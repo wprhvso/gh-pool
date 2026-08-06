@@ -61,7 +61,11 @@ class Tabs:
 
     @property
     def order(self) -> list[Tab]:
-        return [self._tabs[target_id] for target_id in self._order if target_id in self._tabs]
+        return [
+            self._tabs[target_id]
+            for target_id in self._order
+            if target_id in self._tabs
+        ]
 
     def index_of(self, target_id: str) -> int:
         return self._order.index(target_id)
@@ -73,11 +77,44 @@ class Tabs:
         self._pump = asyncio.create_task(self._drain())
         deadline = asyncio.get_running_loop().time() + ATTACH_TIMEOUT
         while asyncio.get_running_loop().time() < deadline:
+            await self._adopt_existing()
             if self._order:
                 await self._prepare(self.active)
                 return
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.2)
         raise NoActiveTab("chrome did not expose a page target")
+
+    async def _adopt_existing(self) -> None:
+        result = await self.cdp.send("Target.getTargets")
+        infos = result.get("targetInfos", [])
+        log.debug(
+            "existing targets: %s", [(i.get("type"), i.get("url")) for i in infos]
+        )
+        for info in infos:
+            target_id = info.get("targetId")
+            if info.get("type") != "page" or target_id in self._tabs:
+                continue
+            try:
+                attached = await self.cdp.send(
+                    "Target.attachToTarget", {"targetId": target_id, "flatten": True}
+                )
+            except CdpError as exc:
+                log.warning("could not attach to %s: %s", target_id, exc)
+                continue
+            session_id = attached.get("sessionId")
+            if not isinstance(session_id, str):
+                continue
+            self._tabs[target_id] = Tab(
+                target_id=target_id,
+                session_id=session_id,
+                url=info.get("url", ""),
+                title=info.get("title", ""),
+                opener=info.get("openerId"),
+            )
+            if target_id not in self._order:
+                self._order.append(target_id)
+            if self._active is None:
+                self._active = target_id
 
     async def stop(self) -> None:
         if self._pump is None:
@@ -93,6 +130,8 @@ class Tabs:
         if info["type"] != "page":
             return
         target_id = info["targetId"]
+        if target_id in self._tabs:
+            return
         tab = Tab(
             target_id=target_id,
             session_id=params["sessionId"],
@@ -112,7 +151,8 @@ class Tabs:
     def _detached(self, message: dict[str, Any]) -> None:
         session_id = message["params"]["sessionId"]
         target_id = next(
-            (key for key, tab in self._tabs.items() if tab.session_id == session_id), None
+            (key for key, tab in self._tabs.items() if tab.session_id == session_id),
+            None,
         )
         if target_id is None:
             return
@@ -155,7 +195,9 @@ class Tabs:
     async def _prepare(self, tab: Tab) -> None:
         await self.cdp.send("Page.enable", session_id=tab.session_id)
         await self.cdp.send("Runtime.enable", session_id=tab.session_id)
-        await self.cdp.send("Page.setLifecycleEventsEnabled", {"enabled": True}, tab.session_id)
+        await self.cdp.send(
+            "Page.setLifecycleEventsEnabled", {"enabled": True}, tab.session_id
+        )
 
     async def bring_to_front(self, tab: Tab | None = None) -> None:
         target = tab or self.active
@@ -172,7 +214,9 @@ class Tabs:
             await self._on_activated(index)
 
     async def create(self, url: str | None) -> int:
-        result = await self.cdp.send("Target.createTarget", {"url": url or "about:blank"})
+        result = await self.cdp.send(
+            "Target.createTarget", {"url": url or "about:blank"}
+        )
         target_id = result["targetId"]
         deadline = asyncio.get_running_loop().time() + ATTACH_TIMEOUT
         while asyncio.get_running_loop().time() < deadline:
@@ -212,7 +256,9 @@ class Tabs:
         if error:
             raise CdpError("Page.navigate", error)
 
-    async def send(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def send(
+        self, method: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         return await self.cdp.send(method, params, self.active.session_id)
 
 
@@ -231,6 +277,11 @@ async def close_tab(tabs: Tabs, args: Any) -> None:
 async def list_tabs(tabs: Tabs) -> list[dict[str, Any]]:
     active = tabs.active.target_id
     return [
-        {"index": index, "url": tab.url, "title": tab.title, "active": tab.target_id == active}
+        {
+            "index": index,
+            "url": tab.url,
+            "title": tab.title,
+            "active": tab.target_id == active,
+        }
         for index, tab in enumerate(tabs.order)
     ]
