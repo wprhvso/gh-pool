@@ -38,6 +38,14 @@ class Cdp:
             payload: dict[str, Any] = response.json()
             return payload
 
+    @staticmethod
+    async def pages(port: int) -> list[dict[str, Any]]:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"http://127.0.0.1:{port}/json/list")
+            response.raise_for_status()
+            payload: list[dict[str, Any]] = response.json()
+            return [item for item in payload if item.get("type") == "page"]
+
     async def connect(self) -> None:
         self._socket = await websockets.connect(
             self._endpoint, max_size=256 * 1024 * 1024, ping_interval=20
@@ -61,16 +69,25 @@ class Cdp:
         self._listeners.pop(event, None)
 
     async def send(
-        self, method: str, params: dict[str, Any] | None = None, session_id: str | None = None
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        session_id: str | None = None,
     ) -> dict[str, Any]:
         if self._socket is None:
             raise CdpError(method, "not connected")
         self._next_id += 1
         message_id = self._next_id
-        message: dict[str, Any] = {"id": message_id, "method": method, "params": params or {}}
+        message: dict[str, Any] = {
+            "id": message_id,
+            "method": method,
+            "params": params or {},
+        }
         if session_id is not None:
             message["sessionId"] = session_id
-        future: asyncio.Future[dict[str, Any]] = asyncio.get_running_loop().create_future()
+        future: asyncio.Future[dict[str, Any]] = (
+            asyncio.get_running_loop().create_future()
+        )
         self._pending[message_id] = future
         await self._socket.send(json.dumps(message))
         return await future
@@ -86,7 +103,9 @@ class Cdp:
                     continue
                 if "error" in message:
                     future.set_exception(
-                        CdpError(str(message.get("method", "?")), message["error"]["message"])
+                        CdpError(
+                            str(message.get("method", "?")), message["error"]["message"]
+                        )
                     )
                 else:
                     future.set_result(message.get("result", {}))

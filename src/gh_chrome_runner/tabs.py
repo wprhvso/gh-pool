@@ -85,14 +85,17 @@ class Tabs:
         raise NoActiveTab("chrome did not expose a page target")
 
     async def _adopt_existing(self) -> None:
-        result = await self.cdp.send("Target.getTargets")
-        infos = result.get("targetInfos", [])
-        log.debug(
-            "existing targets: %s", [(i.get("type"), i.get("url")) for i in infos]
-        )
-        for info in infos:
-            target_id = info.get("targetId")
-            if info.get("type") != "page" or target_id in self._tabs:
+        from gh_chrome_runner.config import settings
+
+        try:
+            pages = await Cdp.pages(settings.debug_port)
+        except Exception as exc:
+            log.warning("could not list pages: %s", exc)
+            return
+        log.debug("existing pages: %s", [p.get("url") for p in pages])
+        for info in pages:
+            target_id = info.get("id")
+            if not isinstance(target_id, str) or target_id in self._tabs:
                 continue
             try:
                 attached = await self.cdp.send(
@@ -109,7 +112,6 @@ class Tabs:
                 session_id=session_id,
                 url=info.get("url", ""),
                 title=info.get("title", ""),
-                opener=info.get("openerId"),
             )
             if target_id not in self._order:
                 self._order.append(target_id)
