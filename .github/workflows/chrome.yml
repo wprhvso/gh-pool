@@ -30,3 +30,6 @@ jobs:
           GH_CHROME_URL: ${{ secrets.GH_CHROME_URL }}
           GH_CHROME_TOKEN: ${{ secrets.GH_CHROME_TOKEN }}
           GH_CHROME_WORKDIR: ${{ runner.temp }}/gh-chrome
+
+      - if: always()
+        run: tail -n 50 ${{ runner.temp }}/gh-chrome/logs/*.log

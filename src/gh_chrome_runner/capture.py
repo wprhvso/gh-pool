@@ -22,7 +22,9 @@ RETRIES = 3
 
 
 class Capture:
-    def __init__(self, display: Display, server: ServerClient, config: RunnerConfig) -> None:
+    def __init__(
+        self, display: Display, server: ServerClient, config: RunnerConfig
+    ) -> None:
         self._display = display
         self._server = server
         self._params = config.params
@@ -101,6 +103,11 @@ class Capture:
         log.info("capture started")
 
     async def stop(self) -> None:
+        if self._task is not None:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+            self._task = None
         if self._process is not None and self._process.returncode is None:
             self._process.terminate()
             with contextlib.suppress(TimeoutError):
@@ -109,17 +116,19 @@ class Capture:
             if self._process.returncode is None:
                 self._process.kill()
                 await self._process.wait()
-        if self._task is not None:
-            self._task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._task
-            self._task = None
         with contextlib.suppress(Exception):
             await self._scan(final=True)
         log.info("capture stopped after %d segments", len(self._sent))
 
     async def _watch(self) -> None:
         while True:
+            if self._process is not None and self._process.returncode is not None:
+                log.error(
+                    "ffmpeg exited with %s, see %s",
+                    self._process.returncode,
+                    settings.logs_dir / "ffmpeg.log",
+                )
+                return
             with contextlib.suppress(Exception):
                 await self._scan(final=False)
             await asyncio.sleep(SCAN_INTERVAL)
@@ -127,7 +136,11 @@ class Capture:
     async def _scan(self, final: bool) -> None:
         if not self._init_sent:
             init = settings.segments_dir / INIT_NAME
-            if init.exists() and init.stat().st_size > 0 and await self._send("init", init):
+            if (
+                init.exists()
+                and init.stat().st_size > 0
+                and await self._send("init", init)
+            ):
                 self._init_sent = True
         for path in sorted(settings.segments_dir.glob("chunk-stream0-*.m4s")):
             if path.name in self._sent:
@@ -157,7 +170,9 @@ class Capture:
             try:
                 await self._server.put_file(route, path)
             except Exception as exc:
-                log.warning("failed to upload %s (attempt %d): %s", path.name, attempt + 1, exc)
+                log.warning(
+                    "failed to upload %s (attempt %d): %s", path.name, attempt + 1, exc
+                )
                 await asyncio.sleep(1.0)
             else:
                 return True
