@@ -2,7 +2,7 @@ VERSION 0.8
 
 PROJECT wprhvso/gh-browser
 
-ARG --global IMAGE=ghcr.io/wprhvso/gh-browser
+ARG --global IMAGE=ghcr.io/wprhvso/gh-chrome
 ARG --global PYTHON=3.13
 
 deps:
