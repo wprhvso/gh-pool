@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>gh-chrome — {{SESSION_ID}}</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; background: #111; color: #eee; font: 14px system-ui, sans-serif; }
+      header { display: flex; gap: 1rem; align-items: baseline; padding: 0.75rem 1rem; }
+      header code { color: #9ab; }
+      #status { margin-left: auto; color: #9ab; }
+      video { display: block; width: 100vw; max-height: calc(100vh - 3rem); background: #000; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>gh-chrome</strong>
+      <code>{{SESSION_ID}}</code>
+      <span id="status">connecting…</span>
+    </header>
+    <video id="player" controls autoplay muted></video>
+    <script src="dash.min.js"></script>
+    <script>
+      const status = document.getElementById("status");
+      const player = dashjs.MediaPlayer().create();
+      player.updateSettings({
+        streaming: {
+          delay: { liveDelay: 3 },
+          liveCatchup: { enabled: true },
+          retryAttempts: { MPD: 30, MediaSegment: 10 },
+        },
+      });
+      player.initialize(document.getElementById("player"), "manifest.mpd", true);
+      player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, () => {
+        status.textContent = player.isDynamic() ? "live" : "recorded";
+      });
+      player.on(dashjs.MediaPlayer.events.ERROR, (e) => {
+        status.textContent = "error: " + (e.error?.message ?? "unknown");
+      });
+      player.on(dashjs.MediaPlayer.events.PLAYBACK_ENDED, () => {
+        status.textContent = "ended";
+      });
+    </script>
+  </body>
+</html>

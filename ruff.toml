@@ -1,0 +1,19 @@
+[lint]
+ignore = [
+    "ASYNC109",
+    "ASYNC110",
+    "ASYNC240",
+    "ARG001",
+    "ARG005",
+    "N818",
+    "S108",
+    "S311",
+    "SIM117",
+]
+
+[lint.per-file-ignores]
+"client/tests/**" = ["PLR2004"]
+"runner/tests/**" = ["PLR2004"]
+"server/tests/**" = ["PLR2004"]
+"runner/gh_chrome_runner/scroll.py" = ["PLR2004"]
+"runner/gh_chrome_runner/xtest.py" = ["PLR2004"]

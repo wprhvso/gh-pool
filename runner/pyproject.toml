@@ -1,0 +1,21 @@
+[project]
+name = "gh-chrome-runner"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "gh-chrome-protocol",
+    "httpx>=0.28",
+    "pydantic-settings>=2.7",
+    "python-xlib>=0.33",
+    "websockets>=14.1",
+]
+
+[project.scripts]
+gh-chrome-runner = "gh_chrome_runner.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["gh_chrome_runner"]

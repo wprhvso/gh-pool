@@ -1,0 +1,30 @@
+name: gh-chrome
+
+on:
+  workflow_dispatch:
+    inputs:
+      session_id:
+        description: gh-chrome session id
+        required: true
+        type: string
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: xvfb openbox xdotool x11-utils zstd
+          version: 1.0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - run: pip install gh-chrome-runner
+
+      - run: gh-chrome-runner --session ${{ inputs.session_id }}
+        env:
+          GH_CHROME_URL: ${{ secrets.GH_CHROME_URL }}
+          GH_CHROME_TOKEN: ${{ secrets.GH_CHROME_TOKEN }}
+          GH_CHROME_WORKDIR: ${{ runner.temp }}/gh-chrome

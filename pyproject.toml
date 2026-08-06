@@ -1,0 +1,82 @@
+[tool.uv.workspace]
+members = ["protocol", "client", "server", "runner"]
+
+[tool.uv.sources]
+gh-chrome-protocol = { workspace = true }
+
+[dependency-groups]
+dev = ["mypy>=1.15", "pytest>=8.3", "pytest-asyncio>=0.25", "ruff>=0.9"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "A",
+    "ARG",
+    "ASYNC",
+    "B",
+    "C4",
+    "E",
+    "ERA",
+    "F",
+    "I",
+    "N",
+    "PL",
+    "PTH",
+    "RET",
+    "RUF",
+    "S",
+    "SIM",
+    "UP",
+    "W",
+]
+ignore = ["PLR0913", "S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"*/tests/*" = ["ARG", "S"]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "gh_chrome",
+    "gh_chrome_protocol",
+    "gh_chrome_runner",
+    "gh_chrome_server",
+]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["protocol", "client", "server", "runner"]
+
+[tool.basedpyright]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+reportImportCycles = false
+reportAny = false
+reportExplicitAny = false
+reportUnusedCallResult = false
+reportUnannotatedClassAttribute = false
+reportImplicitStringConcatenation = false
+reportPrivateUsage = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+executionEnvironments = [
+    { root = "client", extraPaths = [
+        "client",
+    ] },
+    { root = "server", extraPaths = [
+        "server",
+    ] },
+    { root = "runner", extraPaths = [
+        "runner",
+    ] },
+]
