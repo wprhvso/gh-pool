@@ -30,7 +30,7 @@
           retryAttempts: { MPD: 30, MediaSegment: 10 },
         },
       });
-      player.initialize(document.getElementById("player"), "manifest.mpd", true);
+      player.initialize(document.getElementById("player"), "/s/{{SESSION_ID}}/manifest.mpd", true);
       player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, () => {
         status.textContent = player.isDynamic() ? "live" : "recorded";
       });
