@@ -70,13 +70,12 @@ class ServerClient:
         response.raise_for_status()
 
     async def put_file(self, path: str, source: Path) -> None:
-        with source.open("rb") as handle:
-            response = await self._client.put(
-                f"/runner/{self._id}/{path}",
-                content=_iter_file(handle),
-                headers={"Content-Type": "application/octet-stream"},
-                timeout=httpx.Timeout(600.0),
-            )
+        response = await self._client.put(
+            f"/runner/{self._id}/{path}",
+            content=_iter_file(source),
+            headers={"Content-Type": "application/octet-stream"},
+            timeout=httpx.Timeout(600.0),
+        )
         response.raise_for_status()
 
     async def get_profile(self, target: Path) -> bool:
@@ -104,6 +103,7 @@ class ServerClient:
         return target
 
 
-def _iter_file(handle: Any) -> Any:
-    while chunk := handle.read(CHUNK):
-        yield chunk
+async def _iter_file(source: Path) -> AsyncIterator[bytes]:
+    with source.open("rb") as handle:
+        while chunk := handle.read(CHUNK):
+            yield chunk

@@ -12,6 +12,8 @@ jobs:
   run:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
+
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
           packages: xvfb openbox xdotool x11-utils zstd ffmpeg
@@ -21,7 +23,7 @@ jobs:
         with:
           python-version: "3.13"
 
-      - run: pip install gh-chrome
+      - run: pip install .
 
       - run: gh-chrome-runner --session ${{ inputs.session_id }}
         env:
