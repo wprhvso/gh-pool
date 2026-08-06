@@ -14,8 +14,8 @@ jobs:
     steps:
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: xvfb openbox xdotool x11-utils zstd
-          version: 1.0
+          packages: xvfb openbox xdotool x11-utils zstd ffmpeg
+          version: 1.1
 
       - uses: actions/setup-python@v6
         with:
