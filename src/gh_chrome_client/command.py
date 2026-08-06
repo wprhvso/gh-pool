@@ -8,7 +8,7 @@ from uuid import UUID
 from gh_chrome_protocol import CommandArgs
 
 if TYPE_CHECKING:
-    from gh_chrome.session import Session
+    from gh_chrome_client.session import Session
 
 
 class Command[T]:

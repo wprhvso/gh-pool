@@ -10,7 +10,7 @@ from uuid import UUID
 from gh_chrome_protocol import Event
 from gh_chrome_protocol.sse import parse_sse
 
-from gh_chrome.http import Http
+from gh_chrome_client.http import Http
 
 log = logging.getLogger(__name__)
 

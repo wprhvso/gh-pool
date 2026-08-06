@@ -63,10 +63,10 @@ from gh_chrome_protocol.events import (
     SessionReady,
 )
 
-from gh_chrome.command import Command
-from gh_chrome.errors import GhChromeError, SessionDead, SessionNotReady, to_exception
-from gh_chrome.http import Http
-from gh_chrome.stream import EventStream
+from gh_chrome_client.command import Command
+from gh_chrome_client.errors import GhChromeError, SessionDead, SessionNotReady, to_exception
+from gh_chrome_client.http import Http
+from gh_chrome_client.stream import EventStream
 
 USER_EVENTS = frozenset(
     {

@@ -1,11 +1,38 @@
-[tool.uv.workspace]
-members = ["protocol", "client", "server", "runner"]
+[project]
+name = "gh-chrome"
+version = "0.1.1"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "httpx>=0.28",
+    "psycopg[binary,pool]>=3.2",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "python-multipart>=0.0.20",
+    "python-xlib>=0.33",
+    "uvicorn[standard]>=0.34",
+    "websockets>=14.1",
+]
 
-[tool.uv.sources]
-gh-chrome-protocol = { workspace = true }
+[project.scripts]
+gh-chrome = "gh_chrome_client.__main__:main"
+gh-chrome-server = "gh_chrome_server.__main__:main"
+gh-chrome-runner = "gh_chrome_runner.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src/gh_chrome_client",
+    "src/gh_chrome_protocol",
+    "src/gh_chrome_runner",
+    "src/gh_chrome_server",
+]
 
 [dependency-groups]
-dev = ["mypy>=1.15", "pytest>=8.3", "pytest-asyncio>=0.25", "ruff>=0.9"]
+dev = ["pytest>=8.3", "pytest-asyncio>=0.25", "ruff>=0.9"]
 
 [tool.ruff]
 line-length = 100
@@ -34,26 +61,17 @@ select = [
 ]
 ignore = ["PLR0913", "S101"]
 
-[tool.ruff.lint.per-file-ignores]
-"*/tests/*" = ["ARG", "S"]
-
 [tool.ruff.lint.isort]
 known-first-party = [
-    "gh_chrome",
+    "gh_chrome_client",
     "gh_chrome_protocol",
     "gh_chrome_runner",
     "gh_chrome_server",
 ]
 
-[tool.mypy]
-python_version = "3.13"
-strict = true
-warn_unreachable = true
-plugins = ["pydantic.mypy"]
-
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["protocol", "client", "server", "runner"]
+testpaths = ["tests"]
 
 [tool.basedpyright]
 pythonVersion = "3.13"
@@ -69,14 +87,4 @@ reportPrivateUsage = false
 reportUnknownMemberType = false
 reportUnknownVariableType = false
 reportUnknownArgumentType = false
-executionEnvironments = [
-    { root = "client", extraPaths = [
-        "client",
-    ] },
-    { root = "server", extraPaths = [
-        "server",
-    ] },
-    { root = "runner", extraPaths = [
-        "runner",
-    ] },
-]
+executionEnvironments = [{ root = "src", extraPaths = ["src"] }]

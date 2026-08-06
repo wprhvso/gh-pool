@@ -29,7 +29,7 @@ through XTEST, so the page sees trusted events.
 ```bash
 export GH_CHROME_URL=https://chrome.example.com
 export GH_CHROME_TOKEN=...
-python client/examples/hello.py
+python examples/hello.py
 ```
 
 Watch the session at `https://chrome.example.com/s/<id>` (user `admin`, password
@@ -48,7 +48,7 @@ In the repository that runs the workflow, add `GH_CHROME_URL` and
 
 ```bash
 nix develop
-uv sync --all-packages
+uv sync
 uv run pytest -q
 ```
 

@@ -13,8 +13,8 @@ from gh_chrome_protocol import (
     WaitUntil,
 )
 
-from gh_chrome.command import Command
-from gh_chrome.errors import (
+from gh_chrome_client.command import Command
+from gh_chrome_client.errors import (
     Cancelled,
     CommandTimeout,
     ConnectionLost,
@@ -28,8 +28,8 @@ from gh_chrome.errors import (
     SessionUnavailable,
     TooManySessions,
 )
-from gh_chrome.http import Http
-from gh_chrome.session import Session
+from gh_chrome_client.http import Http
+from gh_chrome_client.session import Session
 
 __all__ = [
     "Cancelled",

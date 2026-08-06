@@ -16,7 +16,7 @@ from gh_chrome_protocol import (
     SessionState,
 )
 
-from gh_chrome.errors import (
+from gh_chrome_client.errors import (
     GhChromeError,
     SessionUnavailable,
     TooManySessions,

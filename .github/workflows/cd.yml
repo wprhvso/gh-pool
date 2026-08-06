@@ -41,6 +41,5 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - run: uv build --package gh-chrome-protocol --out-dir dist
-      - run: uv build --package gh-chrome --out-dir dist
+      - run: uv build --out-dir dist
       - run: uv publish

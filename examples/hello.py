@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import asyncio
 
-import gh_chrome
+import gh_chrome_client
 
 
 async def main() -> None:
-    session = await gh_chrome.new(width=1280, height=800, fps=10)
+    session = await gh_chrome_client.new(width=1280, height=800, fps=10)
     print(f"session {session.id}, player at {session.player_url}")
     async with session as s:
         await s.ready(timeout=300)
