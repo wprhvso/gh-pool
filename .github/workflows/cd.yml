@@ -26,3 +26,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - run: earthly --ci --push +multi --VERSION=${GITHUB_REF_NAME#v}
+
+  pypi:
+    runs-on: ubuntu-latest
+
+    environment: pypi
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv build --package gh-chrome-protocol --out-dir dist
+      - run: uv build --package gh-chrome --out-dir dist
+      - run: uv publish
