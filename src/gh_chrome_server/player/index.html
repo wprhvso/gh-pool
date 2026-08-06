@@ -19,7 +19,7 @@
       <span id="status">connecting…</span>
     </header>
     <video id="player" controls autoplay muted></video>
-    <script src="dash.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js" crossorigin="anonymous"></script>
     <script>
       const status = document.getElementById("status");
       const player = dashjs.MediaPlayer().create();

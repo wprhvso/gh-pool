@@ -28,11 +28,6 @@ async def player_page(session_id: UUID, sessions: Ss, _: Basic) -> HTMLResponse:
     return HTMLResponse(html.replace("{{SESSION_ID}}", str(session_id)))
 
 
-@router.get("/{session_id}/dash.min.js")
-async def player_script(session_id: UUID, _: Basic) -> FileResponse:
-    return FileResponse(PLAYER / "dash.min.js", media_type="text/javascript")
-
-
 @router.get("/{session_id}/manifest.mpd")
 async def player_manifest(session_id: UUID, sessions: Ss, _: Basic) -> Response:
     try:
