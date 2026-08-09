@@ -1,33 +1,29 @@
-from __future__ import annotations
-
 from datetime import datetime
 from uuid import UUID, uuid4
+
+from psycopg.rows import DictRow
+from psycopg.types.json import Jsonb
 
 from gh_chrome_protocol import (
     CloseReason,
     CommandError,
+    CommandFailed,
+    CommandFinished,
     CommandRequest,
+    CommandStarted,
     ErrorCode,
     EventData,
+    SessionClosed,
     SessionCreate,
     SessionParams,
+    SessionReady,
     SessionState,
     SessionStatus,
 )
-from gh_chrome_protocol.events import (
-    CommandFailed,
-    CommandFinished,
-    CommandStarted,
-    SessionClosed,
-    SessionReady,
-)
-from psycopg.rows import DictRow
-from psycopg.types.json import Jsonb
-
 from gh_chrome_server.db import Database, Tx
 from gh_chrome_server.events import Events
 
-TERMINAL = ("closed", "dead")
+LIVE = ("pending", "active")
 
 
 class SessionNotFound(Exception):
@@ -42,19 +38,9 @@ class TooManySessions(Exception):
     pass
 
 
-def _state(row: DictRow) -> SessionState:
-    return SessionState(
-        id=row["id"],
-        status=SessionStatus(row["status"]),
-        state_stale=row["state_stale"],
-        profile=row["profile"],
-        persist=row["persist"],
-        params=SessionParams.model_validate(row["params"]),
-        last_seq=row["last_seq"],
-    )
-
-
 class Sessions:
+    """Session and command state. The database is the queue; this is the API over it."""
+
     def __init__(self, db: Database, events: Events) -> None:
         self._db = db
         self._events = events
@@ -62,22 +48,25 @@ class Sessions:
         self.closing: set[UUID] = set()
 
     async def get(self, session_id: UUID) -> SessionState:
-        async with self._db.conn() as conn:
-            cur = await conn.execute("select * from sessions where id = %s", (session_id,))
-            row = await cur.fetchone()
+        row = await self._db.one("select * from sessions where id = %s", (session_id,))
         if row is None:
-            raise SessionNotFound(session_id)
+            raise SessionNotFound(f"unknown session {session_id}")
         return _state(row)
 
+    async def require_live(self, session_id: UUID) -> SessionState:
+        state = await self.get(session_id)
+        if not state.status.live:
+            raise SessionUnavailable(f"session is {state.status}")
+        return state
+
     async def started_at(self, session_id: UUID) -> datetime:
-        async with self._db.conn() as conn:
-            cur = await conn.execute(
-                "select coalesce(ready_at, created_at) as at from sessions where id = %s",
-                (session_id,),
-            )
-            row = await cur.fetchone()
+        """When the recording clock starts: the runner's connection, or creation."""
+        row = await self._db.one(
+            "select coalesce(ready_at, created_at) as at from sessions where id = %s",
+            (session_id,),
+        )
         if row is None:
-            raise SessionNotFound(session_id)
+            raise SessionNotFound(f"unknown session {session_id}")
         at: datetime = row["at"]
         return at
 
@@ -85,26 +74,13 @@ class Sessions:
         session_id = uuid4()
         async with self._db.tx() as tx:
             if request.max_parallel is not None:
-                cur = await tx.conn.execute(
+                live = await tx.one(
                     "select count(*) as live from sessions where status in ('pending', 'active')"
                 )
-                row = await cur.fetchone()
-                if row is not None and int(row["live"]) >= request.max_parallel:
-                    raise TooManySessions(request.max_parallel)
-            stale = False
-            if request.profile is not None:
-                cur = await tx.conn.execute(
-                    "select stale from profiles where name = %s", (request.profile,)
-                )
-                row = await cur.fetchone()
-                if row is None:
-                    await tx.conn.execute(
-                        "insert into profiles (name) values (%s) on conflict do nothing",
-                        (request.profile,),
-                    )
-                else:
-                    stale = bool(row["stale"])
-            cur = await tx.conn.execute(
+                if live is not None and int(live["live"]) >= request.max_parallel:
+                    raise TooManySessions(f"at most {request.max_parallel} sessions at a time")
+            stale = await self._claim_profile(tx, request.profile)
+            row = await tx.one(
                 "insert into sessions (id, params, profile, persist, state_stale) "
                 "values (%s, %s, %s, %s, %s) returning *",
                 (
@@ -115,96 +91,99 @@ class Sessions:
                     stale,
                 ),
             )
-            row = await cur.fetchone()
         if row is None:
-            raise SessionNotFound(session_id)
+            raise SessionNotFound(f"unknown session {session_id}")
         return _state(row)
+
+    async def _claim_profile(self, tx: Tx, profile: str | None) -> bool:
+        """Register the profile if it is new; report whether its state is stale."""
+        if profile is None:
+            return False
+        row = await tx.one("select stale from profiles where name = %s", (profile,))
+        if row is None:
+            await tx.run(
+                "insert into profiles (name) values (%s) on conflict do nothing", (profile,)
+            )
+            return False
+        return bool(row["stale"])
 
     async def mark_ready(self, session_id: UUID) -> None:
         async with self._db.tx() as tx:
-            cur = await tx.conn.execute(
+            row = await tx.one(
                 "update sessions set status = 'active', ready_at = now(), heartbeat_at = now() "
                 "where id = %s and status = 'pending' returning state_stale",
                 (session_id,),
             )
-            row = await cur.fetchone()
-            if row is None:
-                return
-            await self._events.publish(
-                tx, session_id, SessionReady(state_stale=bool(row["state_stale"]))
-            )
+            if row is not None:
+                stale = bool(row["state_stale"])
+                await self._events.publish(tx, session_id, SessionReady(state_stale=stale))
 
     async def heartbeat(self, session_id: UUID) -> bool:
         async with self._db.tx() as tx:
-            cur = await tx.conn.execute(
-                "update sessions set heartbeat_at = now() where id = %s "
-                "and status in ('pending', 'active') returning id",
+            row = await tx.one(
+                "update sessions set heartbeat_at = now() "
+                "where id = %s and status in ('pending', 'active') returning id",
                 (session_id,),
             )
-            return await cur.fetchone() is not None
+        return row is not None
 
     async def request_close(self, session_id: UUID) -> None:
+        """Ask the runner to shut down; a session with no runner yet just ends."""
         async with self._db.tx() as tx:
-            cur = await tx.conn.execute(
+            row = await tx.one(
                 "select status from sessions where id = %s for update", (session_id,)
             )
-            row = await cur.fetchone()
-            if row is None or row["status"] in TERMINAL:
+            if row is None or row["status"] not in LIVE:
                 return
-            if row["status"] == "pending":
-                await self._finish_locked(tx, session_id, CloseReason.CLOSED, SessionStatus.CLOSED)
+            if row["status"] == SessionStatus.PENDING:
+                await self._finish(tx, session_id, CloseReason.CLOSED)
                 return
         self.closing.add(session_id)
 
     async def finish(self, session_id: UUID, reason: CloseReason) -> None:
-        status = SessionStatus.CLOSED if reason is CloseReason.CLOSED else SessionStatus.DEAD
         async with self._db.tx() as tx:
-            await self._finish_locked(tx, session_id, reason, status)
+            await self._finish(tx, session_id, reason)
         self.closing.discard(session_id)
         self._cancels.pop(session_id, None)
 
-    async def _finish_locked(
-        self, tx: Tx, session_id: UUID, reason: CloseReason, status: SessionStatus
-    ) -> None:
-        cur = await tx.conn.execute(
-            "update sessions set status = %s, closed_at = now() where id = %s "
-            "and status in ('pending', 'active') returning profile, persist",
+    async def _finish(self, tx: Tx, session_id: UUID, reason: CloseReason) -> None:
+        status = SessionStatus.CLOSED if reason is CloseReason.CLOSED else SessionStatus.DEAD
+        row = await tx.one(
+            "update sessions set status = %s, closed_at = now() "
+            "where id = %s and status in ('pending', 'active') returning profile, persist",
             (str(status), session_id),
         )
-        row = await cur.fetchone()
         if row is None:
             return
         error = CommandError(code=ErrorCode.SESSION_DEAD, message=f"session {reason}")
-        cur = await tx.conn.execute(
+        orphaned = await tx.rows(
             "update commands set status = 'failed', error = %s, finished_at = now() "
             "where session_id = %s and status in ('queued', 'started') returning id",
             (Jsonb(error.model_dump(mode="json")), session_id),
         )
-        for pending in await cur.fetchall():
+        for pending in orphaned:
             await self._events.publish(
                 tx, session_id, CommandFailed(command_id=pending["id"], error=error)
             )
         if status is SessionStatus.DEAD and row["profile"] is not None and row["persist"]:
-            await tx.conn.execute(
-                "update profiles set stale = true where name = %s", (row["profile"],)
-            )
+            # The runner never got to save the profile, so what we have is old.
+            await tx.run("update profiles set stale = true where name = %s", (row["profile"],))
         await self._events.publish(tx, session_id, SessionClosed(reason=reason))
 
     async def enqueue(self, session_id: UUID, request: CommandRequest) -> tuple[UUID, int]:
         command_id = uuid4()
         async with self._db.tx() as tx:
-            cur = await tx.conn.execute(
-                "update sessions set last_cmd_seq = last_cmd_seq + 1 where id = %s "
-                "and status in ('pending', 'active') returning last_cmd_seq, params",
+            row = await tx.one(
+                "update sessions set last_cmd_seq = last_cmd_seq + 1 "
+                "where id = %s and status in ('pending', 'active') returning last_cmd_seq, params",
                 (session_id,),
             )
-            row = await cur.fetchone()
             if row is None:
-                raise await self._rejection(session_id)
+                raise await self._rejection(tx, session_id)
             seq = int(row["last_cmd_seq"])
             params = SessionParams.model_validate(row["params"])
             timeout = request.timeout if request.timeout is not None else params.timeout
-            await tx.conn.execute(
+            await tx.run(
                 "insert into commands (id, session_id, seq, method, args, timeout_ms) "
                 "values (%s, %s, %s, %s, %s, %s)",
                 (
@@ -218,23 +197,22 @@ class Sessions:
             )
         return command_id, seq
 
-    async def _rejection(self, session_id: UUID) -> Exception:
-        async with self._db.conn() as conn:
-            cur = await conn.execute("select status from sessions where id = %s", (session_id,))
-            row = await cur.fetchone()
+    async def _rejection(self, tx: Tx, session_id: UUID) -> Exception:
+        """Why the session would not take a command."""
+        row = await tx.one("select status from sessions where id = %s", (session_id,))
         if row is None:
-            return SessionNotFound(session_id)
-        return SessionUnavailable(row["status"])
+            return SessionNotFound(f"unknown session {session_id}")
+        return SessionUnavailable(f"session is {row['status']}")
 
     async def take_next(self, session_id: UUID) -> DictRow | None:
+        """Claim the oldest queued command for the runner."""
         async with self._db.tx() as tx:
-            cur = await tx.conn.execute(
+            row = await tx.one(
                 "update commands set status = 'started', started_at = now() where id = ("
                 "select id from commands where session_id = %s and status = 'queued' "
                 "order by seq limit 1 for update skip locked) returning *",
                 (session_id,),
             )
-            row = await cur.fetchone()
             if row is None:
                 return None
             await self._events.publish(tx, session_id, CommandStarted(command_id=row["id"]))
@@ -243,31 +221,27 @@ class Sessions:
     async def complete(
         self, session_id: UUID, command_id: UUID, result: object, error: CommandError | None
     ) -> None:
+        failed = error is not None
         async with self._db.tx() as tx:
-            cur = await tx.conn.execute(
+            row = await tx.one(
                 "update commands set status = %s, result = %s, error = %s, finished_at = now() "
                 "where id = %s and session_id = %s and status = 'started' returning id",
                 (
-                    "failed" if error is not None else "finished",
-                    Jsonb(result) if error is None else None,
+                    "failed" if failed else "finished",
+                    None if failed else Jsonb(result),
                     Jsonb(error.model_dump(mode="json")) if error is not None else None,
                     command_id,
                     session_id,
                 ),
             )
-            if await cur.fetchone() is None:
+            if row is None:
                 return
-            if error is not None:
-                await self._events.publish(
-                    tx, session_id, CommandFailed(command_id=command_id, error=error)
-                )
-            else:
-                await self._events.publish(
-                    tx, session_id, CommandFinished(command_id=command_id, result=result)
-                )
-
-    async def fail_command(self, session_id: UUID, command_id: UUID, error: CommandError) -> None:
-        await self.complete(session_id, command_id, None, error)
+            event = (
+                CommandFailed(command_id=command_id, error=error)
+                if error is not None
+                else CommandFinished(command_id=command_id, result=result)
+            )
+            await self._events.publish(tx, session_id, event)
 
     async def publish_runner_event(self, session_id: UUID, data: EventData) -> None:
         async with self._db.tx() as tx:
@@ -280,19 +254,29 @@ class Sessions:
         return self._cancels.pop(session_id, [])
 
     async def expired_commands(self) -> list[DictRow]:
-        async with self._db.conn() as conn:
-            cur = await conn.execute(
-                "select id, session_id from commands where status = 'started' "
-                "and started_at + make_interval(secs => timeout_ms / 1000.0) < now()"
-            )
-            return list(await cur.fetchall())
+        return await self._db.rows(
+            "select id, session_id from commands where status = 'started' "
+            "and started_at + make_interval(secs => timeout_ms / 1000.0) < now()"
+        )
 
-    async def dead_candidates(self, timeout: float, ready_timeout: float) -> list[UUID]:
-        async with self._db.conn() as conn:
-            cur = await conn.execute(
-                "select id from sessions where "
-                "(status = 'active' and heartbeat_at + make_interval(secs => %s) < now()) or "
-                "(status = 'pending' and created_at + make_interval(secs => %s) < now())",
-                (timeout, ready_timeout),
-            )
-            return [row["id"] for row in await cur.fetchall()]
+    async def dead_candidates(self, heartbeat_timeout: float, ready_timeout: float) -> list[UUID]:
+        """Sessions whose runner stopped answering, or never showed up at all."""
+        rows = await self._db.rows(
+            "select id from sessions where "
+            "(status = 'active' and heartbeat_at + make_interval(secs => %s) < now()) or "
+            "(status = 'pending' and created_at + make_interval(secs => %s) < now())",
+            (heartbeat_timeout, ready_timeout),
+        )
+        return [row["id"] for row in rows]
+
+
+def _state(row: DictRow) -> SessionState:
+    return SessionState(
+        id=row["id"],
+        status=SessionStatus(row["status"]),
+        state_stale=row["state_stale"],
+        profile=row["profile"],
+        persist=row["persist"],
+        params=SessionParams.model_validate(row["params"]),
+        last_seq=row["last_seq"],
+    )

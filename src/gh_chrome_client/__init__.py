@@ -1,5 +1,22 @@
-from __future__ import annotations
+"""Drive a Chrome running on a GitHub Actions runner, over plain HTTPS."""
 
+from typing import Any
+
+from gh_chrome_client.errors import (
+    Cancelled,
+    CommandTimeout,
+    ElementIntercepted,
+    ElementNotFound,
+    GhChromeError,
+    NavigationFailed,
+    RunnerError,
+    SessionDead,
+    SessionNotReady,
+    SessionUnavailable,
+    TooManySessions,
+)
+from gh_chrome_client.http import Http
+from gh_chrome_client.session import Command, Session
 from gh_chrome_protocol import (
     ElementState,
     Event,
@@ -13,36 +30,16 @@ from gh_chrome_protocol import (
     WaitUntil,
 )
 
-from gh_chrome_client.command import Command
-from gh_chrome_client.errors import (
-    Cancelled,
-    CommandTimeout,
-    ConnectionLost,
-    ElementIntercepted,
-    ElementNotFound,
-    GhChromeError,
-    NavigationFailed,
-    RunnerError,
-    SessionDead,
-    SessionNotReady,
-    SessionUnavailable,
-    TooManySessions,
-)
-from gh_chrome_client.http import Http
-from gh_chrome_client.session import Session
-
 __all__ = [
     "Cancelled",
     "Command",
     "CommandTimeout",
-    "ConnectionLost",
     "ElementIntercepted",
     "ElementNotFound",
     "ElementState",
     "Event",
     "EventType",
     "GhChromeError",
-    "Http",
     "NavigationFailed",
     "ProfileInfo",
     "RunnerError",
@@ -65,45 +62,30 @@ async def new(
     *,
     profile: str | None = None,
     persist: bool = True,
-    width: int = 1920,
-    height: int = 1080,
-    fps: int = 15,
-    bitrate: str = "2M",
-    mouse_speed: Speed = Speed.NORMAL,
-    type_speed: Speed = Speed.NORMAL,
-    scroll_speed: Speed = Speed.NORMAL,
-    timeout: float = 30.0,
-    subscribe: list[Topic] | None = None,
     max_parallel: int | None = None,
     close_timeout: float = 120.0,
     server: str | None = None,
     token: str | None = None,
+    **params: Any,
 ) -> Session:
+    """Ask the server for a session; the runner connects a minute or so later.
+
+    Extra keyword arguments are SessionParams fields (width, height, fps,
+    bitrate, mouse_speed, type_speed, scroll_speed, timeout, subscribe).
+    """
     http = Http(server, token)
     request = SessionCreate(
         profile=profile,
         persist=persist,
         max_parallel=max_parallel,
-        params=SessionParams(
-            width=width,
-            height=height,
-            fps=fps,
-            bitrate=bitrate,
-            mouse_speed=mouse_speed,
-            type_speed=type_speed,
-            scroll_speed=scroll_speed,
-            timeout=timeout,
-            subscribe=subscribe or [],
-        ),
+        params=SessionParams(**params),
     )
     try:
         state = await http.create_session(request)
     except BaseException:
         await http.aclose()
         raise
-    session = Session(http, state, close_timeout)
-    session._start()
-    return session
+    return Session(http, state, close_timeout)
 
 
 async def profiles(server: str | None = None, token: str | None = None) -> list[ProfileInfo]:

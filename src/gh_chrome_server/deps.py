@@ -1,6 +1,5 @@
-from __future__ import annotations
-
-from typing import Annotated
+from collections.abc import Callable
+from typing import Annotated, Any
 
 from fastapi import Depends, Request
 
@@ -9,21 +8,15 @@ from gh_chrome_server.events import Events
 from gh_chrome_server.sessions import Sessions
 
 
-def get_db(request: Request) -> Database:
-    db: Database = request.app.state.db
-    return db
+def _from_state(name: str) -> Callable[[Request], Any]:
+    """Hand a route whatever the lifespan put on app.state."""
+
+    def get(request: Request) -> Any:
+        return getattr(request.app.state, name)
+
+    return get
 
 
-def get_events(request: Request) -> Events:
-    events: Events = request.app.state.events
-    return events
-
-
-def get_sessions(request: Request) -> Sessions:
-    sessions: Sessions = request.app.state.sessions
-    return sessions
-
-
-Db = Annotated[Database, Depends(get_db)]
-Ev = Annotated[Events, Depends(get_events)]
-Ss = Annotated[Sessions, Depends(get_sessions)]
+Db = Annotated[Database, Depends(_from_state("db"))]
+Ev = Annotated[Events, Depends(_from_state("events"))]
+Ss = Annotated[Sessions, Depends(_from_state("sessions"))]

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 import shutil
 from collections.abc import AsyncIterator
@@ -10,6 +8,10 @@ from uuid import UUID
 from gh_chrome_server.config import settings
 
 CHUNK = 1 << 20
+
+
+class BadName(ValueError):
+    """A user-supplied file name that would escape its directory."""
 
 
 def ensure_dirs() -> None:
@@ -40,15 +42,16 @@ def profile_path(name: str) -> Path:
 def safe_name(name: str) -> str:
     cleaned = Path(name).name
     if not cleaned or cleaned in {".", ".."}:
-        raise ValueError(name)
+        raise BadName(name)
     return cleaned
 
 
 async def write_atomic(target: Path, chunks: AsyncIterator[bytes]) -> int:
+    """Stream to a temporary file next to the target, then rename over it."""
     target.parent.mkdir(parents=True, exist_ok=True)
+    size = 0
     with NamedTemporaryFile(dir=target.parent, delete=False) as tmp:
         temp_path = Path(tmp.name)
-        size = 0
         try:
             async for chunk in chunks:
                 tmp.write(chunk)

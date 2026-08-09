@@ -1,15 +1,16 @@
-from __future__ import annotations
+"""Bring the browser up, run one command at a time, put the profile back."""
 
 import asyncio
 import contextlib
 import json
 import logging
-from typing import Any
+from collections.abc import AsyncIterator, Callable
+from contextlib import AsyncExitStack, asynccontextmanager
+from typing import Any, Protocol
 from uuid import UUID
 
 from gh_chrome_protocol import CommandEnvelope, CommandError, ErrorCode, RunnerConfig
 from gh_chrome_protocol.sse import parse_sse
-
 from gh_chrome_runner import profile
 from gh_chrome_runner.actions import Actions
 from gh_chrome_runner.browser import Browser
@@ -17,62 +18,76 @@ from gh_chrome_runner.capture import Capture
 from gh_chrome_runner.config import settings
 from gh_chrome_runner.display import Display
 from gh_chrome_runner.http import ServerClient
+from gh_chrome_runner.xtest import Xtest
 
 log = logging.getLogger(__name__)
+
+
+class Component(Protocol):
+    async def start(self) -> None: ...
+    async def stop(self) -> None: ...
+
+
+@asynccontextmanager
+async def running[T: Component](component: T) -> AsyncIterator[T]:
+    """Start a component and always stop it, even if starting went wrong."""
+    try:
+        await component.start()
+        yield component
+    finally:
+        await component.stop()
 
 
 class Runner:
     def __init__(self, session_id: UUID) -> None:
         self._id = session_id
         self._server = ServerClient(session_id)
-        self._display: Display | None = None
-        self._browser: Browser | None = None
-        self._capture: Capture | None = None
-        self._actions: Actions | None = None
-        self._config: RunnerConfig | None = None
         self._current: asyncio.Task[None] | None = None
         self._current_id: UUID | None = None
-        self._stop = asyncio.Event()
 
     async def run(self) -> int:
+        code = 1
         try:
-            await self._setup()
+            config = await self._server.config()
+            settings.workdir.mkdir(parents=True, exist_ok=True)
+            if config.has_profile_archive:
+                await profile.restore(self._server)
+            code = await self._serve(config)
         except Exception:
-            log.exception("runner failed to start")
-            await self._teardown(confirm=False)
-            return 1
-        beat = asyncio.create_task(self._beat())
-        code = 0
-        try:
-            await self._consume()
-        except Exception:
-            log.exception("runner loop failed")
-            code = 1
-        beat.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await beat
-        await self._teardown(confirm=code == 0)
+            log.exception("runner failed")
+        finally:
+            await self._server.aclose()
         return code
 
-    async def _setup(self) -> None:
-        settings.workdir.mkdir(parents=True, exist_ok=True)
-        config = await self._server.config()
-        self._config = config
-        if config.has_profile_archive:
-            await profile.restore(self._server)
-        self._display = Display(config.params.width, config.params.height)
-        await self._display.start()
-        self._browser = Browser(self._display, config.params)
-        await self._browser.start()
-        if self._browser.cdp is None:
-            raise RuntimeError("chrome is not connected")
-        self._actions = Actions(self._browser.cdp, self._display, self._server, config.params)
-        await self._actions.start()
-        self._capture = Capture(self._display, self._server, config)
-        await self._capture.start()
-        log.info("runner is ready for session %s", self._id)
+    async def _serve(self, config: RunnerConfig) -> int:
+        """Everything that needs the display, Chrome and the recorder alive."""
+        code = 1
+        async with AsyncExitStack() as stack:
+            enter = stack.enter_async_context
+            display = await enter(running(Display(config.params.width, config.params.height)))
+            browser = await enter(running(Browser(display, config.params)))
+            await enter(running(Capture(display, self._server, config)))
+            xtest = await asyncio.to_thread(Xtest, display.name)
+            actions = await enter(running(Actions(browser.cdp, xtest, self._server, config.params)))
 
-    async def _consume(self) -> None:
+            log.info("runner is ready for session %s", self._id)
+            beat = asyncio.create_task(self._beat())
+            try:
+                await self._consume(actions, lambda: display.alive() and browser.alive())
+                code = 0
+            except Exception:
+                log.exception("runner loop failed")
+            finally:
+                beat.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await beat
+                await self._await_current()
+        if code == 0:
+            await self._save(config)
+        return code
+
+    async def _consume(self, actions: Actions, healthy: Callable[[], bool]) -> None:
+        """Read the command stream and run one command at a time, in order."""
         async with self._server.stream() as chunks:
             async for message in parse_sse(chunks):
                 if message.event == "close":
@@ -80,15 +95,25 @@ class Runner:
                     return
                 if message.event == "cancel":
                     self._cancel(UUID(json.loads(message.data)["command_id"]))
-                    continue
-                if message.event != "command":
-                    continue
-                envelope = CommandEnvelope.model_validate_json(message.data)
-                await self._await_current()
-                if not self._healthy():
-                    raise RuntimeError("browser or display died")
-                self._current_id = envelope.command_id
-                self._current = asyncio.create_task(self._execute(envelope))
+                elif message.event == "command":
+                    envelope = CommandEnvelope.model_validate_json(message.data)
+                    await self._await_current()
+                    if not healthy():
+                        raise RuntimeError("browser or display died")
+                    self._current_id = envelope.command_id
+                    self._current = asyncio.create_task(self._execute(actions, envelope))
+
+    async def _execute(self, actions: Actions, envelope: CommandEnvelope) -> None:
+        result: Any = None
+        error: CommandError | None = None
+        try:
+            result = await actions.dispatch(envelope.args)
+        except asyncio.CancelledError:
+            error = CommandError(code=ErrorCode.CANCELLED, message="cancelled")
+        except Exception as exc:
+            error = actions.to_error(exc)
+        with contextlib.suppress(Exception):
+            await self._server.complete(envelope.command_id, result, error)
 
     async def _await_current(self) -> None:
         if self._current is None:
@@ -102,54 +127,21 @@ class Runner:
         if self._current is not None and self._current_id == command_id:
             self._current.cancel()
 
-    async def _execute(self, envelope: CommandEnvelope) -> None:
-        if self._actions is None:
-            return
-        result: Any = None
-        error: CommandError | None = None
-        try:
-            result = await self._actions.dispatch(envelope.args)
-        except asyncio.CancelledError:
-            error = CommandError(code=ErrorCode.CANCELLED, message="cancelled")
-        except Exception as exc:
-            error = self._actions.to_error(exc)
-        with contextlib.suppress(Exception):
-            await self._server.complete(envelope.command_id, result, error)
-
-    def _healthy(self) -> bool:
-        return (
-            self._display is not None
-            and self._display.alive()
-            and self._browser is not None
-            and self._browser.alive()
-        )
-
     async def _beat(self) -> None:
-        while not self._stop.is_set():
+        while True:
             try:
                 alive = await self._server.heartbeat()
             except Exception:
-                alive = True
+                alive = True  # a blip on our side is not the server giving up
             if not alive:
                 log.warning("server considers the session finished")
                 return
             await asyncio.sleep(settings.heartbeat_interval)
 
-    async def _teardown(self, confirm: bool) -> None:
-        self._stop.set()
-        await self._await_current()
-        if self._actions is not None:
-            await self._actions.stop()
-        if self._capture is not None:
-            await self._capture.stop()
-        if self._browser is not None:
-            await self._browser.stop()
-        if self._display is not None:
-            await self._display.stop()
-        if confirm and self._config is not None and self._config.persist and self._config.profile:
+    async def _save(self, config: RunnerConfig) -> None:
+        """Chrome is gone, so the profile directory is safe to archive."""
+        if config.persist and config.profile:
             with contextlib.suppress(Exception):
                 await profile.store(self._server)
-        if confirm:
-            with contextlib.suppress(Exception):
-                await self._server.confirm_close()
-        await self._server.aclose()
+        with contextlib.suppress(Exception):
+            await self._server.confirm_close()

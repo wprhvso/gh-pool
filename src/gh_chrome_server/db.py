@@ -1,9 +1,8 @@
-from __future__ import annotations
-
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from psycopg import AsyncConnection
 from psycopg.rows import DictRow, dict_row
@@ -11,14 +10,29 @@ from psycopg_pool import AsyncConnectionPool
 
 MIGRATIONS = Path(__file__).parent / "migrations"
 
+Params = tuple[Any, ...]
+
 
 @dataclass(slots=True)
 class Tx:
+    """One transaction, plus anything that should happen once it commits."""
+
     conn: AsyncConnection[DictRow]
     hooks: list[Callable[[], None]] = field(default_factory=list)
 
     def after_commit(self, hook: Callable[[], None]) -> None:
         self.hooks.append(hook)
+
+    async def run(self, sql: str, params: Params = ()) -> None:
+        await self.conn.execute(sql, params)
+
+    async def one(self, sql: str, params: Params = ()) -> DictRow | None:
+        cur = await self.conn.execute(sql, params)
+        return await cur.fetchone()
+
+    async def rows(self, sql: str, params: Params = ()) -> list[DictRow]:
+        cur = await self.conn.execute(sql, params)
+        return list(await cur.fetchall())
 
 
 class Database:
@@ -38,11 +52,6 @@ class Database:
         await self._pool.close()
 
     @asynccontextmanager
-    async def conn(self) -> AsyncGenerator[AsyncConnection[DictRow]]:
-        async with self._pool.connection() as conn:
-            yield conn
-
-    @asynccontextmanager
     async def tx(self) -> AsyncGenerator[Tx]:
         async with self._pool.connection() as conn:
             tx = Tx(conn)
@@ -50,6 +59,16 @@ class Database:
                 yield tx
         for hook in tx.hooks:
             hook()
+
+    async def one(self, sql: str, params: Params = ()) -> DictRow | None:
+        async with self._pool.connection() as conn:
+            cur = await conn.execute(sql, params)
+            return await cur.fetchone()
+
+    async def rows(self, sql: str, params: Params = ()) -> list[DictRow]:
+        async with self._pool.connection() as conn:
+            cur = await conn.execute(sql, params)
+            return list(await cur.fetchall())
 
     async def migrate(self) -> None:
         async with self._pool.connection() as conn, conn.transaction():

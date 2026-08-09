@@ -1,19 +1,13 @@
-from __future__ import annotations
-
 import asyncio
 import contextlib
-import logging
 import os
 from pathlib import Path
 from typing import Any
 
 from gh_chrome_protocol import SessionParams
-
 from gh_chrome_runner.cdp import Cdp
 from gh_chrome_runner.config import settings
 from gh_chrome_runner.display import Display
-
-log = logging.getLogger(__name__)
 
 READY_TIMEOUT = 60.0
 
@@ -31,7 +25,7 @@ FLAGS = (
 )
 
 
-def _no_sandbox_needed() -> bool:
+def _sandbox_unavailable() -> bool:
     userns = Path("/proc/sys/kernel/unprivileged_userns_clone")
     if userns.exists() and userns.read_text().strip() == "0":
         return True
@@ -39,16 +33,23 @@ def _no_sandbox_needed() -> bool:
 
 
 class Browser:
+    """Chrome on the virtual display, with a CDP connection to it."""
+
     def __init__(self, display: Display, params: SessionParams) -> None:
         self._display = display
         self._params = params
         self._process: asyncio.subprocess.Process | None = None
-        self.cdp: Cdp | None = None
+        self._cdp: Cdp | None = None
+
+    @property
+    def cdp(self) -> Cdp:
+        if self._cdp is None:
+            raise RuntimeError("chrome is not connected")
+        return self._cdp
 
     async def start(self) -> None:
-        settings.profile_dir.mkdir(parents=True, exist_ok=True)
-        settings.downloads_dir.mkdir(parents=True, exist_ok=True)
-        settings.logs_dir.mkdir(parents=True, exist_ok=True)
+        for directory in (settings.profile_dir, settings.downloads_dir, settings.logs_dir):
+            directory.mkdir(parents=True, exist_ok=True)
         command = [
             settings.chrome,
             f"--remote-debugging-port={settings.debug_port}",
@@ -59,7 +60,7 @@ class Browser:
         ]
         if settings.proxy:
             command.append(f"--proxy-server={settings.proxy}")
-        if _no_sandbox_needed():
+        if _sandbox_unavailable():
             command.append("--no-sandbox")
         command.append("about:blank")
         handle = (settings.logs_dir / "chrome.log").open("ab")
@@ -69,15 +70,14 @@ class Browser:
             stderr=asyncio.subprocess.STDOUT,
             env=self._display.env,
         )
-        endpoint = await self._wait_endpoint()
-        self.cdp = Cdp(endpoint)
-        await self.cdp.connect()
-        await self.cdp.send("Target.setDiscoverTargets", {"discover": True})
-        await self.cdp.send(
+        self._cdp = Cdp(await self._wait_endpoint())
+        await self._cdp.connect()
+        await self._cdp.send("Target.setDiscoverTargets", {"discover": True})
+        await self._cdp.send(
             "Target.setAutoAttach",
             {"autoAttach": True, "waitForDebuggerOnStart": False, "flatten": True},
         )
-        await self.cdp.send(
+        await self._cdp.send(
             "Browser.setDownloadBehavior",
             {
                 "behavior": "allowAndName",
@@ -87,11 +87,11 @@ class Browser:
         )
 
     async def stop(self) -> None:
-        if self.cdp is not None:
+        if self._cdp is not None:
             with contextlib.suppress(Exception):
-                await self.cdp.send("Browser.close")
-            await self.cdp.close()
-            self.cdp = None
+                await self._cdp.send("Browser.close")
+            await self._cdp.close()
+            self._cdp = None
         if self._process is None or self._process.returncode is not None:
             return
         self._process.terminate()
@@ -106,17 +106,15 @@ class Browser:
         return self._process is not None and self._process.returncode is None
 
     async def _wait_endpoint(self) -> str:
+        """Poll /json/version until Chrome publishes its websocket endpoint."""
         deadline = asyncio.get_running_loop().time() + READY_TIMEOUT
         while asyncio.get_running_loop().time() < deadline:
             if self._process is not None and self._process.returncode is not None:
                 raise RuntimeError(f"chrome exited with {self._process.returncode}")
-            try:
+            with contextlib.suppress(Exception):
                 version: dict[str, Any] = await Cdp.version(settings.debug_port)
-            except Exception:
-                await asyncio.sleep(0.3)
-                continue
-            endpoint = version.get("webSocketDebuggerUrl")
-            if isinstance(endpoint, str):
-                return endpoint
+                endpoint = version.get("webSocketDebuggerUrl")
+                if isinstance(endpoint, str):
+                    return endpoint
             await asyncio.sleep(0.3)
         raise RuntimeError("chrome did not expose a debugging endpoint")

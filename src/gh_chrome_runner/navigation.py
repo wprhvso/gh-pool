@@ -1,10 +1,6 @@
-from __future__ import annotations
-
 import asyncio
 
-from gh_chrome_protocol import WaitUntil
-from gh_chrome_protocol.commands import GotoArgs
-
+from gh_chrome_protocol import Goto, WaitUntil
 from gh_chrome_runner.cdp import CdpError
 from gh_chrome_runner.tabs import Tabs
 
@@ -17,12 +13,20 @@ READY_STATES = {
 NETWORK_IDLE_QUIET = 0.5
 POLL = 0.1
 
+QUIET_JS = """
+(() => {
+  const entries = performance.getEntriesByType('resource');
+  const last = entries.length ? entries[entries.length - 1].responseEnd : 0;
+  return performance.now() - last;
+})()
+"""
+
 
 class NavigationFailed(Exception):
     pass
 
 
-async def goto(tabs: Tabs, args: GotoArgs) -> None:
+async def goto(tabs: Tabs, args: Goto) -> None:
     try:
         await tabs.navigate(args.url)
     except CdpError as exc:
@@ -47,33 +51,17 @@ async def _history(tabs: Tabs, offset: int) -> None:
     history = await tabs.send("Page.getNavigationHistory")
     index = history["currentIndex"] + offset
     entries = history["entries"]
-    if index < 0 or index >= len(entries):
+    if not 0 <= index < len(entries):
         raise NavigationFailed("no such history entry")
     await tabs.send("Page.navigateToHistoryEntry", {"entryId": entries[index]["id"]})
     await settle(tabs, WaitUntil.LOAD)
 
 
 async def settle(tabs: Tabs, wait_until: WaitUntil) -> None:
-    expected = READY_STATES[wait_until]
-    while True:
-        state = await tabs.evaluate("document.readyState")
-        if state in expected:
-            break
+    """Block until the page reached the requested stage of loading."""
+    while await tabs.evaluate("document.readyState") not in READY_STATES[wait_until]:
         await asyncio.sleep(POLL)
-    if wait_until is WaitUntil.NETWORKIDLE:
-        await _network_idle(tabs)
-
-
-async def _network_idle(tabs: Tabs) -> None:
-    script = """
-    (() => {
-      const entries = performance.getEntriesByType('resource');
-      const last = entries.length ? entries[entries.length - 1].responseEnd : 0;
-      return performance.now() - last;
-    })()
-    """
-    while True:
-        quiet = float(await tabs.evaluate(script) or 0)
-        if quiet / 1000 >= NETWORK_IDLE_QUIET:
-            return
+    if wait_until is not WaitUntil.NETWORKIDLE:
+        return
+    while float(await tabs.evaluate(QUIET_JS) or 0) / 1000 < NETWORK_IDLE_QUIET:
         await asyncio.sleep(POLL)

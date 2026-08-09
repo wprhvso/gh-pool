@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import secrets
 from typing import Annotated
 
@@ -13,10 +11,11 @@ from fastapi.security import (
 
 from gh_chrome_server.config import settings
 
-_bearer = HTTPBearer(auto_error=True)
-_basic = HTTPBasic(auto_error=True, realm="gh-chrome")
-
+REALM = "gh-chrome"
 BASIC_USER = "admin"
+
+_bearer = HTTPBearer(auto_error=True)
+_basic = HTTPBasic(auto_error=True, realm=REALM)
 
 
 async def require_token(
@@ -26,16 +25,15 @@ async def require_token(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "invalid token")
 
 
-async def require_basic(
-    credentials: Annotated[HTTPBasicCredentials, Depends(_basic)],
-) -> None:
+async def require_basic(credentials: Annotated[HTTPBasicCredentials, Depends(_basic)]) -> None:
+    """The player is watched in a browser, so it asks for the token as a password."""
     user_ok = secrets.compare_digest(credentials.username, BASIC_USER)
     token_ok = secrets.compare_digest(credentials.password, settings.token)
     if not (user_ok and token_ok):
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
             "invalid credentials",
-            headers={"WWW-Authenticate": 'Basic realm="gh-chrome"'},
+            headers={"WWW-Authenticate": f'Basic realm="{REALM}"'},
         )
 
 

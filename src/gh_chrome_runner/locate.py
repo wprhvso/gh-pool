@@ -1,9 +1,9 @@
-from __future__ import annotations
+"""Where an element is on the physical screen, so the mouse can be aimed at it."""
 
 import asyncio
+import json
 from dataclasses import dataclass
 
-from gh_chrome_runner.cdp import Cdp
 from gh_chrome_runner.tabs import Tabs
 
 STABLE_INTERVAL = 0.1
@@ -22,6 +22,8 @@ class ElementIntercepted(Exception):
 
 @dataclass(frozen=True, slots=True)
 class Box:
+    """An element's rectangle, in CSS pixels relative to the viewport."""
+
     x: float
     y: float
     width: float
@@ -31,17 +33,22 @@ class Box:
     def center(self) -> tuple[float, float]:
         return self.x + self.width / 2, self.y + self.height / 2
 
-    def close_to(self, other: Box) -> bool:
-        return (
-            abs(self.x - other.x) <= STABLE_EPSILON
-            and abs(self.y - other.y) <= STABLE_EPSILON
-            and abs(self.width - other.width) <= STABLE_EPSILON
-            and abs(self.height - other.height) <= STABLE_EPSILON
+    def close_to(self, other: "Box") -> bool:
+        return all(
+            abs(mine - theirs) <= STABLE_EPSILON
+            for mine, theirs in (
+                (self.x, other.x),
+                (self.y, other.y),
+                (self.width, other.width),
+                (self.height, other.height),
+            )
         )
 
 
 @dataclass(frozen=True, slots=True)
 class Viewport:
+    """Where the page content sits on the X display, and at what scale."""
+
     screen_x: float
     screen_y: float
     scale: float
@@ -74,15 +81,24 @@ BOX_JS = """
 })()
 """
 
+HIT_JS = """
+(() => {
+  const target = document.querySelector(%s);
+  if (!target) return false;
+  const hit = document.elementFromPoint(%f, %f);
+  if (!hit) return false;
+  return target === hit || target.contains(hit) || hit.contains(target);
+})()
+"""
+
 
 def js_string(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'
+    """Quote a Python string for embedding in a JavaScript snippet."""
+    return json.dumps(value)
 
 
 class Locator:
-    def __init__(self, cdp: Cdp, tabs: Tabs) -> None:
-        self._cdp = cdp
+    def __init__(self, tabs: Tabs) -> None:
         self._tabs = tabs
 
     async def viewport(self) -> Viewport:
@@ -105,9 +121,7 @@ class Locator:
             width=float(data["width"]),
             height=float(data["height"]),
         )
-        if box.width <= 0 or box.height <= 0:
-            return None
-        return box
+        return box if box.width > 0 and box.height > 0 else None
 
     async def wait_for_box(self, selector: str, timeout: float = APPEAR_TIMEOUT) -> Box:
         deadline = asyncio.get_running_loop().time() + timeout
@@ -120,36 +134,26 @@ class Locator:
             await asyncio.sleep(POLL_INTERVAL)
 
     async def stable_box(self, selector: str, timeout: float = APPEAR_TIMEOUT) -> Box:
+        """Wait until the element stops moving, so the click lands where we aimed."""
         previous = await self.wait_for_box(selector, timeout)
         while True:
             await asyncio.sleep(STABLE_INTERVAL)
             current = await self.box(selector)
             if current is None:
                 previous = await self.wait_for_box(selector, timeout)
-                continue
-            if current.close_to(previous):
+            elif current.close_to(previous):
                 return current
-            previous = current
+            else:
+                previous = current
 
     async def hit_test(self, selector: str, x: float, y: float) -> bool:
-        script = f"""
-        (() => {{
-          const target = document.querySelector({js_string(selector)});
-          if (!target) return false;
-          const hit = document.elementFromPoint({x:f}, {y:f});
-          if (!hit) return false;
-          return target === hit || target.contains(hit) || hit.contains(target);
-        }})()
-        """
-        return bool(await self._tabs.evaluate(script))
+        """Whether the element really is what sits under that viewport point."""
+        return bool(await self._tabs.evaluate(HIT_JS % (js_string(selector), x, y)))
 
-    def in_viewport(self, box: Box, viewport: Viewport, margin: float = 8.0) -> bool:
-        return (
-            box.y >= margin
-            and box.x >= margin
-            and box.y + box.height <= viewport.height - margin
-            and box.x + box.width <= viewport.width - margin
-        )
+    def in_view(self, box: Box, viewport: Viewport, margin: float = 8.0) -> bool:
+        """Clear of the top and bottom edges, which is all that scrolling can fix."""
+        return box.y >= margin and box.y + box.height <= viewport.height - margin
 
     def scroll_delta(self, box: Box, viewport: Viewport) -> int:
+        """How far to scroll to put the element in the middle of the viewport."""
         return round(box.y + box.height / 2 - viewport.height / 2)

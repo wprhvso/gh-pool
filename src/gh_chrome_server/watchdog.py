@@ -1,21 +1,20 @@
-from __future__ import annotations
-
 import asyncio
 import contextlib
 import logging
 
 from gh_chrome_protocol import CloseReason, CommandError, ErrorCode
-
 from gh_chrome_server.config import settings
-from gh_chrome_server.db import Database
 from gh_chrome_server.sessions import Sessions
 
 log = logging.getLogger(__name__)
 
+TIMED_OUT = CommandError(code=ErrorCode.TIMEOUT, message="command timed out")
+
 
 class Watchdog:
-    def __init__(self, db: Database, sessions: Sessions) -> None:
-        self._db = db
+    """Times commands out and buries sessions whose runner stopped answering."""
+
+    def __init__(self, sessions: Sessions) -> None:
         self._sessions = sessions
         self._task: asyncio.Task[None] | None = None
 
@@ -39,8 +38,7 @@ class Watchdog:
 
     async def _tick(self) -> None:
         for row in await self._sessions.expired_commands():
-            error = CommandError(code=ErrorCode.TIMEOUT, message="command timed out")
-            await self._sessions.fail_command(row["session_id"], row["id"], error)
+            await self._sessions.complete(row["session_id"], row["id"], None, TIMED_OUT)
             self._sessions.request_cancel(row["session_id"], row["id"])
         for session_id in await self._sessions.dead_candidates(
             settings.heartbeat_timeout, settings.ready_timeout

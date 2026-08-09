@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import contextlib
 import json
@@ -85,9 +83,7 @@ class Cdp:
         }
         if session_id is not None:
             message["sessionId"] = session_id
-        future: asyncio.Future[dict[str, Any]] = (
-            asyncio.get_running_loop().create_future()
-        )
+        future: asyncio.Future[dict[str, Any]] = asyncio.get_running_loop().create_future()
         self._pending[message_id] = future
         await self._socket.send(json.dumps(message))
         return await future
@@ -103,9 +99,7 @@ class Cdp:
                     continue
                 if "error" in message:
                     future.set_exception(
-                        CdpError(
-                            str(message.get("method", "?")), message["error"]["message"]
-                        )
+                        CdpError(str(message.get("method", "?")), message["error"]["message"])
                     )
                 else:
                     future.set_result(message.get("result", {}))

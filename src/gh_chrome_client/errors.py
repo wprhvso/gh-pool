@@ -1,10 +1,8 @@
-from __future__ import annotations
-
 from gh_chrome_protocol import CommandError, ErrorCode
 
 
 class GhChromeError(Exception):
-    pass
+    """Base class for everything this client raises."""
 
 
 class CommandTimeout(GhChromeError, TimeoutError):
@@ -43,15 +41,11 @@ class TooManySessions(GhChromeError):
     pass
 
 
-class ConnectionLost(GhChromeError):
-    pass
-
-
 class SessionNotReady(GhChromeError):
     pass
 
 
-_BY_CODE: dict[ErrorCode, type[GhChromeError]] = {
+BY_CODE: dict[ErrorCode, type[GhChromeError]] = {
     ErrorCode.TIMEOUT: CommandTimeout,
     ErrorCode.NOT_FOUND: ElementNotFound,
     ErrorCode.INTERCEPTED: ElementIntercepted,
@@ -63,4 +57,4 @@ _BY_CODE: dict[ErrorCode, type[GhChromeError]] = {
 
 
 def to_exception(error: CommandError) -> GhChromeError:
-    return _BY_CODE[error.code](error.message)
+    return BY_CODE[error.code](error.message)

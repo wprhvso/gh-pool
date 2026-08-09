@@ -1,10 +1,7 @@
-from __future__ import annotations
-
 import asyncio
 import random
 
 from gh_chrome_protocol import Speed
-
 from gh_chrome_runner.xtest import SPECIAL_KEYS, Xtest
 
 MEDIANS: dict[Speed, float] = {

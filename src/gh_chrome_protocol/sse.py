@@ -1,4 +1,4 @@
-from __future__ import annotations
+"""Just enough of the server-sent events format to read a stream."""
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -8,32 +8,24 @@ from dataclasses import dataclass
 class SseMessage:
     event: str
     data: str
-    id: str | None
 
 
 async def parse_sse(chunks: AsyncIterator[bytes]) -> AsyncIterator[SseMessage]:
     buffer = ""
-    last_id: str | None = None
-    name = "message"
-    payload: list[str] = []
+    event = "message"
+    data: list[str] = []
     async for chunk in chunks:
         buffer += chunk.decode("utf-8", "replace")
         while "\n" in buffer:
             line, buffer = buffer.split("\n", 1)
             line = line.rstrip("\r")
-            if not line:
-                if payload:
-                    yield SseMessage(event=name, data="\n".join(payload), id=last_id)
-                name = "message"
-                payload = []
-                continue
-            if line.startswith(":"):
-                continue
-            field, _, value = line.partition(":")
-            value = value.removeprefix(" ")
-            if field == "event":
-                name = value
-            elif field == "data":
-                payload.append(value)
-            elif field == "id" and "\x00" not in value:
-                last_id = value
+            if not line:  # a blank line dispatches the message
+                if data:
+                    yield SseMessage(event, "\n".join(data))
+                event, data = "message", []
+            elif line.startswith(":"):
+                continue  # comment, used as a keepalive
+            elif line.startswith("event:"):
+                event = line.removeprefix("event:").removeprefix(" ")
+            elif line.startswith("data:"):
+                data.append(line.removeprefix("data:").removeprefix(" "))

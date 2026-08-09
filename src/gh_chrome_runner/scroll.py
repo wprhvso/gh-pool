@@ -1,13 +1,11 @@
-from __future__ import annotations
-
 import asyncio
 import random
 
 from gh_chrome_protocol import Speed
-
 from gh_chrome_runner.xtest import Xtest
 
-LINE_PIXELS = 53
+# One wheel button press moves Chrome by a full wheel delta, not by a text line.
+TICK_PIXELS = 120
 
 PROFILES: dict[Speed, tuple[float, float]] = {
     Speed.INSTANT: (0.0, 0.0),
@@ -24,7 +22,7 @@ class Scroller:
         self._rng = random.Random()
 
     async def by_pixels(self, dy: int) -> None:
-        ticks = max(1, round(abs(dy) / LINE_PIXELS))
+        ticks = max(1, round(abs(dy) / TICK_PIXELS))
         await self.by_ticks(ticks, up=dy < 0)
 
     async def by_ticks(self, ticks: int, up: bool) -> None:
