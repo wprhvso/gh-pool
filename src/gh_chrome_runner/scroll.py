@@ -4,7 +4,6 @@ import random
 from gh_chrome_protocol import Speed
 from gh_chrome_runner.xtest import Xtest
 
-# One wheel button press moves Chrome by a full wheel delta, not by a text line.
 TICK_PIXELS = 120
 
 PROFILES: dict[Speed, tuple[float, float]] = {

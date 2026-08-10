@@ -1,5 +1,3 @@
-"""Reading the page, and waiting for it to say what we want to hear."""
-
 import asyncio
 import re
 from typing import Any

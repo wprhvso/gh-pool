@@ -39,8 +39,6 @@ class TooManySessions(Exception):
 
 
 class Sessions:
-    """Session and command state. The database is the queue; this is the API over it."""
-
     def __init__(self, db: Database, events: Events) -> None:
         self._db = db
         self._events = events
@@ -60,7 +58,6 @@ class Sessions:
         return state
 
     async def started_at(self, session_id: UUID) -> datetime:
-        """When the recording clock starts: the runner's connection, or creation."""
         row = await self._db.one(
             "select coalesce(ready_at, created_at) as at from sessions where id = %s",
             (session_id,),
@@ -98,7 +95,6 @@ class Sessions:
         return _state(row)
 
     async def _claim_profile(self, tx: Tx, profile: str | None) -> bool:
-        """Register the profile if it is new; report whether its state is stale."""
         if profile is None:
             return False
         row = await tx.one("select stale from profiles where name = %s", (profile,))
@@ -133,7 +129,6 @@ class Sessions:
         return row is not None
 
     async def request_close(self, session_id: UUID) -> None:
-        """Ask the runner to shut down; a session with no runner yet just ends."""
         async with self._db.tx() as tx:
             row = await tx.one(
                 "select status from sessions where id = %s for update", (session_id,)
@@ -177,7 +172,6 @@ class Sessions:
             and row["profile"] is not None
             and row["persist"]
         ):
-            # The runner never got to save the profile, so what we have is old.
             await tx.run(
                 "update profiles set stale = true where name = %s", (row["profile"],)
             )
@@ -213,14 +207,12 @@ class Sessions:
         return command_id, seq
 
     async def _rejection(self, tx: Tx, session_id: UUID) -> Exception:
-        """Why the session would not take a command."""
         row = await tx.one("select status from sessions where id = %s", (session_id,))
         if row is None:
             return SessionNotFound(f"unknown session {session_id}")
         return SessionUnavailable(f"session is {row['status']}")
 
     async def take_next(self, session_id: UUID) -> DictRow | None:
-        """Claim the oldest queued command for the runner."""
         async with self._db.tx() as tx:
             row = await tx.one(
                 "update commands set status = 'started', started_at = now() where id = ("
@@ -283,7 +275,6 @@ class Sessions:
     async def dead_candidates(
         self, heartbeat_timeout: float, ready_timeout: float
     ) -> list[UUID]:
-        """Sessions whose runner stopped answering, or never showed up at all."""
         rows = await self._db.rows(
             "select id from sessions where "
             "(status = 'active' and heartbeat_at + make_interval(secs => %s) < now()) or "

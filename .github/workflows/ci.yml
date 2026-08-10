@@ -3,9 +3,10 @@ name: ci
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
-  qa:
+  python:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -15,15 +16,18 @@ jobs:
       - uses: actions/checkout@v7
       - uses: wprhvso/qa-python@v1
         with:
-          enable-cache: true
+          checks: ${{ matrix.check }}
 
   nix:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v7
-      - uses: cachix/install-nix-action@v31
+      - uses: wprhvso/qa-nix@v1
         with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-      - run: nix flake check -L
+          checks: fmt,statix,deadnix,flake
+
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: wprhvso/qa-shell@v1

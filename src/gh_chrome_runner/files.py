@@ -19,8 +19,6 @@ SETTLE = 0.3
 
 
 class Files:
-    """Uploads into file inputs, and finished downloads back to the server."""
-
     def __init__(self, cdp: Cdp, server: ServerClient, tabs: Tabs) -> None:
         self._cdp = cdp
         self._server = server
@@ -39,7 +37,6 @@ class Files:
         )
 
     async def _materialize(self, args: Upload) -> Path:
-        """Put the file on the runner's disk, from the server or from a URL."""
         settings.uploads_dir.mkdir(parents=True, exist_ok=True)
         if args.file_id is not None:
             return await self._server.get_upload(args.file_id, settings.uploads_dir)

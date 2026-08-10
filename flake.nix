@@ -14,9 +14,11 @@
     };
     pyproject-build-systems = {
       url = "github:pyproject-nix/build-system-pkgs";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.pyproject-nix.follows = "pyproject-nix";
-      inputs.uv2nix.follows = "uv2nix";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        pyproject-nix.follows = "pyproject-nix";
+        uv2nix.follows = "uv2nix";
+      };
     };
   };
 
@@ -62,8 +64,6 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
 
-          # The wheels uv installs, and Chrome itself, are linked against
-          # libraries a Nix shell does not expose by itself.
           libs = with pkgs; [
             stdenv.cc.cc.lib
             zlib

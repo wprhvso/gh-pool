@@ -11,7 +11,7 @@ CHUNK = 1 << 20
 
 
 class BadName(ValueError):
-    """A user-supplied file name that would escape its directory."""
+    pass
 
 
 def ensure_dirs() -> None:
@@ -47,7 +47,6 @@ def safe_name(name: str) -> str:
 
 
 async def write_atomic(target: Path, chunks: AsyncIterator[bytes]) -> int:
-    """Stream to a temporary file next to the target, then rename over it."""
     target.parent.mkdir(parents=True, exist_ok=True)
     size = 0
     with NamedTemporaryFile(dir=target.parent, delete=False) as tmp:

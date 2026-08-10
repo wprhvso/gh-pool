@@ -1,5 +1,3 @@
-"""Bring the browser up, run one command at a time, put the profile back."""
-
 import asyncio
 import contextlib
 import json
@@ -30,7 +28,6 @@ class Component(Protocol):
 
 @asynccontextmanager
 async def running[T: Component](component: T) -> AsyncGenerator[T]:
-    """Start a component and always stop it, even if starting went wrong."""
     try:
         await component.start()
         yield component
@@ -60,7 +57,6 @@ class Runner:
         return code
 
     async def _serve(self, config: RunnerConfig) -> int:
-        """Everything that needs the display, Chrome and the recorder alive."""
         code = 1
         async with AsyncExitStack() as stack:
             enter = stack.enter_async_context
@@ -93,7 +89,6 @@ class Runner:
         return code
 
     async def _consume(self, actions: Actions, healthy: Callable[[], bool]) -> None:
-        """Read the command stream and run one command at a time, in order."""
         async with self._server.stream() as chunks:
             async for message in parse_sse(chunks):
                 if message.event == "close":
@@ -140,14 +135,13 @@ class Runner:
             try:
                 alive = await self._server.heartbeat()
             except Exception:
-                alive = True  # a blip on our side is not the server giving up
+                alive = True
             if not alive:
                 log.warning("server considers the session finished")
                 return
             await asyncio.sleep(settings.heartbeat_interval)
 
     async def _save(self, config: RunnerConfig) -> None:
-        """Chrome is gone, so the profile directory is safe to archive."""
         if config.persist and config.profile:
             with contextlib.suppress(Exception):
                 await profile.store(self._server)

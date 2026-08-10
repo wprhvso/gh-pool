@@ -12,8 +12,6 @@ TIMED_OUT = CommandError(code=ErrorCode.TIMEOUT, message="command timed out")
 
 
 class Watchdog:
-    """Times commands out and buries sessions whose runner stopped answering."""
-
     def __init__(self, sessions: Sessions) -> None:
         self._sessions = sessions
         self._task: asyncio.Task[None] | None = None

@@ -12,7 +12,7 @@ QUEUE_SIZE = 1000
 
 
 class SubscriberOverflow(Exception):
-    """A listener fell too far behind; it has to reconnect and replay history."""
+    pass
 
 
 class Subscription:
@@ -37,8 +37,6 @@ class Subscription:
 
 
 class Events:
-    """Numbers events per session, stores them, and fans them out to listeners."""
-
     def __init__(self, db: Database) -> None:
         self._db = db
         self._subs: dict[UUID, set[Subscription]] = {}
@@ -64,7 +62,6 @@ class Events:
         return event
 
     async def stream(self, session_id: UUID, after_seq: int) -> AsyncGenerator[Event]:
-        """Replay everything after `after_seq`, then follow along live."""
         with self._subscribe(session_id) as sub:
             delivered = after_seq
             for event in await self._history(session_id, after_seq):
@@ -74,7 +71,7 @@ class Events:
                     return
             while True:
                 event = await sub.get()
-                if event.seq <= delivered:  # already replayed from history
+                if event.seq <= delivered:
                     continue
                 delivered = event.seq
                 yield event

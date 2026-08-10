@@ -25,7 +25,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - run: earthly --ci --push +multi --VERSION=${GITHUB_REF_NAME#v}
+      - run: earthly --ci --push +multi --VERSION="${GITHUB_REF_NAME#v}"
 
   pypi:
     runs-on: ubuntu-latest

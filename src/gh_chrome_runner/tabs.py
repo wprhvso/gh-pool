@@ -28,12 +28,6 @@ class NoActiveTab(Exception):
 
 
 class Tabs:
-    """The open pages, in the order they appeared, and which one is in front.
-
-    CDP hands us target events on the websocket reader, where nothing may block,
-    so the work they trigger is queued and drained by a task of our own.
-    """
-
     def __init__(self, cdp: Cdp) -> None:
         self.cdp = cdp
         self.on_event: Callable[[EventData], Awaitable[None]] | None = None
@@ -93,8 +87,6 @@ class Tabs:
         with contextlib.suppress(asyncio.CancelledError):
             await self._pump
         self._pump = None
-
-    # --- commands ------------------------------------------------------------
 
     async def create(self, url: str | None) -> int:
         result = await self.cdp.send(
@@ -159,10 +151,7 @@ class Tabs:
             raise IndexError(index)
         return tabs[index]
 
-    # --- target bookkeeping --------------------------------------------------
-
     async def _adopt_existing(self) -> None:
-        """Attach to the pages Chrome opened before we were listening."""
         try:
             pages = await Cdp.pages(settings.debug_port)
         except Exception as exc:
@@ -191,7 +180,6 @@ class Tabs:
                 )
 
     def _add(self, tab: Tab) -> bool:
-        """Record a new tab; True if it is the first one we have seen."""
         self._tabs[tab.target_id] = tab
         if tab.target_id not in self._order:
             self._order.append(tab.target_id)

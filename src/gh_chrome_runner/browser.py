@@ -33,8 +33,6 @@ def _sandbox_unavailable() -> bool:
 
 
 class Browser:
-    """Chrome on the virtual display, with a CDP connection to it."""
-
     def __init__(self, display: Display, params: SessionParams) -> None:
         self._display = display
         self._params = params
@@ -110,7 +108,6 @@ class Browser:
         return self._process is not None and self._process.returncode is None
 
     async def _wait_endpoint(self) -> str:
-        """Poll /json/version until Chrome publishes its websocket endpoint."""
         deadline = asyncio.get_running_loop().time() + READY_TIMEOUT
         while asyncio.get_running_loop().time() < deadline:
             if self._process is not None and self._process.returncode is not None:

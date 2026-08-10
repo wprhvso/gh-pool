@@ -237,7 +237,7 @@ in
     users.users = mkIf (cfg.user == "gh-chrome") {
       gh-chrome = {
         isSystemUser = true;
-        group = cfg.group;
+        inherit (cfg) group;
       };
     };
 

@@ -1,12 +1,7 @@
 # gh-chrome
 
-Chrome, running on a GitHub Actions runner, driven from your machine over HTTPS,
-with the whole session recorded and seekable in a browser.
-
-This is a proof of concept. It exists to show the thing is possible, not to be a
-substitute for a browser you own.
-
-## How it works
+Chrome on a GitHub Actions runner, driven from your machine over HTTPS, with the
+session recorded and seekable in a browser.
 
 ```
 your code ──POST──▶ server (VPS) ──SSE──▶ runner (GitHub Actions)
@@ -15,14 +10,10 @@ your code ──POST──▶ server (VPS) ──SSE──▶ runner (GitHub Act
                            profiles            └──▶ ffmpeg ──POST──▶ server
 ```
 
-Everything is plain HTTPS: server-sent events downstream, POST upstream. No
-websockets anywhere in the protocol.
-
-Calling `new()` returns a session id immediately; the server dispatches the
-workflow in the background and the runner connects back with that id. Commands
-go into a strictly sequential queue and return a handle you await. Input is not
-CDP — the runner moves a real cursor along a WindMouse trajectory and types
-through XTEST, so the page sees trusted events.
+Server-sent events downstream, POST upstream, no websockets. `new()` returns a
+session id at once; the server dispatches the workflow and the runner connects
+back with that id. Commands go into a strictly sequential queue and return a
+handle you await. Input goes through XTEST on a real cursor, not through CDP.
 
 ## Quick start
 
@@ -32,25 +23,29 @@ export GH_CHROME_TOKEN=...
 python examples/hello.py
 ```
 
-Watch the session at `https://chrome.example.com/s/<id>` (user `admin`, password
-is the token).
+The player lives at `https://chrome.example.com/s/<id>`: user `admin`, password
+the token.
 
-## Deploying the server
+## Server
 
-Set `GH_CHROME_TOKEN`, `GH_CHROME_DATABASE_URL`, `GH_CHROME_STORAGE`,
-`GH_CHROME_PUBLIC_URL`, `GH_CHROME_GITHUB_REPO` and `GH_CHROME_GITHUB_PAT`
-(needs the `actions:write` scope), then run `gh-chrome-server`.
+| Variable | Meaning |
+| --- | --- |
+| `GH_CHROME_TOKEN` | shared secret for the API and the player |
+| `GH_CHROME_DATABASE_URL` | libpq connection string |
+| `GH_CHROME_STORAGE` | directory for recordings, profiles and uploads |
+| `GH_CHROME_PUBLIC_URL` | origin the runner connects back to |
+| `GH_CHROME_GITHUB_REPO` | repository the browser workflow lives in |
+| `GH_CHROME_GITHUB_PAT` | token with the `actions:write` scope |
 
-In the repository that runs the workflow, add `GH_CHROME_URL` and
-`GH_CHROME_TOKEN` as secrets.
+Run `gh-chrome-server`. In the repository that hosts the workflow add
+`GH_CHROME_URL` and `GH_CHROME_TOKEN` as secrets; `GH_CHROME_PROXY` sends the
+runner's traffic through a proxy of your own.
 
-On NixOS the flake ships the server as a module, so none of that is set by hand:
+On NixOS the flake ships the server as a module:
 
 ```nix
 {
   inputs.gh-chrome.url = "github:wprhvso/gh-chrome";
-
-  # ...
 
   modules = [ inputs.gh-chrome.nixosModules.default ];
 }
@@ -68,50 +63,32 @@ On NixOS the flake ships the server as a module, so none of that is set by hand:
 }
 ```
 
-The token, the PAT and the database URL stay in the environment file; everything
-else is an option.
+The token, the PAT and the database URL stay in the environment file.
 
 ## Development
 
 ```bash
 nix develop
 uv sync
-uv run pytest -q
 ```
-
-Tests that need a display are skipped when `Xvfb` is missing or
-`GH_CHROME_SKIP_X` is set. To watch the runner locally:
 
 ```bash
 gh-chrome-runner --session <id> --server http://127.0.0.1:8000 &
 x11vnc -display :99 -nopw -forever
 ```
 
-## What this cannot do
+## Limits
 
-**Six hours per session.** That is the GitHub job limit. When it expires the
-runner dies, the profile is not saved, and the profile is flagged stale.
+| Limit | Consequence |
+| --- | --- |
+| six hours per job | the runner dies, the profile is flagged stale |
+| one token | no separation between users or sessions |
+| a fresh Azure IP per run | saved cookies still get re-verified |
+| the profile is archived at a clean shutdown | a killed job loses the session |
+| DASH-LL, one to three seconds behind | a recording to scrub, not a desktop |
 
-**One token, no isolation.** Anyone holding the token can read and control any
-session. There is no per-user separation by design.
-
-**A new IP every time.** Each runner comes up in a random Azure range. Cookies
-survive in the profile archive, but fraud detection keys on the address, so
-Google and banks will re-verify no matter how good the saved state is. Route
-outbound traffic through your own VPS (`GH_CHROME_PROXY`) if you need a session
-to actually hold.
-
-**No state after a crash.** The profile is archived once, at a clean shutdown.
-A killed job loses everything since the session started.
-
-**Latency.** DASH-LL puts the recording one to three seconds behind reality.
-It is a recording you can scrub, not a remote desktop.
-
-## Terms
-
-GitHub Actions is meant for CI. This project runs a browser there, which is
-outside what the Actions terms contemplate — it is a demonstration, and running
-it at scale, or to dodge compute costs, is not something the terms allow.
+GitHub Actions is meant for CI; this is a demonstration, not a way to dodge
+compute costs.
 
 ## License
 

@@ -1,5 +1,3 @@
-"""The DASH manifest the player polls while the session is being recorded."""
-
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -21,7 +19,6 @@ TEMPLATE = """<?xml version="1.0" encoding="utf-8"?>
 
 
 def count_segments(directory: Path) -> int:
-    """The highest segment number on disk, which is also how many there are."""
     if not directory.exists():
         return 0
     numbers = [

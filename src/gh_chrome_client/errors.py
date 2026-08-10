@@ -2,7 +2,7 @@ from gh_chrome_protocol import CommandError, ErrorCode
 
 
 class GhChromeError(Exception):
-    """Base class for everything this client raises."""
+    pass
 
 
 class CommandTimeout(GhChromeError, TimeoutError):

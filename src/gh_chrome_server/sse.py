@@ -1,5 +1,3 @@
-"""Sending server-sent events: the downstream half of the protocol."""
-
 import asyncio
 import contextlib
 from collections.abc import AsyncGenerator
@@ -40,7 +38,6 @@ def _encode(frame: Frame) -> str:
 
 
 async def _pump(source: AsyncGenerator[Frame]) -> AsyncGenerator[str]:
-    """Frames as they arrive, with a comment line whenever the source goes quiet."""
     yield f"retry: {RETRY_MS}\n\n"
     pending: asyncio.Task[Frame] | None = None
     try:
@@ -59,7 +56,6 @@ async def _pump(source: AsyncGenerator[Frame]) -> AsyncGenerator[str]:
             yield _encode(frame)
     finally:
         if pending is not None:
-            # Let the cancellation land before closing, or the generator is still running.
             pending.cancel()
             with contextlib.suppress(BaseException):
                 await pending

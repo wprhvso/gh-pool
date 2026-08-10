@@ -9,8 +9,6 @@ from gh_chrome_server.sessions import Sessions
 
 
 def _from_state(name: str) -> Callable[[Request], Any]:
-    """Hand a route whatever the lifespan put on app.state."""
-
     def get(request: Request) -> Any:
         return getattr(request.app.state, name)
 

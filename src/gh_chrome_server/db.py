@@ -15,8 +15,6 @@ Params = tuple[Any, ...]
 
 @dataclass(slots=True)
 class Tx:
-    """One transaction, plus anything that should happen once it commits."""
-
     conn: AsyncConnection[DictRow]
     hooks: list[Callable[[], None]] = field(default_factory=list)
 

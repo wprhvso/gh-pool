@@ -8,8 +8,6 @@ READY_TIMEOUT = 20.0
 
 
 class Display:
-    """An Xvfb screen with a window manager on it, for Chrome to draw into."""
-
     def __init__(self, width: int, height: int) -> None:
         self._width = width
         self._height = height

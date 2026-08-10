@@ -20,13 +20,6 @@ build:
     RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-editable
     SAVE ARTIFACT /app/.venv venv
 
-lint:
-    FROM +deps
-    COPY . .
-    RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen
-    RUN uv run ruff check .
-    RUN uv run ruff format --check .
-
 docker:
     FROM python:$PYTHON-slim-bookworm
     ARG TARGETARCH

@@ -58,7 +58,6 @@ async def _history(tabs: Tabs, offset: int) -> None:
 
 
 async def settle(tabs: Tabs, wait_until: WaitUntil) -> None:
-    """Block until the page reached the requested stage of loading."""
     while await tabs.evaluate("document.readyState") not in READY_STATES[wait_until]:
         await asyncio.sleep(POLL)
     if wait_until is not WaitUntil.NETWORKIDLE:

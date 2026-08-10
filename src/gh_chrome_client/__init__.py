@@ -1,5 +1,3 @@
-"""Drive a Chrome running on a GitHub Actions runner, over plain HTTPS."""
-
 from typing import Any
 
 from gh_chrome_client.errors import (
@@ -68,11 +66,6 @@ async def new(
     token: str | None = None,
     **params: Any,
 ) -> Session:
-    """Ask the server for a session; the runner connects a minute or so later.
-
-    Extra keyword arguments are SessionParams fields (width, height, fps,
-    bitrate, mouse_speed, type_speed, scroll_speed, timeout, subscribe).
-    """
     http = Http(server, token)
     request = SessionCreate(
         profile=profile,

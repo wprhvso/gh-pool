@@ -53,7 +53,6 @@ async def get_config(session_id: UUID, sessions: Ss, _: Token) -> RunnerConfig:
 async def stream_commands(
     session_id: UUID, request: Request, sessions: Ss, _: Token
 ) -> Response:
-    """The command queue, as one long server-sent event stream."""
     await sessions.require_live(session_id)
     await sessions.mark_ready(session_id)
 

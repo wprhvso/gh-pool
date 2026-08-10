@@ -1,12 +1,8 @@
-"""Wire types shared by the client, the server and the runner."""
-
 from enum import StrEnum
 from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
-
-# --- sessions ---------------------------------------------------------------
 
 
 class Speed(StrEnum):
@@ -39,8 +35,6 @@ class CloseReason(StrEnum):
 
 
 class SessionParams(BaseModel):
-    """Everything the runner needs to know before it starts Chrome."""
-
     model_config = ConfigDict(extra="forbid")
 
     width: int = Field(default=1920, ge=320, le=3840)
@@ -87,9 +81,6 @@ class ProfileInfo(BaseModel):
     updated_at: str | None
 
 
-# --- errors -----------------------------------------------------------------
-
-
 class ErrorCode(StrEnum):
     TIMEOUT = "timeout"
     NOT_FOUND = "not_found"
@@ -103,9 +94,6 @@ class ErrorCode(StrEnum):
 class CommandError(BaseModel):
     code: ErrorCode
     message: str
-
-
-# --- commands ---------------------------------------------------------------
 
 
 class Method(StrEnum):
@@ -153,9 +141,6 @@ class WaitUntil(StrEnum):
 class ElementState(StrEnum):
     ATTACHED = "attached"
     VISIBLE = "visible"
-
-
-# Commands that share a payload are one model; `method` stays the discriminator.
 
 
 class Bare(BaseModel):
@@ -316,9 +301,6 @@ class CommandResult(BaseModel):
     command_id: UUID
     result: object = None
     error: object = None
-
-
-# --- events -----------------------------------------------------------------
 
 
 class EventType(StrEnum):

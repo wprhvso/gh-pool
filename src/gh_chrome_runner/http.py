@@ -15,8 +15,6 @@ TRANSFER_TIMEOUT = httpx.Timeout(600.0)
 
 
 class ServerClient:
-    """The runner's side of the wire: one session, one server."""
-
     def __init__(self, session_id: UUID) -> None:
         self._id = session_id
         self._client = httpx.AsyncClient(
@@ -35,7 +33,6 @@ class ServerClient:
 
     @asynccontextmanager
     async def stream(self) -> AsyncGenerator[AsyncIterator[bytes]]:
-        """The command stream; it stays open for the life of the session."""
         async with self._client.stream(
             "GET",
             "/stream",
@@ -57,7 +54,6 @@ class ServerClient:
         response.raise_for_status()
 
     async def heartbeat(self) -> bool:
-        """False once the server has given up on this session."""
         return (await self._client.post("/heartbeat")).is_success
 
     async def event(self, data: EventData) -> None:
@@ -80,11 +76,9 @@ class ServerClient:
         response.raise_for_status()
 
     async def get_profile(self, target: Path) -> bool:
-        """False when the server has no archive for this profile yet."""
         return await self._get_file("/profile", target) is not None
 
     async def get_upload(self, file_id: str, directory: Path) -> Path:
-        """Fetch a file the client uploaded, keeping the name the client gave it."""
         async with self._client.stream(
             "GET", f"/files/{file_id}", timeout=TRANSFER_TIMEOUT
         ) as response:
@@ -112,7 +106,6 @@ async def _write(target: Path, response: httpx.Response) -> Path:
 
 
 def _sent_name(response: httpx.Response, fallback: str) -> str:
-    """The file name out of Content-Disposition, which is what the page will see."""
     _, _, name = response.headers.get("content-disposition", "").partition("filename=")
     return Path(name.strip(' ";')).name or fallback
 

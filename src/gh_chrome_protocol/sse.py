@@ -1,5 +1,3 @@
-"""Just enough of the server-sent events format to read a stream."""
-
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
@@ -19,12 +17,12 @@ async def parse_sse(chunks: AsyncIterator[bytes]) -> AsyncIterator[SseMessage]:
         while "\n" in buffer:
             line, buffer = buffer.split("\n", 1)
             line = line.rstrip("\r")
-            if not line:  # a blank line dispatches the message
+            if not line:
                 if data:
                     yield SseMessage(event, "\n".join(data))
                 event, data = "message", []
             elif line.startswith(":"):
-                continue  # comment, used as a keepalive
+                continue
             elif line.startswith("event:"):
                 event = line.removeprefix("event:").removeprefix(" ")
             elif line.startswith("data:"):

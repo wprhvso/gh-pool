@@ -16,7 +16,6 @@ from gh_chrome_server.sessions import (
 )
 from gh_chrome_server.watchdog import Watchdog
 
-# Domain errors the routes raise; everything else falls through to a 500.
 STATUS_CODES: dict[type[Exception], int] = {
     SessionNotFound: status.HTTP_404_NOT_FOUND,
     SessionUnavailable: status.HTTP_409_CONFLICT,

@@ -1,5 +1,3 @@
-"""Recording the display with ffmpeg and shipping DASH segments as they land."""
-
 import asyncio
 import contextlib
 import logging
@@ -27,17 +25,14 @@ def _ffmpeg_command(display: Display, config: RunnerConfig) -> list[str]:
     return [
         settings.ffmpeg_binary,
         "-hide_banner", "-loglevel", "warning",
-        # grab the X display, cursor included
         "-f", "x11grab", "-draw_mouse", "1",
         "-framerate", str(params.fps),
         "-video_size", f"{params.width}x{params.height}",
         "-i", display.name,
-        # encode for latency rather than for size
         "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-profile:v", "high",
         "-b:v", bitrate, "-maxrate", bitrate, "-bufsize", bitrate,
         "-g", keyframe, "-keyint_min", keyframe, "-sc_threshold", "0",
         "-pix_fmt", "yuv420p",
-        # low-latency DASH, one file per segment
         "-f", "dash", "-ldash", "1", "-streaming", "1",
         "-use_template", "1", "-use_timeline", "0",
         "-seg_duration", str(config.segment_seconds), "-remove_at_exit", "0",
@@ -86,7 +81,7 @@ class Capture:
                 self._process.kill()
                 await self._process.wait()
         with contextlib.suppress(Exception):
-            await self._scan(final=True)  # ffmpeg finished the last segment on exit
+            await self._scan(final=True)
         log.info("capture stopped after %d segments", len(self._sent))
 
     async def _watch(self) -> None:
@@ -117,7 +112,6 @@ class Capture:
                 self._sent.add(path.name)
 
     def _stable(self, path: Path) -> bool:
-        """Only upload a segment once its size has held still for a few scans."""
         size = path.stat().st_size
         if size == 0:
             return False

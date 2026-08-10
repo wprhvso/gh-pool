@@ -31,15 +31,12 @@ def _check(response: httpx.Response) -> httpx.Response:
 
 
 async def _check_stream(response: httpx.Response) -> None:
-    """Same, for a streaming response whose body has not been read yet."""
     if response.is_error:
         await response.aread()
         _check(response)
 
 
 class Http:
-    """The HTTPS side of the client: POST upstream, server-sent events downstream."""
-
     def __init__(self, server: str | None = None, token: str | None = None) -> None:
         self.base_url = (server or os.environ.get("GH_CHROME_URL", DEFAULT_URL)).rstrip(
             "/"

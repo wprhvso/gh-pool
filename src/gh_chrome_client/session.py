@@ -55,7 +55,6 @@ from gh_chrome_protocol.sse import parse_sse
 
 log = logging.getLogger(__name__)
 
-# Events forwarded to Session.events(); the rest only drive command bookkeeping.
 USER_EVENTS = frozenset(
     {
         EventType.TAB_OPENED,
@@ -71,8 +70,6 @@ MAX_BACKOFF = 8.0
 
 
 class Command[T]:
-    """A queued command. Await it for the result, or fire several and await later."""
-
     __slots__ = ("_future", "_task")
 
     def __init__(self) -> None:
@@ -101,7 +98,6 @@ class Command[T]:
 
 
 async def _wait_any(*events: asyncio.Event, timeout: float) -> bool:
-    """Wait until one of the events is set. False if the timeout hit first."""
     waiters = [asyncio.ensure_future(event.wait()) for event in events]
     try:
         done, _ = await asyncio.wait(
@@ -114,8 +110,6 @@ async def _wait_any(*events: asyncio.Event, timeout: float) -> bool:
 
 
 class Session:
-    """A live browser. Every method below queues one command and returns a handle."""
-
     def __init__(self, http: Http, state: SessionState, close_timeout: float) -> None:
         self._http = http
         self._state = state
@@ -139,7 +133,6 @@ class Session:
 
     @property
     def state_stale(self) -> bool:
-        """True when the previous runner died without saving the profile."""
         return self._state.state_stale
 
     @property
@@ -158,7 +151,6 @@ class Session:
         await self.close()
 
     async def ready(self, timeout: float = 300.0) -> None:
-        """Wait for the GitHub Actions runner to pick the session up."""
         settled = await _wait_any(self._ready, self._finished, timeout=timeout)
         if self._finished.is_set() and not self._ready.is_set():
             raise SessionDead("session finished before the runner connected")
@@ -185,7 +177,6 @@ class Session:
             await self._http.aclose()
 
     async def events(self) -> AsyncIterator[Event]:
-        """Tab and download events, once subscribed to the matching topic."""
         queue: asyncio.Queue[Event | None] = asyncio.Queue()
         self._subscribers.add(queue)
         try:
@@ -196,10 +187,7 @@ class Session:
         finally:
             self._subscribers.discard(queue)
 
-    # --- event stream --------------------------------------------------------
-
     async def _read_events(self) -> None:
-        """Follow the event stream, reconnecting from the last sequence number."""
         backoff = MIN_BACKOFF
         while True:
             try:
@@ -230,7 +218,7 @@ class Session:
         elif isinstance(data, CommandFinished | CommandFailed):
             command = self._pending.pop(data.command_id, None)
             if command is None:
-                self._stash[data.command_id] = data  # the result beat the POST reply
+                self._stash[data.command_id] = data
             else:
                 _settle(command, data)
         if data.type in USER_EVENTS:
@@ -241,8 +229,6 @@ class Session:
         for command in tuple(self._pending.values()):
             command._fail(error)
         self._pending.clear()
-
-    # --- command plumbing ----------------------------------------------------
 
     def _call[T](
         self, args: CommandArgs | Awaitable[CommandArgs], timeout: float | None = None
@@ -276,8 +262,6 @@ class Session:
         else:
             self._pending[accepted.command_id] = command
 
-    # --- navigation ----------------------------------------------------------
-
     def goto(
         self,
         url: str,
@@ -295,8 +279,6 @@ class Session:
     def reload(self, timeout: float | None = None) -> Command[None]:
         return self._call(Bare(method=Method.RELOAD), timeout)
 
-    # --- tabs ----------------------------------------------------------------
-
     def new_tab(
         self, url: str | None = None, timeout: float | None = None
     ) -> Command[int]:
@@ -310,8 +292,6 @@ class Session:
 
     def tabs(self, timeout: float | None = None) -> Command[list[dict[str, Any]]]:
         return self._call(Bare(method=Method.TABS), timeout)
-
-    # --- input ---------------------------------------------------------------
 
     def click(self, selector: str, timeout: float | None = None) -> Command[None]:
         return self._call(Selector(method=Method.CLICK, selector=selector), timeout)
@@ -360,7 +340,6 @@ class Session:
         url: str | None = None,
         timeout: float | None = None,
     ) -> Command[None]:
-        """Attach a local file (uploaded through the server) or a remote URL."""
         if (path is None) == (url is None):
             raise ValueError("pass exactly one of path or url")
         if url is not None:
@@ -372,8 +351,6 @@ class Session:
     async def _upload_args(self, selector: str, path: Path) -> CommandArgs:
         file_id = await self._http.upload_file(self.id, path)
         return Upload(selector=selector, file_id=str(file_id))
-
-    # --- reading the page ----------------------------------------------------
 
     def text(self, selector: str, timeout: float | None = None) -> Command[str]:
         return self._call(Selector(method=Method.TEXT, selector=selector), timeout)
@@ -403,13 +380,10 @@ class Session:
         )
 
     def screenshot(self, timeout: float | None = None) -> Command[str]:
-        """A base64 PNG; see screenshot_bytes() for the decoded version."""
         return self._call(Bare(method=Method.SCREENSHOT), timeout)
 
     async def screenshot_bytes(self, timeout: float | None = None) -> bytes:
         return base64.b64decode(await self.screenshot(timeout))
-
-    # --- waiting -------------------------------------------------------------
 
     def wait_for(
         self,
@@ -440,8 +414,6 @@ class Session:
         return self._call(
             Expression(method=Method.WAIT_FOR_FUNCTION, expression=expression), timeout
         )
-
-    # --- session -------------------------------------------------------------
 
     def subscribe(
         self, topics: list[Topic], timeout: float | None = None

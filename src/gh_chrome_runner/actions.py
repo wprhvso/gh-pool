@@ -1,5 +1,3 @@
-"""The command table: one protocol method, one thing to do to the browser."""
-
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -94,7 +92,6 @@ class Actions:
         return await self._handlers[args.method](args)
 
     async def subscribe(self, topics: list[Topic]) -> None:
-        """Forward tab and download activity to the server, or stop doing so."""
         self.tabs.on_event = self._server.event if Topic.TABS in topics else None
         if Topic.DOWNLOADS in topics:
             self.files.watch()

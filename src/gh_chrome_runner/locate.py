@@ -1,5 +1,3 @@
-"""Where an element is on the physical screen, so the mouse can be aimed at it."""
-
 import asyncio
 import json
 from dataclasses import dataclass
@@ -22,8 +20,6 @@ class ElementIntercepted(Exception):
 
 @dataclass(frozen=True, slots=True)
 class Box:
-    """An element's rectangle, in CSS pixels relative to the viewport."""
-
     x: float
     y: float
     width: float
@@ -47,8 +43,6 @@ class Box:
 
 @dataclass(frozen=True, slots=True)
 class Viewport:
-    """Where the page content sits on the X display, and at what scale."""
-
     screen_x: float
     screen_y: float
     scale: float
@@ -93,7 +87,6 @@ HIT_JS = """
 
 
 def js_string(value: str) -> str:
-    """Quote a Python string for embedding in a JavaScript snippet."""
     return json.dumps(value)
 
 
@@ -134,7 +127,6 @@ class Locator:
             await asyncio.sleep(POLL_INTERVAL)
 
     async def stable_box(self, selector: str, timeout: float = APPEAR_TIMEOUT) -> Box:
-        """Wait until the element stops moving, so the click lands where we aimed."""
         previous = await self.wait_for_box(selector, timeout)
         while True:
             await asyncio.sleep(STABLE_INTERVAL)
@@ -147,13 +139,10 @@ class Locator:
                 previous = current
 
     async def hit_test(self, selector: str, x: float, y: float) -> bool:
-        """Whether the element really is what sits under that viewport point."""
         return bool(await self._tabs.evaluate(HIT_JS % (js_string(selector), x, y)))
 
     def in_view(self, box: Box, viewport: Viewport, margin: float = 8.0) -> bool:
-        """Clear of the top and bottom edges, which is all that scrolling can fix."""
         return box.y >= margin and box.y + box.height <= viewport.height - margin
 
     def scroll_delta(self, box: Box, viewport: Viewport) -> int:
-        """How far to scroll to put the element in the middle of the viewport."""
         return round(box.y + box.height / 2 - viewport.height / 2)
