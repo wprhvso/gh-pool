@@ -10,7 +10,12 @@ from types import TracebackType
 from typing import Any, Self, cast
 from uuid import UUID
 
-from gh_chrome_client.errors import GhChromeError, SessionDead, SessionNotReady, to_exception
+from gh_chrome_client.errors import (
+    GhChromeError,
+    SessionDead,
+    SessionNotReady,
+    to_exception,
+)
 from gh_chrome_client.http import Http
 from gh_chrome_protocol import (
     Attr,
@@ -99,7 +104,9 @@ async def _wait_any(*events: asyncio.Event, timeout: float) -> bool:
     """Wait until one of the events is set. False if the timeout hit first."""
     waiters = [asyncio.ensure_future(event.wait()) for event in events]
     try:
-        done, _ = await asyncio.wait(waiters, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
+        done, _ = await asyncio.wait(
+            waiters, timeout=timeout, return_when=asyncio.FIRST_COMPLETED
+        )
         return bool(done)
     finally:
         for waiter in waiters:
@@ -201,13 +208,14 @@ class Session:
                         event = Event.model_validate_json(message.data)
                         self._last_seq = event.seq
                         self._on_event(event)
-                return
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
                 log.debug("event stream dropped: %s", exc)
                 await asyncio.sleep(backoff * random.uniform(0.5, 1.5))
                 backoff = min(backoff * 2, MAX_BACKOFF)
+            else:
+                return
 
     def _on_event(self, event: Event) -> None:
         data = event.data
@@ -256,7 +264,9 @@ class Session:
                 raise SessionDead("session is closed")
             accepted = await self._http.enqueue(self.id, args, timeout)
         except Exception as exc:
-            command._fail(exc if isinstance(exc, GhChromeError) else GhChromeError(str(exc)))
+            command._fail(
+                exc if isinstance(exc, GhChromeError) else GhChromeError(str(exc))
+            )
             return
         stashed = self._stash.pop(accepted.command_id, None)
         if stashed is not None:
@@ -269,7 +279,10 @@ class Session:
     # --- navigation ----------------------------------------------------------
 
     def goto(
-        self, url: str, wait_until: WaitUntil = WaitUntil.LOAD, timeout: float | None = None
+        self,
+        url: str,
+        wait_until: WaitUntil = WaitUntil.LOAD,
+        timeout: float | None = None,
     ) -> Command[None]:
         return self._call(Goto(url=url, wait_until=wait_until), timeout)
 
@@ -284,7 +297,9 @@ class Session:
 
     # --- tabs ----------------------------------------------------------------
 
-    def new_tab(self, url: str | None = None, timeout: float | None = None) -> Command[int]:
+    def new_tab(
+        self, url: str | None = None, timeout: float | None = None
+    ) -> Command[int]:
         return self._call(NewTab(url=url), timeout)
 
     def activate(self, index: int, timeout: float | None = None) -> Command[None]:
@@ -305,13 +320,19 @@ class Session:
         return self._call(Selector(method=Method.DBLCLICK, selector=selector), timeout)
 
     def right_click(self, selector: str, timeout: float | None = None) -> Command[None]:
-        return self._call(Selector(method=Method.RIGHT_CLICK, selector=selector), timeout)
+        return self._call(
+            Selector(method=Method.RIGHT_CLICK, selector=selector), timeout
+        )
 
     def hover(self, selector: str, timeout: float | None = None) -> Command[None]:
         return self._call(Selector(method=Method.HOVER, selector=selector), timeout)
 
     def type(
-        self, selector: str, text: str, clear: bool = False, timeout: float | None = None
+        self,
+        selector: str,
+        text: str,
+        clear: bool = False,
+        timeout: float | None = None,
     ) -> Command[None]:
         return self._call(TypeText(selector=selector, text=text, clear=clear), timeout)
 
@@ -321,7 +342,9 @@ class Session:
     def hotkey(self, *keys: str, timeout: float | None = None) -> Command[None]:
         return self._call(Hotkey(keys=list(keys)), timeout)
 
-    def select(self, selector: str, value: str, timeout: float | None = None) -> Command[None]:
+    def select(
+        self, selector: str, value: str, timeout: float | None = None
+    ) -> Command[None]:
         return self._call(SelectOption(selector=selector, value=value), timeout)
 
     def scroll_to(self, selector: str, timeout: float | None = None) -> Command[None]:
@@ -342,7 +365,9 @@ class Session:
             raise ValueError("pass exactly one of path or url")
         if url is not None:
             return self._call(Upload(selector=selector, url=url), timeout)
-        return self._call(self._upload_args(selector, Path(cast("Path | str", path))), timeout)
+        return self._call(
+            self._upload_args(selector, Path(cast("Path | str", path))), timeout
+        )
 
     async def _upload_args(self, selector: str, path: Path) -> CommandArgs:
         file_id = await self._http.upload_file(self.id, path)
@@ -353,10 +378,14 @@ class Session:
     def text(self, selector: str, timeout: float | None = None) -> Command[str]:
         return self._call(Selector(method=Method.TEXT, selector=selector), timeout)
 
-    def html(self, selector: str | None = None, timeout: float | None = None) -> Command[str]:
+    def html(
+        self, selector: str | None = None, timeout: float | None = None
+    ) -> Command[str]:
         return self._call(Html(selector=selector), timeout)
 
-    def attr(self, selector: str, name: str, timeout: float | None = None) -> Command[str | None]:
+    def attr(
+        self, selector: str, name: str, timeout: float | None = None
+    ) -> Command[str | None]:
         return self._call(Attr(selector=selector, name=name), timeout)
 
     def value(self, selector: str, timeout: float | None = None) -> Command[str]:
@@ -369,7 +398,9 @@ class Session:
         return self._call(Bare(method=Method.TITLE), timeout)
 
     def evaluate(self, expression: str, timeout: float | None = None) -> Command[Any]:
-        return self._call(Expression(method=Method.EVAL, expression=expression), timeout)
+        return self._call(
+            Expression(method=Method.EVAL, expression=expression), timeout
+        )
 
     def screenshot(self, timeout: float | None = None) -> Command[str]:
         """A base64 PNG; see screenshot_bytes() for the decoded version."""
@@ -388,8 +419,12 @@ class Session:
     ) -> Command[None]:
         return self._call(WaitFor(selector=selector, state=state), timeout)
 
-    def wait_for_hidden(self, selector: str, timeout: float | None = None) -> Command[None]:
-        return self._call(Selector(method=Method.WAIT_FOR_HIDDEN, selector=selector), timeout)
+    def wait_for_hidden(
+        self, selector: str, timeout: float | None = None
+    ) -> Command[None]:
+        return self._call(
+            Selector(method=Method.WAIT_FOR_HIDDEN, selector=selector), timeout
+        )
 
     def wait_for_url(self, pattern: str, timeout: float | None = None) -> Command[None]:
         return self._call(WaitForUrl(pattern=pattern), timeout)
@@ -399,14 +434,18 @@ class Session:
     ) -> Command[None]:
         return self._call(WaitForLoad(wait_until=wait_until), timeout)
 
-    def wait_for_function(self, expression: str, timeout: float | None = None) -> Command[None]:
+    def wait_for_function(
+        self, expression: str, timeout: float | None = None
+    ) -> Command[None]:
         return self._call(
             Expression(method=Method.WAIT_FOR_FUNCTION, expression=expression), timeout
         )
 
     # --- session -------------------------------------------------------------
 
-    def subscribe(self, topics: list[Topic], timeout: float | None = None) -> Command[None]:
+    def subscribe(
+        self, topics: list[Topic], timeout: float | None = None
+    ) -> Command[None]:
         return self._call(Subscribe(topics=topics), timeout)
 
     async def download(self, name: str, target: Path | str) -> Path:

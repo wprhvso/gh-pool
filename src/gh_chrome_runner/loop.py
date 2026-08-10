@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import json
 import logging
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Any, Protocol
 from uuid import UUID
@@ -29,7 +29,7 @@ class Component(Protocol):
 
 
 @asynccontextmanager
-async def running[T: Component](component: T) -> AsyncIterator[T]:
+async def running[T: Component](component: T) -> AsyncGenerator[T]:
     """Start a component and always stop it, even if starting went wrong."""
     try:
         await component.start()
@@ -64,16 +64,22 @@ class Runner:
         code = 1
         async with AsyncExitStack() as stack:
             enter = stack.enter_async_context
-            display = await enter(running(Display(config.params.width, config.params.height)))
+            display = await enter(
+                running(Display(config.params.width, config.params.height))
+            )
             browser = await enter(running(Browser(display, config.params)))
             await enter(running(Capture(display, self._server, config)))
             xtest = await asyncio.to_thread(Xtest, display.name)
-            actions = await enter(running(Actions(browser.cdp, xtest, self._server, config.params)))
+            actions = await enter(
+                running(Actions(browser.cdp, xtest, self._server, config.params))
+            )
 
             log.info("runner is ready for session %s", self._id)
             beat = asyncio.create_task(self._beat())
             try:
-                await self._consume(actions, lambda: display.alive() and browser.alive())
+                await self._consume(
+                    actions, lambda: display.alive() and browser.alive()
+                )
                 code = 0
             except Exception:
                 log.exception("runner loop failed")
@@ -101,7 +107,9 @@ class Runner:
                     if not healthy():
                         raise RuntimeError("browser or display died")
                     self._current_id = envelope.command_id
-                    self._current = asyncio.create_task(self._execute(actions, envelope))
+                    self._current = asyncio.create_task(
+                        self._execute(actions, envelope)
+                    )
 
     async def _execute(self, actions: Actions, envelope: CommandEnvelope) -> None:
         result: Any = None

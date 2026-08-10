@@ -46,7 +46,9 @@ def _ffmpeg_command(display: Display, config: RunnerConfig) -> list[str]:
 
 
 class Capture:
-    def __init__(self, display: Display, server: ServerClient, config: RunnerConfig) -> None:
+    def __init__(
+        self, display: Display, server: ServerClient, config: RunnerConfig
+    ) -> None:
         self._display = display
         self._server = server
         self._config = config
@@ -129,7 +131,9 @@ class Capture:
             try:
                 await self._server.put_file(route, path)
             except Exception as exc:
-                log.warning("failed to upload %s (attempt %d): %s", path.name, attempt + 1, exc)
+                log.warning(
+                    "failed to upload %s (attempt %d): %s", path.name, attempt + 1, exc
+                )
                 await asyncio.sleep(1.0)
             else:
                 return True

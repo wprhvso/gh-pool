@@ -1,6 +1,7 @@
 import os
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 from pathlib import Path
 from uuid import UUID
 
@@ -20,9 +21,9 @@ DEFAULT_URL = "http://127.0.0.1:8000"
 
 
 def _check(response: httpx.Response) -> httpx.Response:
-    if response.status_code == httpx.codes.TOO_MANY_REQUESTS:
+    if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
         raise TooManySessions(response.text)
-    if response.status_code == httpx.codes.CONFLICT:
+    if response.status_code == HTTPStatus.CONFLICT:
         raise SessionUnavailable(response.text)
     if response.is_error:
         raise GhChromeError(f"{response.status_code}: {response.text[:300]}")
@@ -40,7 +41,9 @@ class Http:
     """The HTTPS side of the client: POST upstream, server-sent events downstream."""
 
     def __init__(self, server: str | None = None, token: str | None = None) -> None:
-        self.base_url = (server or os.environ.get("GH_CHROME_URL", DEFAULT_URL)).rstrip("/")
+        self.base_url = (server or os.environ.get("GH_CHROME_URL", DEFAULT_URL)).rstrip(
+            "/"
+        )
         secret = token if token is not None else os.environ.get("GH_CHROME_TOKEN", "")
         if not secret:
             raise GhChromeError("GH_CHROME_TOKEN is not set")
@@ -54,7 +57,9 @@ class Http:
         await self._client.aclose()
 
     async def create_session(self, request: SessionCreate) -> SessionState:
-        response = await self._client.post("/sessions", json=request.model_dump(mode="json"))
+        response = await self._client.post(
+            "/sessions", json=request.model_dump(mode="json")
+        )
         return SessionState.model_validate(_check(response).json())
 
     async def enqueue(
@@ -93,7 +98,9 @@ class Http:
         return [ProfileInfo.model_validate(item) for item in _check(response).json()]
 
     @asynccontextmanager
-    async def events(self, session_id: UUID, last_seq: int) -> AsyncGenerator[AsyncIterator[bytes]]:
+    async def events(
+        self, session_id: UUID, last_seq: int
+    ) -> AsyncGenerator[AsyncIterator[bytes]]:
         async with self._client.stream(
             "GET",
             f"/sessions/{session_id}/events",

@@ -25,7 +25,9 @@ async def require_token(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "invalid token")
 
 
-async def require_basic(credentials: Annotated[HTTPBasicCredentials, Depends(_basic)]) -> None:
+async def require_basic(
+    credentials: Annotated[HTTPBasicCredentials, Depends(_basic)],
+) -> None:
     """The player is watched in a browser, so it asks for the token as a password."""
     user_ok = secrets.compare_digest(credentials.username, BASIC_USER)
     token_ok = secrets.compare_digest(credentials.password, settings.token)

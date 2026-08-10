@@ -5,7 +5,13 @@ import random
 
 from gh_chrome_protocol import SessionParams
 from gh_chrome_runner.keyboard import Keyboard
-from gh_chrome_runner.locate import Box, ElementIntercepted, ElementMissing, Locator, Viewport
+from gh_chrome_runner.locate import (
+    Box,
+    ElementIntercepted,
+    ElementMissing,
+    Locator,
+    Viewport,
+)
 from gh_chrome_runner.locate import js_string as js
 from gh_chrome_runner.mouse import TUNINGS, wind_mouse
 from gh_chrome_runner.scroll import Scroller
@@ -110,7 +116,10 @@ class Input:
             raise ElementMissing(selector)
         if not moved.close_to(box):  # it shifted while we were on the way
             drifted = self._aim(moved, viewport)
-            if any(abs(a - b) > DRIFT_TOLERANCE for a, b in zip(drifted, target, strict=True)):
+            if any(
+                abs(a - b) > DRIFT_TOLERANCE
+                for a, b in zip(drifted, target, strict=True)
+            ):
                 await self._travel(drifted)
                 target = drifted
         return viewport.to_viewport(*target)
@@ -124,7 +133,9 @@ class Input:
 
     async def _travel(self, target: tuple[float, float]) -> None:
         start = self._xtest.pointer()
-        path = wind_mouse((float(start.x), float(start.y)), target, self._tuning, self._rng)
+        path = wind_mouse(
+            (float(start.x), float(start.y)), target, self._tuning, self._rng
+        )
         for x, y in path:
             self._xtest.move(x, y)
             if self._tuning.step_delay > 0:

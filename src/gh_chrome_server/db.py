@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, LiteralString
 
 from psycopg import AsyncConnection
 from psycopg.rows import DictRow, dict_row
@@ -23,14 +23,14 @@ class Tx:
     def after_commit(self, hook: Callable[[], None]) -> None:
         self.hooks.append(hook)
 
-    async def run(self, sql: str, params: Params = ()) -> None:
+    async def run(self, sql: LiteralString, params: Params = ()) -> None:
         await self.conn.execute(sql, params)
 
-    async def one(self, sql: str, params: Params = ()) -> DictRow | None:
+    async def one(self, sql: LiteralString, params: Params = ()) -> DictRow | None:
         cur = await self.conn.execute(sql, params)
         return await cur.fetchone()
 
-    async def rows(self, sql: str, params: Params = ()) -> list[DictRow]:
+    async def rows(self, sql: LiteralString, params: Params = ()) -> list[DictRow]:
         cur = await self.conn.execute(sql, params)
         return list(await cur.fetchall())
 
@@ -60,12 +60,12 @@ class Database:
         for hook in tx.hooks:
             hook()
 
-    async def one(self, sql: str, params: Params = ()) -> DictRow | None:
+    async def one(self, sql: LiteralString, params: Params = ()) -> DictRow | None:
         async with self._pool.connection() as conn:
             cur = await conn.execute(sql, params)
             return await cur.fetchone()
 
-    async def rows(self, sql: str, params: Params = ()) -> list[DictRow]:
+    async def rows(self, sql: LiteralString, params: Params = ()) -> list[DictRow]:
         async with self._pool.connection() as conn:
             cur = await conn.execute(sql, params)
             return list(await cur.fetchall())
@@ -82,4 +82,6 @@ class Database:
                 if path.name in applied:
                     continue
                 await conn.execute(path.read_bytes())
-                await conn.execute("insert into schema_migrations (name) values (%s)", (path.name,))
+                await conn.execute(
+                    "insert into schema_migrations (name) values (%s)", (path.name,)
+                )

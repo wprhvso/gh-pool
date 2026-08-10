@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -60,7 +61,9 @@ class ServerClient:
         return (await self._client.post("/heartbeat")).is_success
 
     async def event(self, data: EventData) -> None:
-        response = await self._client.post("/events", json={"data": data.model_dump(mode="json")})
+        response = await self._client.post(
+            "/events", json={"data": data.model_dump(mode="json")}
+        )
         response.raise_for_status()
 
     async def confirm_close(self) -> None:
@@ -86,11 +89,15 @@ class ServerClient:
             "GET", f"/files/{file_id}", timeout=TRANSFER_TIMEOUT
         ) as response:
             response.raise_for_status()
-            return await _write(directory / file_id / _sent_name(response, file_id), response)
+            return await _write(
+                directory / file_id / _sent_name(response, file_id), response
+            )
 
     async def _get_file(self, url: str, target: Path) -> Path | None:
-        async with self._client.stream("GET", url, timeout=TRANSFER_TIMEOUT) as response:
-            if response.status_code == httpx.codes.NOT_FOUND:
+        async with self._client.stream(
+            "GET", url, timeout=TRANSFER_TIMEOUT
+        ) as response:
+            if response.status_code == HTTPStatus.NOT_FOUND:
                 return None
             response.raise_for_status()
             return await _write(target, response)

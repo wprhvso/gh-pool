@@ -78,7 +78,9 @@ class Sessions:
                     "select count(*) as live from sessions where status in ('pending', 'active')"
                 )
                 if live is not None and int(live["live"]) >= request.max_parallel:
-                    raise TooManySessions(f"at most {request.max_parallel} sessions at a time")
+                    raise TooManySessions(
+                        f"at most {request.max_parallel} sessions at a time"
+                    )
             stale = await self._claim_profile(tx, request.profile)
             row = await tx.one(
                 "insert into sessions (id, params, profile, persist, state_stale) "
@@ -102,7 +104,8 @@ class Sessions:
         row = await tx.one("select stale from profiles where name = %s", (profile,))
         if row is None:
             await tx.run(
-                "insert into profiles (name) values (%s) on conflict do nothing", (profile,)
+                "insert into profiles (name) values (%s) on conflict do nothing",
+                (profile,),
             )
             return False
         return bool(row["stale"])
@@ -116,7 +119,9 @@ class Sessions:
             )
             if row is not None:
                 stale = bool(row["state_stale"])
-                await self._events.publish(tx, session_id, SessionReady(state_stale=stale))
+                await self._events.publish(
+                    tx, session_id, SessionReady(state_stale=stale)
+                )
 
     async def heartbeat(self, session_id: UUID) -> bool:
         async with self._db.tx() as tx:
@@ -147,7 +152,9 @@ class Sessions:
         self._cancels.pop(session_id, None)
 
     async def _finish(self, tx: Tx, session_id: UUID, reason: CloseReason) -> None:
-        status = SessionStatus.CLOSED if reason is CloseReason.CLOSED else SessionStatus.DEAD
+        status = (
+            SessionStatus.CLOSED if reason is CloseReason.CLOSED else SessionStatus.DEAD
+        )
         row = await tx.one(
             "update sessions set status = %s, closed_at = now() "
             "where id = %s and status in ('pending', 'active') returning profile, persist",
@@ -165,12 +172,20 @@ class Sessions:
             await self._events.publish(
                 tx, session_id, CommandFailed(command_id=pending["id"], error=error)
             )
-        if status is SessionStatus.DEAD and row["profile"] is not None and row["persist"]:
+        if (
+            status is SessionStatus.DEAD
+            and row["profile"] is not None
+            and row["persist"]
+        ):
             # The runner never got to save the profile, so what we have is old.
-            await tx.run("update profiles set stale = true where name = %s", (row["profile"],))
+            await tx.run(
+                "update profiles set stale = true where name = %s", (row["profile"],)
+            )
         await self._events.publish(tx, session_id, SessionClosed(reason=reason))
 
-    async def enqueue(self, session_id: UUID, request: CommandRequest) -> tuple[UUID, int]:
+    async def enqueue(
+        self, session_id: UUID, request: CommandRequest
+    ) -> tuple[UUID, int]:
         command_id = uuid4()
         async with self._db.tx() as tx:
             row = await tx.one(
@@ -215,11 +230,17 @@ class Sessions:
             )
             if row is None:
                 return None
-            await self._events.publish(tx, session_id, CommandStarted(command_id=row["id"]))
+            await self._events.publish(
+                tx, session_id, CommandStarted(command_id=row["id"])
+            )
         return row
 
     async def complete(
-        self, session_id: UUID, command_id: UUID, result: object, error: CommandError | None
+        self,
+        session_id: UUID,
+        command_id: UUID,
+        result: object,
+        error: CommandError | None,
     ) -> None:
         failed = error is not None
         async with self._db.tx() as tx:
@@ -259,7 +280,9 @@ class Sessions:
             "and started_at + make_interval(secs => timeout_ms / 1000.0) < now()"
         )
 
-    async def dead_candidates(self, heartbeat_timeout: float, ready_timeout: float) -> list[UUID]:
+    async def dead_candidates(
+        self, heartbeat_timeout: float, ready_timeout: float
+    ) -> list[UUID]:
         """Sessions whose runner stopped answering, or never showed up at all."""
         rows = await self._db.rows(
             "select id from sessions where "

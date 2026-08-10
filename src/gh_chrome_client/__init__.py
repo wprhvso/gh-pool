@@ -88,7 +88,9 @@ async def new(
     return Session(http, state, close_timeout)
 
 
-async def profiles(server: str | None = None, token: str | None = None) -> list[ProfileInfo]:
+async def profiles(
+    server: str | None = None, token: str | None = None
+) -> list[ProfileInfo]:
     http = Http(server, token)
     try:
         return await http.profiles()

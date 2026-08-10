@@ -35,7 +35,9 @@ async def player_manifest(session_id: UUID, sessions: Ss, _: Basic) -> Response:
         available_at=await sessions.started_at(session_id),
         live=state.status.live,
     )
-    return Response(xml, media_type="application/dash+xml", headers={"Cache-Control": "no-cache"})
+    return Response(
+        xml, media_type="application/dash+xml", headers={"Cache-Control": "no-cache"}
+    )
 
 
 @router.get("/{session_id}/init.m4s")

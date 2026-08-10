@@ -70,7 +70,9 @@ async def _property(tabs: Tabs, selector: str, name: str) -> str:
 
 async def wait_for(tabs: Tabs, selector: str, state: ElementState) -> None:
     if state is ElementState.ATTACHED:
-        while not await tabs.evaluate(f"document.querySelector({js(selector)}) !== null"):
+        while not await tabs.evaluate(
+            f"document.querySelector({js(selector)}) !== null"
+        ):
             await asyncio.sleep(POLL)
         return
     locator = Locator(tabs)

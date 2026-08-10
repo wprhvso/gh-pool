@@ -24,7 +24,9 @@ def count_segments(directory: Path) -> int:
     """The highest segment number on disk, which is also how many there are."""
     if not directory.exists():
         return 0
-    numbers = [int(path.stem) for path in directory.glob("*.m4s") if path.stem.isdigit()]
+    numbers = [
+        int(path.stem) for path in directory.glob("*.m4s") if path.stem.isdigit()
+    ]
     return max(numbers, default=0)
 
 

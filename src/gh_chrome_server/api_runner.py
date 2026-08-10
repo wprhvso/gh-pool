@@ -50,7 +50,9 @@ async def get_config(session_id: UUID, sessions: Ss, _: Token) -> RunnerConfig:
 
 
 @router.get("/{session_id}/stream")
-async def stream_commands(session_id: UUID, request: Request, sessions: Ss, _: Token) -> Response:
+async def stream_commands(
+    session_id: UUID, request: Request, sessions: Ss, _: Token
+) -> Response:
     """The command queue, as one long server-sent event stream."""
     await sessions.require_live(session_id)
     await sessions.mark_ready(session_id)
@@ -79,11 +81,15 @@ async def stream_commands(session_id: UUID, request: Request, sessions: Ss, _: T
     return sse_response(frames())
 
 
-@router.post("/{session_id}/commands/{command_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/{session_id}/commands/{command_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 async def complete_command(
     session_id: UUID, command_id: UUID, result: CommandResult, sessions: Ss, _: Token
 ) -> None:
-    error = CommandError.model_validate(result.error) if result.error is not None else None
+    error = (
+        CommandError.model_validate(result.error) if result.error is not None else None
+    )
     await sessions.complete(session_id, command_id, result.result, error)
 
 
@@ -94,7 +100,9 @@ async def heartbeat(session_id: UUID, sessions: Ss, _: Token) -> None:
 
 
 @router.post("/{session_id}/events", status_code=status.HTTP_204_NO_CONTENT)
-async def publish_event(session_id: UUID, event: RunnerEvent, sessions: Ss, _: Token) -> None:
+async def publish_event(
+    session_id: UUID, event: RunnerEvent, sessions: Ss, _: Token
+) -> None:
     await sessions.publish_runner_event(session_id, event.data)
 
 
@@ -105,14 +113,20 @@ async def confirm_close(session_id: UUID, sessions: Ss, _: Token) -> None:
 
 @router.put("/{session_id}/init", status_code=status.HTTP_204_NO_CONTENT)
 async def put_init_segment(session_id: UUID, request: Request, _: Token) -> None:
-    await storage.write_atomic(storage.segments_dir(session_id) / "init.m4s", request.stream())
+    await storage.write_atomic(
+        storage.segments_dir(session_id) / "init.m4s", request.stream()
+    )
 
 
 @router.put("/{session_id}/segments/{number}", status_code=status.HTTP_204_NO_CONTENT)
-async def put_segment(session_id: UUID, number: int, request: Request, _: Token) -> None:
+async def put_segment(
+    session_id: UUID, number: int, request: Request, _: Token
+) -> None:
     if number < 1:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "bad segment number")
-    await storage.write_atomic(storage.segments_dir(session_id) / f"{number}.m4s", request.stream())
+    await storage.write_atomic(
+        storage.segments_dir(session_id) / f"{number}.m4s", request.stream()
+    )
 
 
 @router.get("/{session_id}/profile")
@@ -127,11 +141,15 @@ async def get_profile(session_id: UUID, sessions: Ss, _: Token) -> FileResponse:
 
 
 @router.put("/{session_id}/profile", status_code=status.HTTP_204_NO_CONTENT)
-async def put_profile(session_id: UUID, request: Request, sessions: Ss, db: Db, _: Token) -> None:
+async def put_profile(
+    session_id: UUID, request: Request, sessions: Ss, db: Db, _: Token
+) -> None:
     state = await sessions.get(session_id)
     if state.profile is None or not state.persist:
         raise SessionUnavailable("session does not persist a profile")
-    size = await storage.write_atomic(storage.profile_path(state.profile), request.stream())
+    size = await storage.write_atomic(
+        storage.profile_path(state.profile), request.stream()
+    )
     async with db.tx() as tx:
         await tx.run(
             "update profiles set size = %s, stale = false, updated_at = now() where name = %s",
@@ -142,7 +160,8 @@ async def put_profile(session_id: UUID, request: Request, sessions: Ss, db: Db, 
 @router.get("/{session_id}/files/{file_id}")
 async def get_upload(session_id: UUID, file_id: UUID, db: Db, _: Token) -> FileResponse:
     row = await db.one(
-        "select name from files where id = %s and session_id = %s", (file_id, session_id)
+        "select name from files where id = %s and session_id = %s",
+        (file_id, session_id),
     )
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown file")
@@ -157,7 +176,9 @@ async def put_download(
     session_id: UUID, name: str, request: Request, sessions: Ss, db: Db, _: Token
 ) -> None:
     safe = storage.safe_name(name)
-    size = await storage.write_atomic(storage.downloads_dir(session_id) / safe, request.stream())
+    size = await storage.write_atomic(
+        storage.downloads_dir(session_id) / safe, request.stream()
+    )
     async with db.tx() as tx:
         await tx.run(
             "insert into downloads (session_id, name, size) values (%s, %s, %s) "
@@ -165,4 +186,6 @@ async def put_download(
             (session_id, safe, size),
         )
     url = f"{settings.public_url}/sessions/{session_id}/downloads/{safe}"
-    await sessions.publish_runner_event(session_id, Download(name=safe, size=size, url=url))
+    await sessions.publish_runner_event(
+        session_id, Download(name=safe, size=size, url=url)
+    )

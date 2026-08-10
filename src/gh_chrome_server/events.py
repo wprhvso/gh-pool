@@ -53,7 +53,12 @@ class Events:
         event = Event(seq=int(row["last_seq"]), data=data)
         await tx.run(
             "insert into events (session_id, seq, type, data) values (%s, %s, %s, %s)",
-            (session_id, event.seq, str(data.type), Jsonb(data.model_dump(mode="json"))),
+            (
+                session_id,
+                event.seq,
+                str(data.type),
+                Jsonb(data.model_dump(mode="json")),
+            ),
         )
         tx.after_commit(lambda: self._dispatch(session_id, event))
         return event
@@ -97,4 +102,7 @@ class Events:
             "select seq, data from events where session_id = %s and seq > %s order by seq",
             (session_id, after_seq),
         )
-        return [Event.model_validate({"seq": row["seq"], "data": row["data"]}) for row in rows]
+        return [
+            Event.model_validate({"seq": row["seq"], "data": row["data"]})
+            for row in rows
+        ]

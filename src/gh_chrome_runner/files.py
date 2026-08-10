@@ -45,7 +45,9 @@ class Files:
             return await self._server.get_upload(args.file_id, settings.uploads_dir)
         if args.url is None:
             raise ValueError("upload needs either file_id or url")
-        target = settings.uploads_dir / (Path(httpx.URL(args.url).path).name or "upload.bin")
+        target = settings.uploads_dir / (
+            Path(httpx.URL(args.url).path).name or "upload.bin"
+        )
         async with httpx.AsyncClient(timeout=600.0, follow_redirects=True) as client:
             async with client.stream("GET", args.url) as response:
                 response.raise_for_status()
@@ -89,7 +91,9 @@ class Files:
         if params.get("state") != "completed":
             return
         guid = params["guid"]
-        task = asyncio.get_running_loop().create_task(self._ship(guid, self._names.pop(guid, guid)))
+        task = asyncio.get_running_loop().create_task(
+            self._ship(guid, self._names.pop(guid, guid))
+        )
         self._shipping.add(task)
         task.add_done_callback(self._shipping.discard)
 

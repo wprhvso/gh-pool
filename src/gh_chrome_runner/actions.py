@@ -4,7 +4,14 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from gh_chrome_protocol import CommandArgs, CommandError, ErrorCode, Method, SessionParams, Topic
+from gh_chrome_protocol import (
+    CommandArgs,
+    CommandError,
+    ErrorCode,
+    Method,
+    SessionParams,
+    Topic,
+)
 from gh_chrome_runner import dom, navigation
 from gh_chrome_runner.cdp import Cdp, CdpError
 from gh_chrome_runner.files import Files
@@ -26,7 +33,9 @@ ERROR_CODES: tuple[tuple[type[Exception], ErrorCode], ...] = (
 
 
 class Actions:
-    def __init__(self, cdp: Cdp, xtest: Xtest, server: ServerClient, params: SessionParams) -> None:
+    def __init__(
+        self, cdp: Cdp, xtest: Xtest, server: ServerClient, params: SessionParams
+    ) -> None:
         self._server = server
         self._params = params
         self.tabs = Tabs(cdp)
@@ -61,10 +70,14 @@ class Actions:
             Method.EVAL: lambda a: dom.evaluate(self.tabs, a.expression),
             Method.SCREENSHOT: lambda a: dom.screenshot(self.tabs),
             Method.WAIT_FOR: lambda a: dom.wait_for(self.tabs, a.selector, a.state),
-            Method.WAIT_FOR_HIDDEN: lambda a: dom.wait_for_hidden(self.tabs, a.selector),
+            Method.WAIT_FOR_HIDDEN: lambda a: dom.wait_for_hidden(
+                self.tabs, a.selector
+            ),
             Method.WAIT_FOR_URL: lambda a: dom.wait_for_url(self.tabs, a.pattern),
             Method.WAIT_FOR_LOAD: lambda a: dom.wait_for_load(self.tabs, a.wait_until),
-            Method.WAIT_FOR_FUNCTION: lambda a: dom.wait_for_function(self.tabs, a.expression),
+            Method.WAIT_FOR_FUNCTION: lambda a: dom.wait_for_function(
+                self.tabs, a.expression
+            ),
             Method.SUBSCRIBE: lambda a: self.subscribe(a.topics),
         }
 
@@ -92,5 +105,5 @@ class Actions:
         for error, code in ERROR_CODES:
             if isinstance(exc, error):
                 return CommandError(code=code, message=str(exc) or str(code))
-        log.exception("unhandled command failure", exc_info=exc)
+        log.error("unhandled command failure", exc_info=exc)
         return CommandError(code=ErrorCode.RUNNER_ERROR, message=repr(exc))

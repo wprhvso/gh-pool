@@ -48,7 +48,11 @@ class Browser:
         return self._cdp
 
     async def start(self) -> None:
-        for directory in (settings.profile_dir, settings.downloads_dir, settings.logs_dir):
+        for directory in (
+            settings.profile_dir,
+            settings.downloads_dir,
+            settings.logs_dir,
+        ):
             directory.mkdir(parents=True, exist_ok=True)
         command = [
             settings.chrome,

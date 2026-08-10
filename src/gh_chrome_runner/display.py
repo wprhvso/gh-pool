@@ -48,7 +48,9 @@ class Display:
                 process.kill()
 
     def alive(self) -> bool:
-        return bool(self._processes) and all(p.returncode is None for p in self._processes)
+        return bool(self._processes) and all(
+            p.returncode is None for p in self._processes
+        )
 
     async def _spawn(self, log_name: str, *command: str) -> None:
         handle = (settings.logs_dir / f"{log_name}.log").open("ab")

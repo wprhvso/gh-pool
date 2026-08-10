@@ -51,7 +51,11 @@ class Tabs:
 
     @property
     def order(self) -> list[Tab]:
-        return [self._tabs[target_id] for target_id in self._order if target_id in self._tabs]
+        return [
+            self._tabs[target_id]
+            for target_id in self._order
+            if target_id in self._tabs
+        ]
 
     def index_of(self, target_id: str) -> int:
         return self._order.index(target_id)
@@ -93,7 +97,9 @@ class Tabs:
     # --- commands ------------------------------------------------------------
 
     async def create(self, url: str | None) -> int:
-        result = await self.cdp.send("Target.createTarget", {"url": url or "about:blank"})
+        result = await self.cdp.send(
+            "Target.createTarget", {"url": url or "about:blank"}
+        )
         target_id = result["targetId"]
         deadline = asyncio.get_running_loop().time() + ATTACH_TIMEOUT
         while asyncio.get_running_loop().time() < deadline:
@@ -108,7 +114,9 @@ class Tabs:
         await self._emit(TabActivated(index=index))
 
     async def close(self, index: int) -> None:
-        await self.cdp.send("Target.closeTarget", {"targetId": self._at(index).target_id})
+        await self.cdp.send(
+            "Target.closeTarget", {"targetId": self._at(index).target_id}
+        )
 
     async def bring_to_front(self, tab: Tab | None = None) -> None:
         target = tab or self.active
@@ -117,7 +125,9 @@ class Tabs:
         self._active = target.target_id
 
     async def navigate(self, url: str) -> None:
-        result = await self.cdp.send("Page.navigate", {"url": url}, self.active.session_id)
+        result = await self.cdp.send(
+            "Page.navigate", {"url": url}, self.active.session_id
+        )
         if error := result.get("errorText"):
             raise CdpError("Page.navigate", error)
 
@@ -138,7 +148,9 @@ class Tabs:
             raise CdpError("Runtime.evaluate", details.get("text", "evaluation failed"))
         return result.get("result", {}).get("value")
 
-    async def send(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def send(
+        self, method: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         return await self.cdp.send(method, params, self.active.session_id)
 
     def _at(self, index: int) -> Tab:
@@ -206,7 +218,8 @@ class Tabs:
     def _detached(self, message: dict[str, Any]) -> None:
         session_id = message["params"]["sessionId"]
         target_id = next(
-            (key for key, tab in self._tabs.items() if tab.session_id == session_id), None
+            (key for key, tab in self._tabs.items() if tab.session_id == session_id),
+            None,
         )
         if target_id is None:
             return
@@ -243,12 +256,16 @@ class Tabs:
             return
         await self._prepare(tab)
         await self.bring_to_front(tab)
-        await self._emit(TabOpened(index=self.index_of(target_id), url=tab.url, active=True))
+        await self._emit(
+            TabOpened(index=self.index_of(target_id), url=tab.url, active=True)
+        )
 
     async def _prepare(self, tab: Tab) -> None:
         await self.cdp.send("Page.enable", session_id=tab.session_id)
         await self.cdp.send("Runtime.enable", session_id=tab.session_id)
-        await self.cdp.send("Page.setLifecycleEventsEnabled", {"enabled": True}, tab.session_id)
+        await self.cdp.send(
+            "Page.setLifecycleEventsEnabled", {"enabled": True}, tab.session_id
+        )
 
     async def _emit(self, event: EventData) -> None:
         if self.on_event is not None:

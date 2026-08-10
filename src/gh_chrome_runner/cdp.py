@@ -48,7 +48,7 @@ class Cdp:
         self._socket = await websockets.connect(
             self._endpoint, max_size=256 * 1024 * 1024, ping_interval=20
         )
-        self._reader = asyncio.create_task(self._read())
+        self._reader = asyncio.create_task(self._read(self._socket))
 
     async def close(self) -> None:
         if self._reader is not None:
@@ -83,14 +83,15 @@ class Cdp:
         }
         if session_id is not None:
             message["sessionId"] = session_id
-        future: asyncio.Future[dict[str, Any]] = asyncio.get_running_loop().create_future()
+        future: asyncio.Future[dict[str, Any]] = (
+            asyncio.get_running_loop().create_future()
+        )
         self._pending[message_id] = future
         await self._socket.send(json.dumps(message))
         return await future
 
-    async def _read(self) -> None:
-        assert self._socket is not None
-        async for raw in self._socket:
+    async def _read(self, socket: ClientConnection) -> None:
+        async for raw in socket:
             message = json.loads(raw)
             message_id = message.get("id")
             if message_id is not None:
@@ -99,7 +100,9 @@ class Cdp:
                     continue
                 if "error" in message:
                     future.set_exception(
-                        CdpError(str(message.get("method", "?")), message["error"]["message"])
+                        CdpError(
+                            str(message.get("method", "?")), message["error"]["message"]
+                        )
                     )
                 else:
                     future.set_result(message.get("result", {}))

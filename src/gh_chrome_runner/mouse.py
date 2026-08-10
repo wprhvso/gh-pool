@@ -23,10 +23,18 @@ class Tuning:
 
 
 TUNINGS: dict[Speed, Tuning] = {
-    Speed.INSTANT: Tuning(gravity=0.0, wind=0.0, max_step=0.0, target_area=0.0, step_delay=0.0),
-    Speed.FAST: Tuning(gravity=12.0, wind=2.0, max_step=28.0, target_area=12.0, step_delay=0.004),
-    Speed.NORMAL: Tuning(gravity=9.0, wind=3.0, max_step=15.0, target_area=10.0, step_delay=0.008),
-    Speed.SLOW: Tuning(gravity=6.0, wind=4.0, max_step=8.0, target_area=8.0, step_delay=0.014),
+    Speed.INSTANT: Tuning(
+        gravity=0.0, wind=0.0, max_step=0.0, target_area=0.0, step_delay=0.0
+    ),
+    Speed.FAST: Tuning(
+        gravity=12.0, wind=2.0, max_step=28.0, target_area=12.0, step_delay=0.004
+    ),
+    Speed.NORMAL: Tuning(
+        gravity=9.0, wind=3.0, max_step=15.0, target_area=10.0, step_delay=0.008
+    ),
+    Speed.SLOW: Tuning(
+        gravity=6.0, wind=4.0, max_step=8.0, target_area=8.0, step_delay=0.014
+    ),
 }
 
 

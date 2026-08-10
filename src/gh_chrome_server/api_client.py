@@ -27,7 +27,9 @@ class FileAccepted(BaseModel):
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-async def create_session(request: SessionCreate, sessions: Ss, _: Token) -> SessionState:
+async def create_session(
+    request: SessionCreate, sessions: Ss, _: Token
+) -> SessionState:
     state = await sessions.create(request)
     try:
         await github.dispatch(state.id)
@@ -52,7 +54,12 @@ async def enqueue_command(
 
 @router.get("/{session_id}/events")
 async def stream_events(
-    session_id: UUID, request: Request, sessions: Ss, events: Ev, _: Token, last_seq: int = 0
+    session_id: UUID,
+    request: Request,
+    sessions: Ss,
+    events: Ev,
+    _: Token,
+    last_seq: int = 0,
 ) -> Response:
     await sessions.get(session_id)
     after = resume_from(request, last_seq)
