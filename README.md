@@ -44,6 +44,33 @@ Set `GH_CHROME_TOKEN`, `GH_CHROME_DATABASE_URL`, `GH_CHROME_STORAGE`,
 In the repository that runs the workflow, add `GH_CHROME_URL` and
 `GH_CHROME_TOKEN` as secrets.
 
+On NixOS the flake ships the server as a module, so none of that is set by hand:
+
+```nix
+{
+  inputs.gh-chrome.url = "github:wprhvso/gh-chrome";
+
+  # ...
+
+  modules = [ inputs.gh-chrome.nixosModules.default ];
+}
+```
+
+```nix
+{
+  services.gh-chrome = {
+    enable = true;
+    port = 8001;
+    publicUrl = "https://chrome.example.com";
+    database.createLocally = true;
+    environmentFiles = [ "/var/lib/secrets/gh-chrome" ];
+  };
+}
+```
+
+The token, the PAT and the database URL stay in the environment file; everything
+else is an option.
+
 ## Development
 
 ```bash
