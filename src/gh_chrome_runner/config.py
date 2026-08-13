@@ -21,9 +21,14 @@ class Settings(BaseSettings):
     workdir: Path = Path("/tmp/gh-chrome")
     chrome_binary: str = ""
     ffmpeg_binary: str = "ffmpeg"
+    kasmvnc_binary: str = "Xkasmvnc"
     heartbeat_interval: float = 10.0
     debug_port: int = 9222
     proxy: str = ""
+    vnc: bool = True
+    vnc_port: int = 6800
+    vnc_frame_rate: int = 30
+    vnc_www: Path = Path("/usr/share/kasmvnc/www")
 
     @property
     def chrome(self) -> str:

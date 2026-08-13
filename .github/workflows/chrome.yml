@@ -8,6 +8,9 @@ on:
         required: true
         type: string
 
+env:
+  KASMVNC_VERSION: "1.5.0"
+
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -16,9 +19,35 @@ jobs:
 
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: xvfb openbox xdotool x11-utils zstd ffmpeg
-          version: 1.2
+          packages: >-
+            xvfb openbox xdotool x11-utils zstd ffmpeg
+            ssl-cert xauth x11-xkb-utils xkb-data xfonts-base libgbm1
+            libswitch-perl libyaml-tiny-perl libhash-merge-simple-perl
+            liblist-moreutils-perl libtry-tiny-perl libdatetime-perl
+            libdatetime-timezone-perl
+          version: 1.3
           execute_install_scripts: true
+
+      # The live desktop is a bonus: a session without KasmVNC still records and
+      # still answers commands, so a bad release asset must not fail the job.
+      - name: install KasmVNC
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          arch=$(dpkg --print-architecture)
+          for codename in "$(. /etc/os-release && echo "$VERSION_CODENAME")" noble; do
+            deb="kasmvncserver_${codename}_${KASMVNC_VERSION}_${arch}.deb"
+            url="https://github.com/kasmtech/KasmVNC/releases/download/v${KASMVNC_VERSION}/${deb}"
+            if curl -fsSL --retry 3 --retry-all-errors -o "$RUNNER_TEMP/$deb" "$url"; then
+              sudo apt-get update -qq || true
+              sudo apt-get install -y --no-install-recommends "$RUNNER_TEMP/$deb"
+              command -v Xkasmvnc
+              test -f /usr/share/kasmvnc/www/index.html
+              exit 0
+            fi
+            echo "no KasmVNC build for $codename"
+          done
+          exit 1
 
       - uses: actions/setup-python@v6
         with:

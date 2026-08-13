@@ -1,11 +1,11 @@
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, Response
 
 from gh_chrome_server import manifest, storage
-from gh_chrome_server.auth import Basic
+from gh_chrome_server.auth import Basic, hand_out_ticket
 from gh_chrome_server.config import settings
 from gh_chrome_server.deps import Ss
 
@@ -15,9 +15,13 @@ PAGE = (Path(__file__).parent / "player" / "index.html").read_text()
 
 
 @router.get("/{session_id}", response_class=HTMLResponse)
-async def player_page(session_id: UUID, sessions: Ss, _: Basic) -> HTMLResponse:
+async def player_page(
+    session_id: UUID, request: Request, sessions: Ss, _: Basic
+) -> HTMLResponse:
     await sessions.get(session_id)
-    return HTMLResponse(PAGE.replace("{{SESSION_ID}}", str(session_id)))
+    page = HTMLResponse(PAGE.replace("{{SESSION_ID}}", str(session_id)))
+    hand_out_ticket(page, request, session_id)
+    return page
 
 
 @router.get("/{session_id}/manifest.mpd")

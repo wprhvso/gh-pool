@@ -1,0 +1,51 @@
+from enum import IntEnum, StrEnum
+
+from pydantic import BaseModel, Field
+
+HEADER = 5
+MAX_PAYLOAD = 8 << 20
+CHUNK = 1 << 16
+BINARY = "binary"
+
+
+class Op(IntEnum):
+    OPEN = 1
+    HEAD = 2
+    DATA = 3
+    TEXT = 4
+    EOF = 5
+    CLOSE = 6
+
+
+class Kind(StrEnum):
+    HTTP = "http"
+    WS = "ws"
+
+
+class Open(BaseModel):
+    kind: Kind
+    target: str
+    method: str = "GET"
+    headers: list[tuple[str, str]] = Field(default_factory=list)
+    subprotocols: list[str] = Field(default_factory=list)
+
+
+class Head(BaseModel):
+    status: int
+    headers: list[tuple[str, str]] = Field(default_factory=list)
+    subprotocol: str | None = None
+
+
+class Close(BaseModel):
+    error: str | None = None
+
+
+def frame(op: Op, stream: int, payload: bytes | BaseModel = b"") -> bytes:
+    body = payload if isinstance(payload, bytes) else payload.model_dump_json().encode()
+    return bytes((op,)) + stream.to_bytes(4, "big") + body
+
+
+def parse(data: bytes) -> tuple[Op, int, bytes]:
+    if len(data) < HEADER:
+        raise ValueError("truncated tunnel frame")
+    return Op(data[0]), int.from_bytes(data[1:HEADER], "big"), data[HEADER:]

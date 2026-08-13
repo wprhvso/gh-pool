@@ -103,6 +103,7 @@ server = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "gh-chrome", extra = ["runner", "server"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
 ]
@@ -124,6 +125,7 @@ provides-extras = ["runner", "server"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "gh-chrome", extras = ["runner", "server"] },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.25" },
 ]

@@ -16,6 +16,7 @@ from gh_chrome_runner.capture import Capture
 from gh_chrome_runner.config import settings
 from gh_chrome_runner.display import Display
 from gh_chrome_runner.http import ServerClient
+from gh_chrome_runner.tunnel import Tunnel
 from gh_chrome_runner.xtest import Xtest
 
 log = logging.getLogger(__name__)
@@ -65,6 +66,8 @@ class Runner:
             )
             browser = await enter(running(Browser(display, config.params)))
             await enter(running(Capture(display, self._server, config)))
+            if display.vnc_port is not None:
+                await enter(running(Tunnel(self._id, display.vnc_port)))
             xtest = await asyncio.to_thread(Xtest, display.name)
             actions = await enter(
                 running(Actions(browser.cdp, xtest, self._server, config.params))

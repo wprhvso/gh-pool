@@ -2,7 +2,7 @@ import asyncio
 from collections.abc import AsyncGenerator
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, WebSocket, status
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
@@ -16,9 +16,9 @@ from gh_chrome_protocol import (
     RunnerEvent,
 )
 from gh_chrome_server import storage
-from gh_chrome_server.auth import Token
+from gh_chrome_server.auth import SocketToken, Token
 from gh_chrome_server.config import settings
-from gh_chrome_server.deps import Db, Ss
+from gh_chrome_server.deps import Db, Ss, Tn
 from gh_chrome_server.sessions import SessionUnavailable
 from gh_chrome_server.sse import Frame, sse_response
 
@@ -78,6 +78,14 @@ async def stream_commands(
             )
 
     return sse_response(frames())
+
+
+@router.websocket("/{session_id}/tunnel")
+async def serve_tunnel(
+    session_id: UUID, websocket: WebSocket, tunnels: Tn, _: SocketToken
+) -> None:
+    await websocket.accept()
+    await tunnels.serve(session_id, websocket)
 
 
 @router.post(
