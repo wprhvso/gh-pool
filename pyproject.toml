@@ -1,17 +1,24 @@
 [project]
 name = "gh-chrome"
-version = "0.1.6"
+version = "0.2.0"
 requires-python = ">=3.13"
 dependencies = [
-    "fastapi>=0.115",
     "httpx>=0.28",
-    "psycopg[binary,pool]>=3.2",
     "pydantic>=2.10",
+]
+
+[project.optional-dependencies]
+runner = [
+    "pydantic-settings>=2.7",
+    "python-xlib>=0.33",
+    "websockets>=14.1",
+]
+server = [
+    "fastapi>=0.115",
+    "psycopg[binary,pool]>=3.2",
     "pydantic-settings>=2.7",
     "python-multipart>=0.0.20",
-    "python-xlib>=0.33",
     "uvicorn[standard]>=0.34",
-    "websockets>=14.1",
 ]
 
 [project.scripts]

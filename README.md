@@ -26,6 +26,32 @@ python examples/hello.py
 The player lives at `https://chrome.example.com/s/<id>`: user `admin`, password
 the token.
 
+## Network taps
+
+`Tap` patches `fetch` and `XMLHttpRequest` inside the page, so a request the
+application makes can be answered locally, sent with a different body, or taken
+apart and replayed. The replay runs in the page too: same cookies, same IP, same
+TLS fingerprint as everything else the tab does.
+
+```python
+tap = Tap(session)
+await tap.arm()
+await session.goto("https://example.com")
+await tap.install([Rule(name="send", url="/api/send", action="capture", status=400)])
+
+await session.click("#send")
+captured = await tap.take("send", timeout=30)
+
+async for chunk in tap.replay(captured, body=my_payload, timeout=300):
+    print(chunk, end="")
+```
+
+`arm()` registers the script for every document the tab loads afterwards, so the
+hooks are in place before any application code runs; `install()` also seeds the
+document that is already open. Three actions: `fulfill` answers without touching
+the network, `rewrite` swaps the request body, `capture` records url, method,
+headers and body and answers with `status` instead of letting it out.
+
 ## Server
 
 | Variable | Meaning |
@@ -65,11 +91,17 @@ On NixOS the flake ships the server as a module:
 
 The token, the PAT and the database URL stay in the environment file.
 
+## Packaging
+
+The base distribution installs what the client needs and nothing else: `httpx`
+and `pydantic`. Extra `server` adds FastAPI, psycopg and uvicorn; extra `runner`
+adds websockets and python-xlib.
+
 ## Development
 
 ```bash
 nix develop
-uv sync
+uv sync --all-extras
 ```
 
 ```bash

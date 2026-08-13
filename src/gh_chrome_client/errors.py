@@ -45,6 +45,21 @@ class SessionNotReady(GhChromeError):
     pass
 
 
+class TapError(GhChromeError):
+    pass
+
+
+class TapTimeout(TapError, TimeoutError):
+    pass
+
+
+class TapRejected(TapError):
+    def __init__(self, status: int, body: str) -> None:
+        super().__init__(f"the page answered {status}: {body[:300]}")
+        self.status = status
+        self.body = body
+
+
 BY_CODE: dict[ErrorCode, type[GhChromeError]] = {
     ErrorCode.TIMEOUT: CommandTimeout,
     ErrorCode.NOT_FOUND: ElementNotFound,

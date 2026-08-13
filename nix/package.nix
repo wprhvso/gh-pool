@@ -35,7 +35,7 @@ let
     ]
   );
 
-  venv = pythonSet.mkVirtualEnv "gh-chrome-env" workspace.deps.default;
+  venv = pythonSet.mkVirtualEnv "gh-chrome-env" workspace.deps.optionals;
 
   inherit (callPackages pyproject-nix.build.util { }) mkApplication;
 in

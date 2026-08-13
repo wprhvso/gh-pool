@@ -66,6 +66,7 @@ class Actions:
             Method.URL: lambda a: dom.url(self.tabs),
             Method.TITLE: lambda a: dom.title(self.tabs),
             Method.EVAL: lambda a: dom.evaluate(self.tabs, a.expression),
+            Method.INIT_SCRIPT: lambda a: dom.init_script(self.tabs, a.source),
             Method.SCREENSHOT: lambda a: dom.screenshot(self.tabs),
             Method.WAIT_FOR: lambda a: dom.wait_for(self.tabs, a.selector, a.state),
             Method.WAIT_FOR_HIDDEN: lambda a: dom.wait_for_hidden(

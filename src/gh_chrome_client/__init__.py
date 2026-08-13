@@ -11,10 +11,14 @@ from gh_chrome_client.errors import (
     SessionDead,
     SessionNotReady,
     SessionUnavailable,
+    TapError,
+    TapRejected,
+    TapTimeout,
     TooManySessions,
 )
 from gh_chrome_client.http import Http
 from gh_chrome_client.session import Command, Session
+from gh_chrome_client.tap import Captured, Rule, Tap
 from gh_chrome_protocol import (
     ElementState,
     Event,
@@ -30,6 +34,7 @@ from gh_chrome_protocol import (
 
 __all__ = [
     "Cancelled",
+    "Captured",
     "Command",
     "CommandTimeout",
     "ElementIntercepted",
@@ -40,6 +45,7 @@ __all__ = [
     "GhChromeError",
     "NavigationFailed",
     "ProfileInfo",
+    "Rule",
     "RunnerError",
     "Session",
     "SessionDead",
@@ -48,6 +54,10 @@ __all__ = [
     "SessionStatus",
     "SessionUnavailable",
     "Speed",
+    "Tap",
+    "TapError",
+    "TapRejected",
+    "TapTimeout",
     "TooManySessions",
     "Topic",
     "WaitUntil",

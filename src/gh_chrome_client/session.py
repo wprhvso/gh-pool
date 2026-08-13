@@ -31,6 +31,7 @@ from gh_chrome_protocol import (
     Hotkey,
     Html,
     Index,
+    InitScript,
     Method,
     NewTab,
     Press,
@@ -134,6 +135,10 @@ class Session:
     @property
     def state_stale(self) -> bool:
         return self._state.state_stale
+
+    @property
+    def alive(self) -> bool:
+        return not self._closed and not self._finished.is_set()
 
     @property
     def player_url(self) -> str:
@@ -378,6 +383,9 @@ class Session:
         return self._call(
             Expression(method=Method.EVAL, expression=expression), timeout
         )
+
+    def init_script(self, source: str, timeout: float | None = None) -> Command[str]:
+        return self._call(InitScript(source=source), timeout)
 
     def screenshot(self, timeout: float | None = None) -> Command[str]:
         return self._call(Bare(method=Method.SCREENSHOT), timeout)

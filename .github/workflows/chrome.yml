@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: "3.13"
 
-      - run: pip install .
+      - run: pip install '.[runner]'
 
       - run: gh-chrome-runner --session ${{ inputs.session_id }}
         env:

@@ -123,6 +123,7 @@ class Method(StrEnum):
     URL = "url"
     TITLE = "title"
     EVAL = "eval"
+    INIT_SCRIPT = "init_script"
     SCREENSHOT = "screenshot"
     WAIT_FOR = "wait_for"
     WAIT_FOR_HIDDEN = "wait_for_hidden"
@@ -252,6 +253,11 @@ class WaitForLoad(BaseModel):
     wait_until: WaitUntil = WaitUntil.LOAD
 
 
+class InitScript(BaseModel):
+    method: Literal[Method.INIT_SCRIPT] = Method.INIT_SCRIPT
+    source: str
+
+
 class Subscribe(BaseModel):
     method: Literal[Method.SUBSCRIBE] = Method.SUBSCRIBE
     topics: list[Topic]
@@ -275,6 +281,7 @@ CommandArgs = Annotated[
     | WaitFor
     | WaitForUrl
     | WaitForLoad
+    | InitScript
     | Subscribe,
     Field(discriminator="method"),
 ]

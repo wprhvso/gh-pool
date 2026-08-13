@@ -80,18 +80,25 @@ wheels = [
 
 [[package]]
 name = "gh-chrome"
-version = "0.1.6"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
-    { name = "fastapi" },
     { name = "httpx" },
-    { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pydantic" },
+]
+
+[package.optional-dependencies]
+runner = [
+    { name = "pydantic-settings" },
+    { name = "python-xlib" },
+    { name = "websockets" },
+]
+server = [
+    { name = "fastapi" },
+    { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pydantic-settings" },
     { name = "python-multipart" },
-    { name = "python-xlib" },
     { name = "uvicorn", extra = ["standard"] },
-    { name = "websockets" },
 ]
 
 [package.dev-dependencies]
@@ -102,16 +109,18 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fastapi", specifier = ">=0.115" },
+    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.28" },
-    { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2" },
+    { name = "psycopg", extras = ["binary", "pool"], marker = "extra == 'server'", specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.10" },
-    { name = "pydantic-settings", specifier = ">=2.7" },
-    { name = "python-multipart", specifier = ">=0.0.20" },
-    { name = "python-xlib", specifier = ">=0.33" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
-    { name = "websockets", specifier = ">=14.1" },
+    { name = "pydantic-settings", marker = "extra == 'runner'", specifier = ">=2.7" },
+    { name = "pydantic-settings", marker = "extra == 'server'", specifier = ">=2.7" },
+    { name = "python-multipart", marker = "extra == 'server'", specifier = ">=0.0.20" },
+    { name = "python-xlib", marker = "extra == 'runner'", specifier = ">=0.33" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.34" },
+    { name = "websockets", marker = "extra == 'runner'", specifier = ">=14.1" },
 ]
+provides-extras = ["runner", "server"]
 
 [package.metadata.requires-dev]
 dev = [

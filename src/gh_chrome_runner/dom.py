@@ -52,6 +52,13 @@ async def evaluate(tabs: Tabs, expression: str) -> Any:
     return await tabs.evaluate(f"(() => ({expression}))()")
 
 
+async def init_script(tabs: Tabs, source: str) -> str:
+    result = await tabs.send(
+        "Page.addScriptToEvaluateOnNewDocument", {"source": source}
+    )
+    return str(result["identifier"])
+
+
 async def screenshot(tabs: Tabs) -> str:
     result = await tabs.send("Page.captureScreenshot", {"format": "png"})
     return str(result["data"])
