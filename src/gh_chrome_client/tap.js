@@ -2,6 +2,10 @@
   if (window.__ghTap) return true;
 
   const MAX_READ = 262144;
+  // What one replay may hold for a client that has stopped reading it. Past
+  // this the page is buffering a response nobody is taking, and the tab pays
+  // for it: the stream is failed instead.
+  const MAX_BUFFER = 8388608;
 
   const origin = {
     fetch: window.fetch.bind(window),
@@ -29,6 +33,9 @@
       (rule) => url.includes(rule.url) && (!rule.method || rule.method === method),
     ) || null;
 
+  // Two requests can match one rule before the client comes to collect, and the
+  // second used to overwrite the first — both kept off the network, only one
+  // ever handed over.
   const keep = (rule, entry) => {
     const wake = waiting.get(rule.name);
     if (wake) {
@@ -36,13 +43,16 @@
       wake(entry);
       return;
     }
-    taken.set(rule.name, entry);
+    const queue = taken.get(rule.name);
+    if (queue) queue.push(entry);
+    else taken.set(rule.name, [entry]);
   };
 
   const take = (name, waitMs) => {
-    const entry = taken.get(name);
-    if (entry) {
-      taken.delete(name);
+    const queue = taken.get(name);
+    if (queue && queue.length) {
+      const entry = queue.shift();
+      if (!queue.length) taken.delete(name);
       return Promise.resolve(entry);
     }
     return new Promise((resolve) => {
@@ -57,7 +67,24 @@
     });
   };
 
+  // The rule is written in Python, where a header may be spelled any way at
+  // all; everything below reads them in lower case, and the Headers
+  // constructor appends rather than replaces, so a "Content-Type" next to a
+  // "content-type" would make the response's type both of them at once.
+  const lowerKeys = (headers) => {
+    const plain = {};
+    for (const [key, value] of Object.entries(headers || {})) {
+      plain[String(key).toLowerCase()] = String(value);
+    }
+    return plain;
+  };
+
   const contentType = (rule) => rule.headers["content-type"] || "application/json";
+
+  const answerHeaders = (rule) => ({
+    "content-type": contentType(rule),
+    ...rule.headers,
+  });
 
   const parse = (text) => {
     try {
@@ -71,6 +98,31 @@
     if (body == null) return null;
     if (typeof body === "string") return body;
     if (body instanceof URLSearchParams) return body.toString();
+    if (typeof Document !== "undefined" && body instanceof Document) {
+      return new XMLSerializer().serializeToString(body);
+    }
+    if (body instanceof ArrayBuffer) return new TextDecoder().decode(body);
+    if (ArrayBuffer.isView(body)) {
+      return new TextDecoder().decode(
+        new Uint8Array(body.buffer, body.byteOffset, body.byteLength),
+      );
+    }
+    return null;
+  };
+
+  // What XHR puts on the wire when the page set no content type of its own.
+  // Without it a captured request replays as something the server reads
+  // differently from what the page actually sent.
+  const impliedType = (body) => {
+    if (body == null) return null;
+    if (typeof body === "string") return "text/plain;charset=UTF-8";
+    if (body instanceof URLSearchParams) {
+      return "application/x-www-form-urlencoded;charset=UTF-8";
+    }
+    if (typeof Document !== "undefined" && body instanceof Document) {
+      return "text/html;charset=UTF-8";
+    }
+    if (typeof Blob !== "undefined" && body instanceof Blob) return body.type || null;
     return null;
   };
 
@@ -82,10 +134,15 @@
     return plain;
   };
 
+  // A GET or a HEAD carries no body, and fetch throws rather than ignoring one:
+  // a captured GET keeps an empty string where a body would be.
+  const sendable = (method, body) =>
+    body && method !== "GET" && method !== "HEAD" ? body : undefined;
+
   const canned = (rule) =>
     new Response(rule.body ?? "", {
       status: rule.status,
-      headers: { "content-type": contentType(rule), ...rule.headers },
+      headers: answerHeaders(rule),
     });
 
   window.fetch = async (input, init) => {
@@ -101,7 +158,7 @@
       return origin.fetch(request.url, {
         method: request.method,
         headers: request.headers,
-        body: rule.body,
+        body: sendable(request.method, rule.body),
         credentials: "include",
       });
     }
@@ -121,9 +178,29 @@
     return canned(rule);
   };
 
+  const SHADOWED = [
+    "readyState",
+    "status",
+    "statusText",
+    "responseText",
+    "responseURL",
+    "response",
+  ];
+
+  // Reusing an XMLHttpRequest is ordinary in polling code, and the own getters
+  // installed by settle would otherwise shadow every real response the object
+  // ever gets afterwards.
+  const unsettle = (xhr) => {
+    if (!xhr.__ghTapSettled) return;
+    for (const key of SHADOWED) delete xhr[key];
+    delete xhr.getAllResponseHeaders;
+    delete xhr.getResponseHeader;
+    xhr.__ghTapSettled = false;
+  };
+
   const settle = (xhr, rule) => {
     const body = rule.body ?? "";
-    const type = contentType(rule);
+    const headers = answerHeaders(rule);
     const values = {
       readyState: 4,
       status: rule.status,
@@ -135,9 +212,12 @@
     for (const [key, value] of Object.entries(values)) {
       Object.defineProperty(xhr, key, { configurable: true, get: () => value });
     }
-    xhr.getAllResponseHeaders = () => `content-type: ${type}\r\n`;
-    xhr.getResponseHeader = (name) =>
-      String(name).toLowerCase() === "content-type" ? type : null;
+    const lines = Object.entries(headers)
+      .map(([name, value]) => `${name}: ${value}\r\n`)
+      .join("");
+    xhr.getAllResponseHeaders = () => lines;
+    xhr.getResponseHeader = (name) => headers[String(name).toLowerCase()] ?? null;
+    xhr.__ghTapSettled = true;
     setTimeout(() => {
       xhr.dispatchEvent(new Event("readystatechange"));
       xhr.dispatchEvent(new ProgressEvent("load"));
@@ -146,6 +226,7 @@
   };
 
   XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+    unsettle(this);
     this.__ghTapCall = {
       method: String(method).toUpperCase(),
       url: absolute(url),
@@ -166,11 +247,14 @@
     if (!rule) return origin.send.call(this, body);
     if (rule.action === "rewrite") return origin.send.call(this, rule.body);
     if (rule.action === "capture") {
+      const headers = { ...call.headers };
+      const implied = impliedType(body);
+      if (!headers["content-type"] && implied) headers["content-type"] = implied;
       keep(rule, {
         name: rule.name,
         url: call.url,
         method: call.method,
-        headers: call.headers,
+        headers,
         body: asText(body),
       });
     }
@@ -201,8 +285,9 @@
       const response = await origin.fetch(request.url, {
         method: request.method,
         headers: request.headers,
-        body: request.body,
+        body: sendable(request.method, request.body),
         credentials: "include",
+        signal: stream.control.signal,
       });
       stream.status = response.status;
       if (!response.body) {
@@ -213,10 +298,14 @@
       const decoder = new TextDecoder();
       for (;;) {
         const step = await reader.read();
-        if (step.done) break;
+        if (step.done || stream.stopped) break;
         stream.text += decoder.decode(step.value, { stream: true });
+        if (stream.text.length > MAX_BUFFER) {
+          throw new Error("the replayed response outgrew the buffer");
+        }
         notify(stream);
       }
+      if (stream.stopped) await reader.cancel().catch(() => {});
     } catch (failure) {
       stream.error = String(failure);
     } finally {
@@ -227,7 +316,15 @@
 
   const replay = (request) => {
     const id = String(++counter);
-    const stream = { text: "", status: 0, error: null, done: false, wake: null };
+    const stream = {
+      text: "",
+      status: 0,
+      error: null,
+      done: false,
+      wake: null,
+      stopped: false,
+      control: new AbortController(),
+    };
     streams.set(id, stream);
     void pump(stream, request);
     return id;
@@ -256,17 +353,31 @@
     });
   };
 
+  // Forgetting the id is not enough: the pump holds the stream object itself
+  // and would go on fetching and buffering, for the life of the document, a
+  // response nobody can read any more.
+  const stop = (id) => {
+    const stream = streams.get(id);
+    if (!stream) return false;
+    stream.stopped = true;
+    stream.control.abort();
+    streams.delete(id);
+    return true;
+  };
+
   window.__ghTap = {
     configure: (next) => {
       rules.length = 0;
-      rules.push(...next);
+      rules.push(
+        ...next.map((rule) => ({ ...rule, headers: lowerKeys(rule.headers) })),
+      );
       taken.clear();
       return true;
     },
     take,
     replay,
     read,
-    stop: (id) => streams.delete(id),
+    stop,
   };
 
   return true;

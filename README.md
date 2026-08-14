@@ -97,10 +97,12 @@ async for chunk in tap.replay(captured, body=my_payload, timeout=300):
 ```
 
 `arm()` registers the script for every document the tab loads afterwards, so the
-hooks are in place before any application code runs; `install()` also seeds the
-document that is already open. Three actions: `fulfill` answers without touching
-the network, `rewrite` swaps the request body, `capture` records url, method,
-headers and body and answers with `status` instead of letting it out.
+hooks are in place before any application code runs; `install()` seeds the
+document that is already open and registers the rules for the ones that follow,
+so a reload, a redirect or an iframe is tapped like the first page. Three
+actions: `fulfill` answers without touching the network, `rewrite` swaps the
+request body, `capture` records url, method, headers and body and answers with
+`status` instead of letting it out.
 
 ## Server
 
@@ -139,7 +141,10 @@ On NixOS the flake ships the server as a module:
 }
 ```
 
-The token, the PAT and the database URL stay in the environment file.
+The token and the PAT stay in the environment file. `database.createLocally`
+makes the database, makes the service user its owner and points the server at
+it over the local socket; a database of your own goes in `database.url`, or in
+the environment file when the password makes it a secret.
 
 ## Packaging
 
@@ -162,6 +167,38 @@ KasmVNC is not in nixpkgs, so the dev shell has no `Xkasmvnc` and the runner
 falls back to Xvfb; `x11vnc -display :99 -nopw -forever` is enough to watch it.
 Install `kasmvncserver` from the KasmVNC releases to get the live desktop
 locally.
+
+## Tests
+
+```bash
+uv run pytest -o asyncio_mode=auto -o pythonpath=.
+```
+
+The pytest settings live in `wprhvso/qa-python` and are laid down by the action,
+so a local run passes the two that matter by hand.
+
+`tests/` holds the unit tests. `tests/e2e/` puts the whole thing together: the
+real server on a real port, the real client against it, a website of its own on
+loopback, and a runner on the other end of the command stream. It comes in two
+tiers, and each one skips itself, with a reason, on a machine that cannot host
+it.
+
+| Tier | What it needs | What it drives |
+| --- | --- | --- |
+| protocol | postgres | sessions, the command queue, events, timeouts, transfers, the desktop tunnel |
+| browser (`-m browser`) | an X server, Chrome, ffmpeg, zstd | navigation, the DOM, XTEST input, tabs, uploads, downloads, taps, the recording, profiles |
+
+The protocol tier answers commands from a scripted runner that speaks the
+runner's half of the wire; the browser tier starts `gh-chrome-runner` itself,
+with its own display, its own Chrome and its own recorder, one session per test.
+
+| Variable | Meaning |
+| --- | --- |
+| `GH_CHROME_TEST_DATABASE_URL` | a cluster to test against; without it the suite puts up a throwaway one, which `initdb` will not do for root |
+| `GH_CHROME_TEST_CHROME` | the browser to drive, when it is not on `PATH` |
+
+`-m "not browser"` leaves the browser tier out; `pytest tests/e2e/test_input.py`
+runs one part of it.
 
 ## Limits
 

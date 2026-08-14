@@ -15,6 +15,7 @@ from gh_chrome_protocol import (
 )
 from gh_chrome_server import github, storage
 from gh_chrome_server.auth import Token
+from gh_chrome_server.config import settings
 from gh_chrome_server.deps import Db, Ev, Ss
 from gh_chrome_server.sse import Frame, resume_from, sse_response
 
@@ -90,7 +91,7 @@ async def upload_file(
         while chunk := await file.read(storage.CHUNK):
             yield chunk
 
-    size = await storage.write_atomic(target, chunks())
+    size = await storage.write_atomic(target, chunks(), settings.max_upload)
     async with db.tx() as tx:
         await tx.run(
             "insert into files (id, session_id, name, size) values (%s, %s, %s, %s)",

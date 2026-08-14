@@ -131,9 +131,20 @@ async def _upstream(websocket: WebSocket, stream: Stream) -> None:
         if message["type"] == "websocket.disconnect":
             return
         if (data := message.get("bytes")) is not None:
-            await stream.send(tunnel.Op.DATA, data)
+            await _forward(websocket, stream, tunnel.Op.DATA, data)
         elif (text := message.get("text")) is not None:
-            await stream.send(tunnel.Op.TEXT, text.encode())
+            await _forward(websocket, stream, tunnel.Op.TEXT, text.encode())
+
+
+async def _forward(
+    websocket: WebSocket, stream: Stream, op: tunnel.Op, payload: bytes
+) -> None:
+    # One frame per message, so an oversized one cannot be split. It costs this
+    # viewer its socket; sending it anyway would cost every viewer the tunnel.
+    if len(payload) > tunnel.MAX_PAYLOAD - tunnel.HEADER:
+        await websocket.close(code=1009)
+        raise WebSocketDisconnect(1009)
+    await stream.send(op, payload)
 
 
 async def _downstream(websocket: WebSocket, stream: Stream) -> None:

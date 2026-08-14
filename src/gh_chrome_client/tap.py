@@ -65,9 +65,20 @@ class Tap:
         self._armed = True
 
     async def install(self, rules: Sequence[Rule]) -> None:
-        await self._session.evaluate(SCRIPT)
+        """The rules, for the document that is open and for the ones to come.
+
+        They live in the injected script's own closure, so a document this call
+        did not reach comes up with the hooks in place and nothing to match:
+        every reload, redirect, form post and iframe used to let the requests
+        the caller was watching for go out for real, silently. Installing again
+        registers another script — they run in the order they were registered,
+        and each configure replaces what the one before it set.
+        """
         payload = [rule.model_dump(mode="json") for rule in rules]
+        await self._session.init_script(f"{SCRIPT};\n{_call('configure', payload)};")
+        await self._session.evaluate(SCRIPT)
         await self._session.evaluate(_call("configure", payload))
+        self._armed = True
 
     async def take(self, name: str, *, timeout: float) -> Captured:
         deadline = _now() + timeout

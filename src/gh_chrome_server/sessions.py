@@ -24,6 +24,7 @@ from gh_chrome_server.db import Database, Tx
 from gh_chrome_server.events import Events
 
 LIVE = ("pending", "active")
+_PARALLEL_LOCK = 0x6768_6301
 
 
 class SessionNotFound(Exception):
@@ -51,6 +52,18 @@ class Sessions:
             raise SessionNotFound(f"unknown session {session_id}")
         return _state(row)
 
+    async def live(self, session_id: UUID) -> bool:
+        """Whether the session is still worth a runner's time.
+
+        A session that was never closed by hand can still be over: the watchdog
+        gives up on it, or it was closed before it ever went active. Anything
+        holding a stream open on its behalf needs to hear about that.
+        """
+        row = await self._db.one(
+            "select status from sessions where id = %s", (session_id,)
+        )
+        return row is not None and SessionStatus(row["status"]).live
+
     async def require_live(self, session_id: UUID) -> SessionState:
         state = await self.get(session_id)
         if not state.status.live:
@@ -71,6 +84,9 @@ class Sessions:
         session_id = uuid4()
         async with self._db.tx() as tx:
             if request.max_parallel is not None:
+                # Without this two creates count each other's absence and both
+                # pass a limit of one.
+                await tx.run("select pg_advisory_xact_lock(%s)", (_PARALLEL_LOCK,))
                 live = await tx.one(
                     "select count(*) as live from sessions where status in ('pending', 'active')"
                 )
@@ -152,7 +168,8 @@ class Sessions:
         )
         row = await tx.one(
             "update sessions set status = %s, closed_at = now() "
-            "where id = %s and status in ('pending', 'active') returning profile, persist",
+            "where id = %s and status in ('pending', 'active') "
+            "returning profile, persist, ready_at",
             (str(status), session_id),
         )
         if row is None:
@@ -169,6 +186,10 @@ class Sessions:
             )
         if (
             status is SessionStatus.DEAD
+            # A session that never went active never opened the profile: a
+            # dispatch that failed, or a runner that never arrived, leaves the
+            # archive exactly as the last session left it.
+            and row["ready_at"] is not None
             and row["profile"] is not None
             and row["persist"]
         ):
@@ -206,6 +227,15 @@ class Sessions:
             )
         return command_id, seq
 
+    async def _claim(self, tx: Tx, session_id: UUID) -> None:
+        """Takes the session row before its commands.
+
+        _finish and enqueue lock the session first and its commands second; a
+        transaction that went the other way round would deadlock against them
+        for as long as postgres takes to notice.
+        """
+        await tx.run("select id from sessions where id = %s for update", (session_id,))
+
     async def _rejection(self, tx: Tx, session_id: UUID) -> Exception:
         row = await tx.one("select status from sessions where id = %s", (session_id,))
         if row is None:
@@ -214,6 +244,7 @@ class Sessions:
 
     async def take_next(self, session_id: UUID) -> DictRow | None:
         async with self._db.tx() as tx:
+            await self._claim(tx, session_id)
             row = await tx.one(
                 "update commands set status = 'started', started_at = now() where id = ("
                 "select id from commands where session_id = %s and status = 'queued' "
@@ -235,7 +266,9 @@ class Sessions:
         error: CommandError | None,
     ) -> None:
         failed = error is not None
+        result = _printable(result)
         async with self._db.tx() as tx:
+            await self._claim(tx, session_id)
             row = await tx.one(
                 "update commands set status = %s, result = %s, error = %s, finished_at = now() "
                 "where id = %s and session_id = %s and status = 'started' returning id",
@@ -282,6 +315,23 @@ class Sessions:
             (heartbeat_timeout, ready_timeout),
         )
         return [row["id"] for row in rows]
+
+
+def _printable(value: object) -> object:
+    """A result the database will take.
+
+    A page can put a NUL in anything it hands back — the text of an element, a
+    key of an event, the body of a response — and postgres refuses one inside
+    jsonb. Dropping the byte costs the caller a character; refusing the write
+    loses the answer and leaves the command hanging until it times out.
+    """
+    if isinstance(value, str):
+        return value.replace("\x00", "�")
+    if isinstance(value, list):
+        return [_printable(item) for item in value]
+    if isinstance(value, dict):
+        return {str(_printable(key)): _printable(item) for key, item in value.items()}
+    return value
 
 
 def _state(row: DictRow) -> SessionState:

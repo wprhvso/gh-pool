@@ -54,7 +54,16 @@ class ServerClient:
         response.raise_for_status()
 
     async def heartbeat(self) -> bool:
-        return (await self._client.post("/heartbeat")).is_success
+        """False only when the server says this session is over.
+
+        Anything else — a gateway between here and there, a restart, a stall —
+        is an error for the caller to shrug at, not an answer.
+        """
+        response = await self._client.post("/heartbeat")
+        if response.status_code == HTTPStatus.CONFLICT:
+            return False
+        response.raise_for_status()
+        return True
 
     async def event(self, data: EventData) -> None:
         response = await self._client.post(

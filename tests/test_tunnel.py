@@ -33,6 +33,17 @@ def test_a_truncated_frame_is_rejected():
         tunnel.parse(b"\x03\x00\x00")
 
 
+def test_an_op_this_build_has_no_meaning_for_is_skipped_not_fatal():
+    """One tunnel carries every stream on the desktop.
+
+    An op from a newer other end used to raise out of the pump, which took the
+    whole tunnel down and with it every viewer watching the session.
+    """
+    raw = bytes((99,)) + (4).to_bytes(4, "big") + b"from a later build"
+
+    assert tunnel.parse(raw) == (None, 4, b"from a later build")
+
+
 class Pipe:
     def __init__(self):
         self.down = asyncio.Queue()
@@ -89,6 +100,11 @@ def _http(_connection, request):
         if not request.path.startswith("/socket"):
             return _missing()
         return None if all(name in request.headers for name in wanted) else _missing()
+    if request.path == "/moved":
+        # What KasmVNC answers a directory with: a redirect rooted at its own
+        # origin, which the proxy has to move under the session's prefix.
+        headers = Headers([("Location", "/vnc/"), ("Content-Length", "0")])
+        return Response(302, "Found", headers)
     if request.path == "/" or request.path.startswith("/asset"):
         headers = Headers(
             [("Content-Type", "text/plain"), ("Content-Length", str(len(BODY)))]
@@ -184,6 +200,20 @@ async def test_a_refused_websocket_comes_back_as_its_status():
     async with _desktop() as port, _tunnel(port) as server:
         stream = await server.open(tunnel.Open(kind=tunnel.Kind.WS, target="/gone"))
         assert (await stream.head()).status == 404
+
+
+async def test_a_stream_the_runner_could_not_open_says_so_at_once():
+    """KasmVNC not up yet: the reason is worth more than the wait."""
+    pipe = Pipe()
+    server = ServerTunnel(ServerEnd(pipe))
+    stream = await server.open(tunnel.Open(kind=tunnel.Kind.HTTP, target="/asset"))
+    await stream.offer(
+        tunnel.Op.CLOSE,
+        tunnel.Close(error="ConnectError: refused").model_dump_json().encode(),
+    )
+
+    with pytest.raises(TunnelDown, match="refused"):
+        await stream.head()
 
 
 async def test_a_dead_desktop_fails_the_waiting_stream():

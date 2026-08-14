@@ -45,6 +45,14 @@ class SessionNotReady(GhChromeError):
     pass
 
 
+class Rejected(GhChromeError):
+    """An answer that will not become a different one by asking again."""
+
+    def __init__(self, status: int, body: str) -> None:
+        super().__init__(f"{status}: {body}")
+        self.status = status
+
+
 class TapError(GhChromeError):
     pass
 

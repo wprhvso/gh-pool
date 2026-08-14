@@ -12,6 +12,10 @@ from gh_chrome_runner.config import settings
 log = logging.getLogger(__name__)
 
 ATTACH_TIMEOUT = 15.0
+# A request that has been open this long is a stream, a long poll or a
+# websocket upgrade, not part of a page settling; a wait for a quiet network
+# would otherwise never end on a page that keeps one open.
+STALE_REQUEST = 10.0
 
 
 @dataclass(slots=True)
@@ -36,6 +40,7 @@ class Tabs:
         self._active: str | None = None
         self._queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
         self._pump: asyncio.Task[None] | None = None
+        self._inflight: dict[str, dict[str, float]] = {}
 
     @property
     def active(self) -> Tab:
@@ -60,16 +65,27 @@ class Tabs:
             {
                 "index": index,
                 "url": tab.url,
-                "title": tab.title,
+                "title": await self._title(tab),
                 "active": tab.target_id == active,
             }
             for index, tab in enumerate(self.order)
         ]
 
+    async def _title(self, tab: Tab) -> str:
+        # What the browser puts in a target's info is the title it had when the
+        # page committed, which for anything that sets one is the address: the
+        # document knows better, and it is one round trip away.
+        with contextlib.suppress(Exception):
+            tab.title = str(await self.evaluate("document.title", tab))
+        return tab.title
+
     async def start(self) -> None:
         self.cdp.on("Target.attachedToTarget", self._attached)
         self.cdp.on("Target.detachedFromTarget", self._detached)
         self.cdp.on("Target.targetInfoChanged", self._info_changed)
+        self.cdp.on("Network.requestWillBeSent", self._request_began)
+        self.cdp.on("Network.loadingFinished", self._request_ended)
+        self.cdp.on("Network.loadingFailed", self._request_ended)
         self._pump = asyncio.create_task(self._drain())
         deadline = asyncio.get_running_loop().time() + ATTACH_TIMEOUT
         while asyncio.get_running_loop().time() < deadline:
@@ -214,10 +230,47 @@ class Tabs:
         index = self._order.index(target_id) if target_id in self._order else None
         self._order = [item for item in self._order if item != target_id]
         self._tabs.pop(target_id, None)
+        self._inflight.pop(session_id, None)
         if self._active == target_id:
-            self._active = self._order[-1] if self._order else None
+            # The browser shows the neighbour of the tab that went, not the last
+            # one to attach; picking differently points the CDP session at one
+            # page while the cursor is over another.
+            self._active = self._neighbour(index)
+            if self._active is not None:
+                self._queue.put_nowait(("took-over", self._active))
         if index is not None:
             self._queue.put_nowait(("closed", index))
+
+    def _neighbour(self, index: int | None) -> str | None:
+        if not self._order:
+            return None
+        if index is None:
+            return self._order[-1]
+        return self._order[min(index, len(self._order) - 1)]
+
+    def inflight(self, tab: Tab | None = None) -> int:
+        """How many requests the tab is still waiting on.
+
+        Resource timing only lists what has already finished, so a page in the
+        middle of the fetch a caller is waiting for used to look exactly like a
+        quiet one.
+        """
+        target = tab or self.active
+        now = asyncio.get_running_loop().time()
+        started = self._inflight.get(target.session_id, {})
+        return sum(1 for at in started.values() if now - at < STALE_REQUEST)
+
+    def _request_began(self, message: dict[str, Any]) -> None:
+        session_id = message.get("sessionId")
+        if isinstance(session_id, str):
+            self._inflight.setdefault(session_id, {})[
+                message["params"]["requestId"]
+            ] = asyncio.get_running_loop().time()
+
+    def _request_ended(self, message: dict[str, Any]) -> None:
+        session_id = message.get("sessionId")
+        if isinstance(session_id, str):
+            self._inflight.get(session_id, {}).pop(message["params"]["requestId"], None)
 
     def _info_changed(self, message: dict[str, Any]) -> None:
         info = message["params"]["targetInfo"]
@@ -233,10 +286,17 @@ class Tabs:
             try:
                 if kind == "opened":
                     await self._handle_opened(str(payload))
+                elif kind == "took-over":
+                    await self._show(str(payload))
                 else:
                     await self._emit(TabClosed(index=int(payload)))
             except Exception:
                 log.exception("failed to handle a tab event")
+
+    async def _show(self, target_id: str) -> None:
+        tab = self._tabs.get(target_id)
+        if tab is not None:
+            await self.bring_to_front(tab)
 
     async def _handle_opened(self, target_id: str) -> None:
         tab = self._tabs.get(target_id)
@@ -251,6 +311,10 @@ class Tabs:
     async def _prepare(self, tab: Tab) -> None:
         await self.cdp.send("Page.enable", session_id=tab.session_id)
         await self.cdp.send("Runtime.enable", session_id=tab.session_id)
+        # Enabled for the life of the tab rather than around a wait: the
+        # browser does not replay the requests already in flight when the
+        # domain comes on, so a count started later starts at nothing.
+        await self.cdp.send("Network.enable", session_id=tab.session_id)
         await self.cdp.send(
             "Page.setLifecycleEventsEnabled", {"enabled": True}, tab.session_id
         )

@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     ready_timeout: float = 600.0
     watchdog_interval: float = 5.0
     segment_seconds: float = 1.0
+    max_upload: int = 1 << 30
 
     @property
     def sessions_dir(self) -> Path:

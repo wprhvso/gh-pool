@@ -46,10 +46,19 @@ class Keyboard:
 
     async def hotkey(self, keys: list[str]) -> None:
         names = [keysym_name(key) for key in keys]
-        for name in names[:-1]:
-            self._xtest.key(name, True)
-            await asyncio.sleep(0.02)
-        self._xtest.tap(names[-1])
-        for name in reversed(names[:-1]):
-            self._xtest.key(name, False)
-            await asyncio.sleep(0.01)
+        # Resolved before anything is pressed: a name the layout does not know
+        # would otherwise raise with the modifiers already down, and every
+        # keystroke after that in the session would carry them.
+        for name in names:
+            self._xtest.resolve(name)
+        held: list[str] = []
+        try:
+            for name in names[:-1]:
+                self._xtest.key(name, True)
+                held.append(name)
+                await asyncio.sleep(0.02)
+            self._xtest.tap(names[-1])
+        finally:
+            for name in reversed(held):
+                self._xtest.key(name, False)
+                await asyncio.sleep(0.01)

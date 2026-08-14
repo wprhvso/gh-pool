@@ -31,10 +31,15 @@ def socket_url(session_id: UUID) -> str:
     return urlunsplit((scheme, parts.netloc, path, "", ""))
 
 
+class TunnelOverflow(Exception):
+    pass
+
+
 class Channel:
     def __init__(self, link: "Link", stream_id: int) -> None:
         self.id = stream_id
         self._link = link
+        self.overflowed = False
         self._queue: asyncio.Queue[tuple[tunnel.Op, bytes] | None] = asyncio.Queue(
             QUEUE_SIZE
         )
@@ -50,6 +55,9 @@ class Channel:
         try:
             self._queue.put_nowait(item)
         except asyncio.QueueFull:
+            # Not an end of message: whatever is reading this must not treat a
+            # body it never finished receiving as a body that finished.
+            self.overflowed = True
             self.hang_up()
 
     def hang_up(self) -> None:
@@ -74,6 +82,8 @@ class Link:
             if isinstance(raw, str):
                 continue
             op, stream_id, payload = tunnel.parse(raw)
+            if op is None:
+                continue
             if op is tunnel.Op.OPEN:
                 self._accept(stream_id, tunnel.Open.model_validate_json(payload))
             elif (channel := self._channels.get(stream_id)) is not None:
@@ -122,6 +132,8 @@ class Link:
         body = bytearray()
         while (item := await channel.read()) is not None:
             body += item[1]
+        if channel.overflowed:
+            raise TunnelOverflow("the request body arrived faster than it was read")
         async with self._client.stream(
             message.method,
             message.target,
@@ -175,12 +187,17 @@ class Link:
             await upstream.close()
 
     async def _drain(self, channel: Channel, upstream: ClientConnection) -> None:
-        async for raw in upstream:
-            if isinstance(raw, str):
-                await channel.send(tunnel.Op.TEXT, raw.encode())
-            else:
-                await channel.send(tunnel.Op.DATA, raw)
-        channel.hang_up()
+        try:
+            async for raw in upstream:
+                if isinstance(raw, str):
+                    await channel.send(tunnel.Op.TEXT, raw.encode())
+                else:
+                    await channel.send(tunnel.Op.DATA, raw)
+        finally:
+            # websockets raises rather than stopping the iteration when the
+            # desktop goes abnormally, and a viewer nobody hangs up on just
+            # freezes on its last frame.
+            channel.hang_up()
 
 
 class Tunnel:

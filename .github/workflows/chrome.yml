@@ -17,16 +17,23 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: >-
-            xvfb openbox xdotool x11-utils zstd ffmpeg
-            ssl-cert xauth x11-xkb-utils xkb-data xfonts-base libgbm1
-            libswitch-perl libyaml-tiny-perl libhash-merge-simple-perl
-            liblist-moreutils-perl libtry-tiny-perl libdatetime-perl
+      # Installed rather than restored from a package cache. The cache holds
+      # the packages that were asked for and not what they link against, and an
+      # ffmpeg that cannot find libblas records nothing at all — quietly: the
+      # recorder logs the exit and the session goes on answering commands with
+      # no video behind it. This is also the job that holds the token, which is
+      # no place for a third-party action pinned to a moving tag.
+      - run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            xvfb openbox xdotool x11-utils zstd ffmpeg \
+            ssl-cert xauth x11-xkb-utils xkb-data xfonts-base libgbm1 \
+            libswitch-perl libyaml-tiny-perl libhash-merge-simple-perl \
+            liblist-moreutils-perl libtry-tiny-perl libdatetime-perl \
             libdatetime-timezone-perl
-          version: 1.3
-          execute_install_scripts: true
+          ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc=size=64x64:rate=1 \
+            -frames:v 1 -f mp4 /dev/null
 
       # The live desktop is a bonus: a session without KasmVNC still records and
       # still answers commands, so a bad release asset must not fail the job.
@@ -49,13 +56,16 @@ jobs:
           done
           exit 1
 
-      - uses: actions/setup-python@v6
+      # Every other consumer of this code — the image, the checks — is built
+      # from uv.lock. Resolving the ranges in pyproject.toml fresh at dispatch
+      # time would make the one artifact users actually run the only one whose
+      # dependencies nothing has ever tested together.
+      - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.13"
+          enable-cache: true
+      - run: uv sync --frozen --no-dev --extra runner
 
-      - run: pip install '.[runner]'
-
-      - run: gh-chrome-runner --session ${{ inputs.session_id }}
+      - run: uv run --frozen --no-dev gh-chrome-runner --session ${{ inputs.session_id }}
         env:
           GH_CHROME_URL: ${{ secrets.GH_CHROME_URL }}
           GH_CHROME_TOKEN: ${{ secrets.GH_CHROME_TOKEN }}

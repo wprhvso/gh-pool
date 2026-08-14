@@ -6,8 +6,54 @@ on:
       - v*
 
 jobs:
+  # uv publish is the one step in this repository that cannot be taken back:
+  # PyPI will not accept a version again once it has been uploaded, deleted or
+  # not. Nothing goes out before the same checks that guard a commit have
+  # passed on the commit being tagged.
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [ruff, format, pyright, pytest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: wprhvso/qa-python@v1
+        with:
+          checks: ${{ matrix.check }}
+
+  # The tag names the image and pyproject.toml names the wheel, and nothing
+  # else compares them: a tag without a bump would ship an image whose version
+  # and whose `pip show` disagree, against a PyPI upload that either 400s or
+  # quietly does nothing.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      prerelease: ${{ steps.read.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: read
+        run: |
+          set -euo pipefail
+          tagged="${GITHUB_REF_NAME#v}"
+          declared=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
+          if [ "$tagged" != "$declared" ]; then
+            echo "tag $GITHUB_REF_NAME does not match pyproject version $declared" >&2
+            exit 1
+          fi
+          echo "version=$tagged" >> "$GITHUB_OUTPUT"
+          # Only digits and dots is a release; an rc, an alpha, a dev or a
+          # local segment is something else and must not become what anyone
+          # gets by asking for no version at all.
+          case "$tagged" in
+            *[!0-9.]*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
   release:
     runs-on: ubuntu-latest
+    needs: [check, version]
 
     permissions:
       contents: read
@@ -25,10 +71,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - run: earthly --ci --push +multi --VERSION="${GITHUB_REF_NAME#v}"
+      # A release candidate is not what :latest should mean.
+      - run: |
+          earthly --ci --push +multi \
+            --VERSION="${{ needs.version.outputs.version }}" \
+            --LATEST="${{ needs.version.outputs.prerelease == 'false' }}"
 
   pypi:
     runs-on: ubuntu-latest
+    needs: [check, version, release]
 
     environment: pypi
 

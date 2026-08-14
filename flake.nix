@@ -41,6 +41,76 @@
       forAllSystems = lib.genAttrs systems;
 
       buildArgs = { inherit pyproject-nix uv2nix pyproject-build-systems; };
+
+      # nix flake check never looks inside a NixOS module's config body, so a
+      # module that cannot produce a service anyone could start passes it. This
+      # evaluates one the way somebody deploying it would.
+      machine =
+        system:
+        lib.nixosSystem {
+          inherit system;
+          modules = [
+            self.nixosModules.default
+            {
+              boot.loader.grub.enable = false;
+              fileSystems."/" = {
+                device = "/dev/disk/by-label/nixos";
+                fsType = "ext4";
+              };
+              system.stateVersion = "25.05";
+              services.gh-chrome = {
+                enable = true;
+                publicUrl = "https://chrome.example.com";
+                database.createLocally = true;
+                environmentFiles = [ "/var/lib/secrets/gh-chrome" ];
+              };
+            }
+          ];
+        };
+
+      moduleFacts =
+        system:
+        let
+          inherit (machine system) config;
+          failed = lib.filter (item: !item.assertion) config.assertions;
+          unit = config.systemd.services.gh-chrome;
+          database = config.services.postgresql;
+          owner = lib.filter (user: user.ensureDBOwnership) database.ensureUsers;
+        in
+        {
+          failures = lib.concatMapStringsSep "\n" (item: item.message) failed;
+          url = unit.environment.GH_CHROME_DATABASE_URL or "";
+          databases = lib.concatStringsSep " " database.ensureDatabases;
+          owners = lib.concatMapStringsSep " " (user: user.name) owner;
+        };
+
+      moduleScript = ''
+        set -eu
+        if [ -n "$failures" ]; then
+          printf 'the module asserts:\n%s\n' "$failures" >&2
+          exit 1
+        fi
+        case "$url" in
+          *"/run/postgresql"*) ;;
+          *) echo "the unit has no local database url: '$url'" >&2; exit 1 ;;
+        esac
+        case " $databases " in
+          *" gh-chrome "*) ;;
+          *) echo "no database was created: '$databases'" >&2; exit 1 ;;
+        esac
+        case " $owners " in
+          *" gh-chrome "*) ;;
+          *) echo "the service user owns nothing: '$owners'" >&2; exit 1 ;;
+        esac
+        echo ok > "$out"
+      '';
+
+      moduleCheck =
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        pkgs.runCommand "gh-chrome-module" (moduleFacts system) moduleScript;
     in
     {
       overlays.default = final: _prev: {
@@ -106,6 +176,7 @@
 
       checks = forAllSystems (system: {
         inherit (self.packages.${system}) gh-chrome venv;
+        module = moduleCheck system;
       });
 
       formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.nixfmt);

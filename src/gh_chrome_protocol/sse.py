@@ -6,12 +6,16 @@ from dataclasses import dataclass
 class SseMessage:
     event: str
     data: str
+    # What the sender called this frame, which is how a reader that cannot make
+    # sense of the data can still say where it got to.
+    id: str | None = None
 
 
 async def parse_sse(chunks: AsyncIterator[bytes]) -> AsyncIterator[SseMessage]:
     buffer = ""
     event = "message"
     data: list[str] = []
+    identifier: str | None = None
     async for chunk in chunks:
         buffer += chunk.decode("utf-8", "replace")
         while "\n" in buffer:
@@ -19,11 +23,13 @@ async def parse_sse(chunks: AsyncIterator[bytes]) -> AsyncIterator[SseMessage]:
             line = line.rstrip("\r")
             if not line:
                 if data:
-                    yield SseMessage(event, "\n".join(data))
-                event, data = "message", []
+                    yield SseMessage(event, "\n".join(data), identifier)
+                event, data, identifier = "message", [], None
             elif line.startswith(":"):
                 continue
             elif line.startswith("event:"):
                 event = line.removeprefix("event:").removeprefix(" ")
+            elif line.startswith("id:"):
+                identifier = line.removeprefix("id:").removeprefix(" ")
             elif line.startswith("data:"):
                 data.append(line.removeprefix("data:").removeprefix(" "))

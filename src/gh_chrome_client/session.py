@@ -10,8 +10,11 @@ from types import TracebackType
 from typing import Any, Self, cast
 from uuid import UUID
 
+from pydantic import ValidationError
+
 from gh_chrome_client.errors import (
     GhChromeError,
+    Rejected,
     SessionDead,
     SessionNotReady,
     to_exception,
@@ -52,7 +55,7 @@ from gh_chrome_protocol import (
     WaitForUrl,
     WaitUntil,
 )
-from gh_chrome_protocol.sse import parse_sse
+from gh_chrome_protocol.sse import SseMessage, parse_sse
 
 log = logging.getLogger(__name__)
 
@@ -81,8 +84,13 @@ class Command[T]:
         return self._future.done()
 
     async def wait(self, timeout: float | None = None) -> T:
+        # Shielded on both paths. Awaiting a bare future makes it the awaiting
+        # task's own waiter, so a cancel anywhere up the stack — a task group
+        # giving up on a sibling, an outer wait_for — would cancel the command's
+        # future rather than the wait, and the answer that arrives afterwards
+        # would have nowhere to go.
         if timeout is None:
-            return await self._future
+            return await asyncio.shield(self._future)
         async with asyncio.timeout(timeout):
             return await asyncio.shield(self._future)
 
@@ -96,6 +104,15 @@ class Command[T]:
     def _fail(self, error: BaseException) -> None:
         if not self._future.done():
             self._future.set_exception(error)
+
+
+def _seq_of(message: SseMessage, fallback: int) -> int:
+    if message.id is None:
+        return fallback
+    try:
+        return int(message.id)
+    except ValueError:
+        return fallback
 
 
 async def _wait_any(*events: asyncio.Event, timeout: float) -> bool:
@@ -181,9 +198,19 @@ class Session:
                 queue.put_nowait(None)
             await self._http.aclose()
 
-    async def events(self) -> AsyncIterator[Event]:
+    def events(self) -> AsyncIterator[Event]:
+        """Everything the session announces from this moment on.
+
+        The queue is registered here rather than inside the generator body: an
+        async generator runs nothing until its first __anext__, so a caller who
+        held the iterator and then did the thing it wanted to watch used to miss
+        exactly the events it had asked for.
+        """
         queue: asyncio.Queue[Event | None] = asyncio.Queue()
         self._subscribers.add(queue)
+        return self._drain(queue)
+
+    async def _drain(self, queue: asyncio.Queue[Event | None]) -> AsyncIterator[Event]:
         try:
             while (event := await queue.get()) is not None:
                 yield event
@@ -197,18 +224,43 @@ class Session:
         while True:
             try:
                 async with self._http.events(self.id, self._last_seq) as chunks:
+                    # A stream that opened is a server that is there; the next
+                    # drop deserves a fresh short wait rather than the one the
+                    # last outage had worked its way up to.
+                    backoff = MIN_BACKOFF
                     async for message in parse_sse(chunks):
-                        event = Event.model_validate_json(message.data)
-                        self._last_seq = event.seq
-                        self._on_event(event)
+                        self._take(message)
             except asyncio.CancelledError:
                 raise
+            except Rejected as refused:
+                # The session is gone, or the token is not the one the server
+                # wants. Reconnecting forever would leave every caller waiting
+                # on a stream that will never say anything again.
+                log.warning("the event stream is closed to us: %s", refused)
+                self._finished.set()
+                self._fail_pending(SessionDead(str(refused)))
+                return
             except Exception as exc:
                 log.debug("event stream dropped: %s", exc)
                 await asyncio.sleep(backoff * random.uniform(0.5, 1.5))
                 backoff = min(backoff * 2, MAX_BACKOFF)
             else:
                 return
+
+    def _take(self, message: SseMessage) -> None:
+        try:
+            event = Event.model_validate_json(message.data)
+        except ValidationError:
+            # An event this build has no model for: a server deployed ahead of
+            # the client, which is the ordinary case for the half that lives on
+            # someone's laptop. The stream resumes from the last sequence
+            # number seen, so a frame left unread here would be the first thing
+            # redelivered on every reconnect, forever.
+            log.warning("skipping a %s event this client cannot read", message.event)
+            self._last_seq = _seq_of(message, self._last_seq)
+            return
+        self._last_seq = event.seq
+        self._on_event(event)
 
     def _on_event(self, event: Event) -> None:
         data = event.data
@@ -251,7 +303,7 @@ class Session:
         try:
             if isawaitable(args):
                 args = await args
-            if self._finished.is_set():
+            if self._over:
                 raise SessionDead("session is closed")
             accepted = await self._http.enqueue(self.id, args, timeout)
         except Exception as exc:
@@ -262,10 +314,19 @@ class Session:
         stashed = self._stash.pop(accepted.command_id, None)
         if stashed is not None:
             _settle(command, stashed)
-        elif self._finished.is_set():
+        elif self._over:
+            # close() sweeps what is pending and then awaits; a submit whose
+            # POST landed inside that window would otherwise be filed as
+            # pending afterwards, with the reader already cancelled and nothing
+            # left that could ever settle it.
             command._fail(SessionDead("session is closed"))
         else:
             self._pending[accepted.command_id] = command
+
+    @property
+    def _over(self) -> bool:
+        """Closed by us, or finished by the server: either way nothing more."""
+        return self._closed or self._finished.is_set()
 
     def goto(
         self,
@@ -355,7 +416,7 @@ class Session:
 
     async def _upload_args(self, selector: str, path: Path) -> CommandArgs:
         file_id = await self._http.upload_file(self.id, path)
-        return Upload(selector=selector, file_id=str(file_id))
+        return Upload(selector=selector, file_id=file_id)
 
     def text(self, selector: str, timeout: float | None = None) -> Command[str]:
         return self._call(Selector(method=Method.TEXT, selector=selector), timeout)

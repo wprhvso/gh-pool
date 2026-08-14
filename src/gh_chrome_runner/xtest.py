@@ -1,4 +1,6 @@
+import contextlib
 import logging
+import time
 from dataclasses import dataclass
 
 from Xlib import XK, X
@@ -44,6 +46,20 @@ SPECIAL_KEYS = {
 }
 
 
+# The keyboard map is changed to type a character the layout has no key for,
+# and the browser reads the map on its own schedule: before it has caught up
+# the borrowed key means nothing, and after the map is put back it means
+# nothing again. So the change is given a moment to land, and what it left
+# behind stays behind until the next character needs the key or the display
+# is done with.
+REMAP_SETTLE = 0.03
+
+
+def keysym_of(character: str) -> int:
+    code = ord(character)
+    return code if code < 0x100 else 0x01000000 + code
+
+
 @dataclass(frozen=True, slots=True)
 class Point:
     x: int
@@ -61,8 +77,10 @@ class Xtest:
             raise XtestError("XTEST extension is unavailable")
         self._root = self._display.screen().root
         self._spare = self._find_spare_keycode()
+        self._borrowed = False
 
     def close(self) -> None:
+        self._release_spare()
         self._display.close()
 
     def pointer(self) -> Point:
@@ -85,59 +103,75 @@ class Xtest:
 
     def key(self, keysym_name: str, press: bool) -> None:
         keycode, shifted = self._resolve(keysym_name)
-        if press and shifted:
-            self._raw_key(self._keycode_of("Shift_L"), True)
-        self._raw_key(keycode, press)
-        if not press and shifted:
-            self._raw_key(self._keycode_of("Shift_L"), False)
+        self._send(keycode, shifted, press)
 
     def tap(self, keysym_name: str) -> None:
         self.key(keysym_name, True)
         self.key(keysym_name, False)
 
     def char(self, character: str) -> None:
-        name = self._keysym_name(character)
-        if name is not None:
-            self.tap(name)
+        # By keysym rather than by its name: a comma is XK_comma, and asking
+        # the layout for "," finds nothing, which used to send every space and
+        # every mark the long way round through a borrowed key.
+        found = self._lookup(keysym_of(character))
+        if found is None:
+            self._tap_remapped(character)
             return
-        self._tap_remapped(character)
+        keycode, shifted = found
+        self._send(keycode, shifted, True)
+        self._send(keycode, shifted, False)
+
+    def _send(self, keycode: int, shifted: bool, press: bool) -> None:
+        if press and shifted:
+            self._raw_key(self._keycode_of("Shift_L"), True)
+        self._raw_key(keycode, press)
+        if not press and shifted:
+            self._raw_key(self._keycode_of("Shift_L"), False)
 
     def _raw_key(self, keycode: int, press: bool) -> None:
         event = X.KeyPress if press else X.KeyRelease
         xtest.fake_input(self._display, event, keycode)
         self._display.sync()
 
-    def _keysym_name(self, character: str) -> str | None:
-        name = XK.keysym_to_string(ord(character))
-        if name is None:
+    def _lookup(self, keysym: int) -> tuple[int, bool] | None:
+        mapping = list(self._display.keysym_to_keycodes(keysym))
+        if not mapping:
             return None
-        if self._display.keysym_to_keycode(XK.string_to_keysym(name)) == 0:
-            return None
-        return name
+        keycode, index = mapping[0]
+        return int(keycode), int(index) % 2 == 1
+
+    def resolve(self, keysym_name: str) -> tuple[int, bool]:
+        """Raises for a name this keyboard cannot produce, without pressing it."""
+        return self._resolve(keysym_name)
 
     def _resolve(self, keysym_name: str) -> tuple[int, bool]:
         keysym = XK.string_to_keysym(keysym_name)
         if keysym == 0:
             raise XtestError(f"unknown key: {keysym_name}")
-        mapping = list(self._display.keysym_to_keycodes(keysym))
-        if not mapping:
+        found = self._lookup(keysym)
+        if found is None:
             raise XtestError(f"key is not mapped: {keysym_name}")
-        keycode, index = mapping[0]
-        return int(keycode), int(index) % 2 == 1
+        return found
 
     def _keycode_of(self, keysym_name: str) -> int:
         return int(self._display.keysym_to_keycode(XK.string_to_keysym(keysym_name)))
 
     def _tap_remapped(self, character: str) -> None:
-        keysym = ord(character)
-        if keysym >= 0x100:
-            keysym = 0x01000000 + ord(character)
-        self._display.change_keyboard_mapping(self._spare, [[keysym] * 2])
+        self._display.change_keyboard_mapping(self._spare, [[keysym_of(character)] * 2])
         self._display.sync()
-        try:
-            self._raw_key(self._spare, True)
-            self._raw_key(self._spare, False)
-        finally:
+        self._borrowed = True
+        time.sleep(REMAP_SETTLE)
+        self._raw_key(self._spare, True)
+        self._raw_key(self._spare, False)
+        # The browser has the event but not necessarily the meaning of it yet,
+        # and the next character would take the key back.
+        time.sleep(REMAP_SETTLE)
+
+    def _release_spare(self) -> None:
+        if not self._borrowed:
+            return
+        self._borrowed = False
+        with contextlib.suppress(Exception):
             self._display.change_keyboard_mapping(self._spare, [[X.NoSymbol] * 2])
             self._display.sync()
 

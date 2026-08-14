@@ -24,6 +24,9 @@ docker:
     FROM python:$PYTHON-slim-bookworm
     ARG TARGETARCH
     ARG VERSION=dev
+    # A prerelease is tagged like any other version and must not become what
+    # anyone gets by asking for nothing in particular.
+    ARG LATEST=false
     ENV PATH=/app/.venv/bin:$PATH
     ENV PYTHONUNBUFFERED=1
     ENV GH_CHROME_HOST=0.0.0.0
@@ -35,8 +38,14 @@ docker:
     VOLUME /var/lib/gh-chrome
     EXPOSE 8000
     ENTRYPOINT ["gh-chrome-server"]
-    SAVE IMAGE --push $IMAGE:$VERSION $IMAGE:latest
+    IF [ "$LATEST" = "true" ]
+        SAVE IMAGE --push $IMAGE:$VERSION $IMAGE:latest
+    ELSE
+        SAVE IMAGE --push $IMAGE:$VERSION
+    END
 
 multi:
     ARG VERSION=dev
-    BUILD --platform=linux/amd64 --platform=linux/arm64 +docker --VERSION=$VERSION
+    ARG LATEST=false
+    BUILD --platform=linux/amd64 --platform=linux/arm64 +docker \
+        --VERSION=$VERSION --LATEST=$LATEST

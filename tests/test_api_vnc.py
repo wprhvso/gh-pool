@@ -86,6 +86,30 @@ def test_the_index_is_reachable_at_the_directory_root(client):
     assert client.get(f"/s/{SESSION}/vnc/", auth=ADMIN).status_code == 200
 
 
+def test_a_redirect_from_the_desktop_is_moved_under_the_session(client):
+    """KasmVNC answers a directory with a redirect rooted at its own origin.
+
+    Relayed as it stands it sends the viewer out of the session entirely; the
+    stand-in desktop never produced one, so the rewrite ran in no test at all.
+    """
+    moved = client.get(f"/s/{SESSION}/vnc/moved", auth=ADMIN, follow_redirects=False)
+
+    assert moved.status_code == 302
+    assert moved.headers["location"] == f"/s/{SESSION}/vnc/vnc/"
+
+
+def test_a_body_bigger_than_the_proxy_will_carry_is_refused(client):
+    """Refused on the declared length, before any of it is relayed."""
+    refused = client.post(
+        f"/s/{SESSION}/vnc/asset.js",
+        auth=ADMIN,
+        content=b"x",
+        headers={"content-length": str(api_vnc.MAX_BODY + 1)},
+    )
+
+    assert refused.status_code == 413
+
+
 def _connect(client, url):
     with client.websocket_connect(url):
         pass

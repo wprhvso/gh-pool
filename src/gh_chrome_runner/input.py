@@ -19,15 +19,29 @@ from gh_chrome_runner.xtest import BUTTONS, Xtest
 DRIFT_TOLERANCE = 2.0
 MAX_ATTEMPTS = 40
 SETTLE_DELAY = 0.05
+# What a click will spend on an element that will not hold still. Each try
+# walks the cursor across the screen at human speed, so forty of them outlast
+# the command's own timeout and the caller gets a timeout where the runner had
+# an answer — "it stayed covered" — all along. Five tries always happen, so a
+# machine slow enough to make one try take seconds still gets several; after
+# that the budget decides.
+CLICK_BUDGET = 10.0
+MIN_ATTEMPTS = 5
 
 SELECT_JS = """
 (() => {
   const el = document.querySelector(%s);
-  if (!el) return false;
-  el.value = %s;
+  if (!el) return 'missing';
+  const wanted = %s;
+  const options = Array.from(el.options ?? []);
+  const found = options.find((option) => option.value === wanted)
+    ?? options.find((option) => option.label === wanted)
+    ?? options.find((option) => option.text.trim() === wanted);
+  if (!found) return 'no-such-option';
+  el.value = found.value;
   el.dispatchEvent(new Event('input', {bubbles: true}));
   el.dispatchEvent(new Event('change', {bubbles: true}));
-  return true;
+  return 'selected';
 })()
 """
 
@@ -47,7 +61,13 @@ class Input:
 
     async def click(self, selector: str, count: int = 1, button: str = "left") -> None:
         code = BUTTONS[button]
-        for _ in range(MAX_ATTEMPTS):
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + CLICK_BUDGET
+        attempts = 0
+        while attempts < MIN_ATTEMPTS or (
+            attempts < MAX_ATTEMPTS and loop.time() < deadline
+        ):
+            attempts += 1
             viewport_x, viewport_y = await self._approach(selector)
             if not await self._locator.hit_test(selector, viewport_x, viewport_y):
                 await asyncio.sleep(SETTLE_DELAY)
@@ -80,7 +100,12 @@ class Input:
     async def select(self, selector: str, value: str) -> None:
         if await self._locator.box(selector) is None:
             raise ElementMissing(selector)
-        await self._tabs.evaluate(SELECT_JS % (js(selector), js(value)))
+        outcome = await self._tabs.evaluate(SELECT_JS % (js(selector), js(value)))
+        if outcome == "missing":
+            raise ElementMissing(selector)
+        if outcome != "selected":
+            # Assigning the value would have quietly cleared the control.
+            raise ElementMissing(f"{selector} has no option {value!r}")
 
     async def scroll_to(self, selector: str) -> None:
         for _ in range(MAX_ATTEMPTS):
@@ -121,9 +146,14 @@ class Input:
         return viewport.to_viewport(*target)
 
     def _aim(self, box: Box, viewport: Viewport) -> tuple[float, float]:
-        center_x, center_y = box.center
+        center_x, _ = box.center
+        # Vertically the aim is the middle of whatever part of the element is on
+        # the screen, which for anything taller than the window is not its own
+        # middle; the jitter stays inside that.
+        center_y = self._locator.aim_point(box, viewport)
+        span = min(box.height, viewport.height) / 2
         jitter_x = self._rng.uniform(-0.2, 0.2) * box.width
-        jitter_y = self._rng.uniform(-0.2, 0.2) * box.height
+        jitter_y = self._rng.uniform(-0.2, 0.2) * span
         return viewport.to_screen(center_x + jitter_x, center_y + jitter_y)
 
     async def _travel(self, target: tuple[float, float]) -> None:

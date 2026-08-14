@@ -16,6 +16,8 @@ INIT_NAME = "init-stream0.m4s"
 SCAN_INTERVAL = 0.5
 STABLE_CHECKS = 2
 RETRIES = 3
+RESTARTS = 3
+FINAL_SCAN = 30.0
 
 
 def _ffmpeg_command(display: Display, config: RunnerConfig) -> list[str]:
@@ -56,6 +58,11 @@ class Capture:
     async def start(self) -> None:
         settings.segments_dir.mkdir(parents=True, exist_ok=True)
         settings.logs_dir.mkdir(parents=True, exist_ok=True)
+        await self._spawn()
+        self._task = asyncio.create_task(self._watch())
+        log.info("capture started")
+
+    async def _spawn(self) -> None:
         handle = (settings.logs_dir / "ffmpeg.log").open("ab")
         self._process = await asyncio.create_subprocess_exec(
             *_ffmpeg_command(self._display, self._config),
@@ -63,8 +70,6 @@ class Capture:
             stderr=asyncio.subprocess.STDOUT,
             env=self._display.env,
         )
-        self._task = asyncio.create_task(self._watch())
-        log.info("capture started")
 
     async def stop(self) -> None:
         if self._task is not None:
@@ -80,11 +85,14 @@ class Capture:
             if self._process.returncode is None:
                 self._process.kill()
                 await self._process.wait()
-        with contextlib.suppress(Exception):
-            await self._scan(final=True)
+        with contextlib.suppress(Exception, TimeoutError):
+            # Whatever is left over is worth a moment, not the rest of the job.
+            async with asyncio.timeout(FINAL_SCAN):
+                await self._scan(final=True)
         log.info("capture stopped after %d segments", len(self._sent))
 
     async def _watch(self) -> None:
+        restarts = 0
         while True:
             if self._process is not None and self._process.returncode is not None:
                 log.error(
@@ -92,7 +100,15 @@ class Capture:
                     self._process.returncode,
                     settings.logs_dir / "ffmpeg.log",
                 )
-                return
+                if restarts >= RESTARTS:
+                    log.error("giving up on the recording after %d tries", restarts)
+                    return
+                restarts += 1
+                # The session outlives its recorder either way; it should not
+                # also go unrecorded because x11grab lost the display once.
+                await asyncio.sleep(1.0)
+                await self._spawn()
+                continue
             with contextlib.suppress(Exception):
                 await self._scan(final=False)
             await asyncio.sleep(SCAN_INTERVAL)
@@ -110,6 +126,9 @@ class Capture:
                 continue
             if await self._send(f"segments/{int(match.group(1))}", path):
                 self._sent.add(path.name)
+                # The server has it now, and a six hour session would otherwise
+                # keep every frame of itself on the runner's disk.
+                path.unlink(missing_ok=True)
 
     def _stable(self, path: Path) -> bool:
         size = path.stat().st_size

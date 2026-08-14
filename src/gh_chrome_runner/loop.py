@@ -59,6 +59,7 @@ class Runner:
 
     async def _serve(self, config: RunnerConfig) -> int:
         code = 1
+        told = False
         async with AsyncExitStack() as stack:
             enter = stack.enter_async_context
             display = await enter(
@@ -74,11 +75,13 @@ class Runner:
             )
 
             log.info("runner is ready for session %s", self._id)
-            beat = asyncio.create_task(self._beat())
+            consume = asyncio.create_task(
+                self._consume(actions, lambda: display.alive() and browser.alive())
+            )
+            beat = asyncio.create_task(self._beat(consume))
             try:
-                await self._consume(
-                    actions, lambda: display.alive() and browser.alive()
-                )
+                with contextlib.suppress(asyncio.CancelledError):
+                    told = await consume
                 code = 0
             except Exception:
                 log.exception("runner loop failed")
@@ -88,15 +91,27 @@ class Runner:
                     await beat
                 await self._await_current()
         if code == 0:
-            await self._save(config)
+            await self._save(config, told)
         return code
 
-    async def _consume(self, actions: Actions, healthy: Callable[[], bool]) -> None:
+    async def _consume(self, actions: Actions, healthy: Callable[[], bool]) -> bool:
+        """True when the server asked for the close, rather than the stream ending.
+
+        A stream that merely stops — a restart, a proxy giving up — says nothing
+        about the session, and confirming a close on the strength of it would
+        end a session the client is still using.
+        """
         async with self._server.stream() as chunks:
             async for message in parse_sse(chunks):
                 if message.event == "close":
                     log.info("close requested")
-                    return
+                    # Whatever is running now has nobody left to answer to, and
+                    # the stream that could have cancelled it ends here: waiting
+                    # it out would hold the profile and the browser open until
+                    # the job runs out of hours.
+                    if self._current is not None:
+                        self._current.cancel()
+                    return True
                 if message.event == "cancel":
                     self._cancel(UUID(json.loads(message.data)["command_id"]))
                 elif message.event == "command":
@@ -108,12 +123,19 @@ class Runner:
                     self._current = asyncio.create_task(
                         self._execute(actions, envelope)
                     )
+        log.warning("the command stream ended without a close")
+        return False
 
     async def _execute(self, actions: Actions, envelope: CommandEnvelope) -> None:
         result: Any = None
         error: CommandError | None = None
         try:
-            result = await actions.dispatch(envelope.args)
+            # The waits inside the actions poll for as long as it takes; the
+            # server's cancel is the only thing that used to bound them, and it
+            # cannot arrive while the runner is busy with the command it would
+            # cancel.
+            async with asyncio.timeout(envelope.timeout_ms / 1000):
+                result = await actions.dispatch(envelope.args)
         except asyncio.CancelledError:
             error = CommandError(code=ErrorCode.CANCELLED, message="cancelled")
         except Exception as exc:
@@ -133,20 +155,24 @@ class Runner:
         if self._current is not None and self._current_id == command_id:
             self._current.cancel()
 
-    async def _beat(self) -> None:
+    async def _beat(self, consume: asyncio.Task[bool]) -> None:
         while True:
             try:
                 alive = await self._server.heartbeat()
             except Exception:
                 alive = True
             if not alive:
-                log.warning("server considers the session finished")
+                # Nothing else is watching for this: the stream can be healthy
+                # and the session over, and then the job just sits there.
+                log.warning("the server has finished with this session")
+                consume.cancel()
                 return
             await asyncio.sleep(settings.heartbeat_interval)
 
-    async def _save(self, config: RunnerConfig) -> None:
+    async def _save(self, config: RunnerConfig, told: bool) -> None:
         if config.persist and config.profile:
             with contextlib.suppress(Exception):
                 await profile.store(self._server)
-        with contextlib.suppress(Exception):
-            await self._server.confirm_close()
+        if told:
+            with contextlib.suppress(Exception):
+                await self._server.confirm_close()

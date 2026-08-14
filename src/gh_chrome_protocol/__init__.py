@@ -40,7 +40,8 @@ class SessionParams(BaseModel):
     width: int = Field(default=1920, ge=320, le=3840)
     height: int = Field(default=1080, ge=240, le=2160)
     fps: int = Field(default=15, ge=1, le=60)
-    bitrate: str = "2M"
+    # Straight into ffmpeg's argv, so it is a bitrate and nothing else.
+    bitrate: str = Field(default="2M", pattern=r"^[1-9][0-9]{0,6}[KkMm]?$")
     mouse_speed: Speed = Speed.NORMAL
     type_speed: Speed = Speed.NORMAL
     scroll_speed: Speed = Speed.NORMAL
@@ -48,8 +49,13 @@ class SessionParams(BaseModel):
     subscribe: list[Topic] = Field(default_factory=list)
 
 
+PROFILE_NAME = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+
+
 class SessionCreate(BaseModel):
-    profile: str | None = None
+    # The name is a key on the server's disk as well as in its database, so it
+    # is held to what a filename may be before it gets anywhere near either.
+    profile: str | None = Field(default=None, pattern=PROFILE_NAME)
     persist: bool = True
     max_parallel: int | None = Field(default=None, ge=1)
     params: SessionParams = Field(default_factory=SessionParams)
@@ -222,7 +228,8 @@ class ScrollBy(BaseModel):
 class Upload(BaseModel):
     method: Literal[Method.UPLOAD] = Method.UPLOAD
     selector: str
-    file_id: str | None = None
+    # The id becomes a path on the server and a directory on the runner.
+    file_id: UUID | None = None
     url: str | None = None
 
 

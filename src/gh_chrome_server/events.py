@@ -9,6 +9,7 @@ from gh_chrome_protocol import Event, EventData, EventType
 from gh_chrome_server.db import Database, Tx
 
 QUEUE_SIZE = 1000
+LIVE = ("pending", "active")
 
 
 class SubscriberOverflow(Exception):
@@ -63,12 +64,20 @@ class Events:
 
     async def stream(self, session_id: UUID, after_seq: int) -> AsyncGenerator[Event]:
         with self._subscribe(session_id) as sub:
+            # Asked before the history is read, so a session that ends while it
+            # is being read still comes through the subscription below.
+            over = await self._over(session_id)
             delivered = after_seq
             for event in await self._history(session_id, after_seq):
                 delivered = event.seq
                 yield event
                 if event.data.type is EventType.SESSION_CLOSED:
                     return
+            if over:
+                # A caller resuming past the last event of a session that is
+                # already over would otherwise hold the stream open for a
+                # session that will never say anything again.
+                return
             while True:
                 event = await sub.get()
                 if event.seq <= delivered:
@@ -93,6 +102,12 @@ class Events:
     def _dispatch(self, session_id: UUID, event: Event) -> None:
         for sub in tuple(self._subs.get(session_id, ())):
             sub.offer(event)
+
+    async def _over(self, session_id: UUID) -> bool:
+        row = await self._db.one(
+            "select status from sessions where id = %s", (session_id,)
+        )
+        return row is None or row["status"] not in LIVE
 
     async def _history(self, session_id: UUID, after_seq: int) -> list[Event]:
         rows = await self._db.rows(

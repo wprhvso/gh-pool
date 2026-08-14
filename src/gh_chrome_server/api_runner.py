@@ -58,13 +58,24 @@ async def stream_commands(
 
     async def frames() -> AsyncGenerator[Frame]:
         while not await request.is_disconnected():
+            # Cancels first: a command that timed out in the same breath as the
+            # close would otherwise keep the runner busy with work the session
+            # has already given up on, and the stream it was told through is
+            # gone by then.
+            for command_id in sessions.take_cancels(session_id):
+                yield Frame(name="cancel", data=Cancel(command_id=command_id))
             if session_id in sessions.closing:
                 yield Frame(name="close", data=Close())
                 return
-            for command_id in sessions.take_cancels(session_id):
-                yield Frame(name="cancel", data=Cancel(command_id=command_id))
             row = await sessions.take_next(session_id)
             if row is None:
+                # Only the polite close goes through sessions.closing; a session
+                # the watchdog gave up on, or one closed before it ever went
+                # active, would otherwise leave the runner holding this stream
+                # until the job runs out of hours.
+                if not await sessions.live(session_id):
+                    yield Frame(name="close", data=Close())
+                    return
                 await asyncio.sleep(POLL_INTERVAL)
                 continue
             yield Frame(
@@ -121,7 +132,9 @@ async def confirm_close(session_id: UUID, sessions: Ss, _: Token) -> None:
 @router.put("/{session_id}/init", status_code=status.HTTP_204_NO_CONTENT)
 async def put_init_segment(session_id: UUID, request: Request, _: Token) -> None:
     await storage.write_atomic(
-        storage.segments_dir(session_id) / "init.m4s", request.stream()
+        storage.segments_dir(session_id) / "init.m4s",
+        request.stream(),
+        settings.max_upload,
     )
 
 
@@ -132,7 +145,9 @@ async def put_segment(
     if number < 1:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "bad segment number")
     await storage.write_atomic(
-        storage.segments_dir(session_id) / f"{number}.m4s", request.stream()
+        storage.segments_dir(session_id) / f"{number}.m4s",
+        request.stream(),
+        settings.max_upload,
     )
 
 
@@ -155,7 +170,7 @@ async def put_profile(
     if state.profile is None or not state.persist:
         raise SessionUnavailable("session does not persist a profile")
     size = await storage.write_atomic(
-        storage.profile_path(state.profile), request.stream()
+        storage.profile_path(state.profile), request.stream(), settings.max_upload
     )
     async with db.tx() as tx:
         await tx.run(
@@ -184,7 +199,7 @@ async def put_download(
 ) -> None:
     safe = storage.safe_name(name)
     size = await storage.write_atomic(
-        storage.downloads_dir(session_id) / safe, request.stream()
+        storage.downloads_dir(session_id) / safe, request.stream(), settings.max_upload
     )
     async with db.tx() as tx:
         await tx.run(

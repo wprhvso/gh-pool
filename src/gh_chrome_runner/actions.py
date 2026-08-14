@@ -86,6 +86,7 @@ class Actions:
             await self.subscribe(self._params.subscribe)
 
     async def stop(self) -> None:
+        await self.files.settle()
         self.input.close()
         await self.tabs.stop()
 

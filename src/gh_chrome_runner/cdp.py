@@ -59,12 +59,20 @@ class Cdp:
         if self._socket is not None:
             await self._socket.close()
             self._socket = None
+        self._abandon("the browser connection was closed")
 
     def on(self, event: str, handler: Callable[[dict[str, Any]], None]) -> None:
         self._listeners.setdefault(event, []).append(handler)
 
-    def off(self, event: str) -> None:
-        self._listeners.pop(event, None)
+    def off(
+        self, event: str, handler: Callable[[dict[str, Any]], None] | None = None
+    ) -> None:
+        if handler is None:
+            self._listeners.pop(event, None)
+            return
+        listeners = self._listeners.get(event, [])
+        if handler in listeners:
+            listeners.remove(handler)
 
     async def send(
         self,
@@ -90,7 +98,22 @@ class Cdp:
         await self._socket.send(json.dumps(message))
         return await future
 
+    def _abandon(self, reason: str) -> None:
+        # Nothing else resolves these: a caller waiting on a browser that has
+        # gone would otherwise wait for as long as the session lasts.
+        for future in self._pending.values():
+            if not future.done():
+                future.set_exception(CdpError("connection", reason))
+                future.exception()
+        self._pending.clear()
+
     async def _read(self, socket: ClientConnection) -> None:
+        try:
+            await self._pump(socket)
+        finally:
+            self._abandon("the browser stopped answering")
+
+    async def _pump(self, socket: ClientConnection) -> None:
         async for raw in socket:
             message = json.loads(raw)
             message_id = message.get("id")

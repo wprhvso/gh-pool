@@ -10,6 +10,7 @@ from gh_chrome_runner.config import settings
 from gh_chrome_runner.display import Display
 
 READY_TIMEOUT = 60.0
+CLOSE_TIMEOUT = 5.0
 
 FLAGS = (
     "--no-first-run",
@@ -90,8 +91,11 @@ class Browser:
 
     async def stop(self) -> None:
         if self._cdp is not None:
+            # A page with a beforeunload handler can hold this call open for
+            # ever, and the ladder below closes Chrome either way.
             with contextlib.suppress(Exception):
-                await self._cdp.send("Browser.close")
+                async with asyncio.timeout(CLOSE_TIMEOUT):
+                    await self._cdp.send("Browser.close")
             await self._cdp.close()
             self._cdp = None
         if self._process is None or self._process.returncode is not None:

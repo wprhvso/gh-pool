@@ -14,10 +14,22 @@ let
     mkIf
     mkOption
     optional
+    optionals
     types
     ;
 
   cfg = config.services.gh-chrome;
+
+  # The settings attrset drops nulls, so a url left unset simply leaves
+  # GH_CHROME_DATABASE_URL out of the unit's environment and the server falls
+  # back to a default database name of its own — one nothing here created.
+  databaseUrl =
+    if cfg.database.url != null then
+      cfg.database.url
+    else if cfg.database.createLocally then
+      "postgresql:///${cfg.database.name}?host=/run/postgresql"
+    else
+      null;
 
   settings = filterAttrs (_name: value: value != null) (
     {
@@ -25,7 +37,7 @@ let
       GH_CHROME_PORT = toString cfg.port;
       GH_CHROME_PUBLIC_URL = cfg.publicUrl;
       GH_CHROME_STORAGE = cfg.storage;
-      GH_CHROME_DATABASE_URL = cfg.database.url;
+      GH_CHROME_DATABASE_URL = databaseUrl;
       GH_CHROME_GITHUB_REPO = cfg.github.repo;
       GH_CHROME_GITHUB_WORKFLOW = cfg.github.workflow;
       GH_CHROME_GITHUB_REF = cfg.github.ref;
@@ -73,7 +85,16 @@ let
     Group = cfg.group;
   };
 
-  baseAfter = [ "network-online.target" ] ++ optional cfg.database.createLocally "postgresql.service";
+  # Where the database and the role are actually made moved between nixpkgs
+  # releases; systemd ignores an After on a unit that is not there, so naming
+  # both costs nothing and saves a first start against an empty cluster.
+  baseAfter = [
+    "network-online.target"
+  ]
+  ++ optionals cfg.database.createLocally [
+    "postgresql.service"
+    "postgresql-setup.service"
+  ];
   baseRequires = optional cfg.database.createLocally "postgresql.service";
 in
 {
@@ -156,8 +177,11 @@ in
 
       name = mkOption {
         type = types.str;
-        default = "gh_chrome";
-        description = "PostgreSQL database name.";
+        default = "gh-chrome";
+        description = ''
+          PostgreSQL database name. With createLocally it has to match
+          services.gh-chrome.user, which is what makes that user its owner.
+        '';
       };
 
       url = mkOption {
@@ -232,6 +256,16 @@ in
           GH_CHROME_GITHUB_PAT; the server refuses to start without a token.
         '';
       }
+      {
+        assertion = !cfg.database.createLocally || cfg.database.name == cfg.user;
+        message = ''
+          services.gh-chrome.database.createLocally makes the service user the
+          owner of the database it creates, and NixOS grants that only when the
+          role and the database have the same name. Set
+          services.gh-chrome.database.name to "${cfg.user}", or create the
+          database yourself and point services.gh-chrome.database.url at it.
+        '';
+      }
     ];
 
     users.users = mkIf (cfg.user == "gh-chrome") {
@@ -243,8 +277,19 @@ in
 
     users.groups = mkIf (cfg.group == "gh-chrome") { gh-chrome = { }; };
 
+    # A database on its own is not enough to connect to: without a role for the
+    # unit's user there is nobody to log in as, and without ownership the first
+    # thing the server does — create its migrations table — is refused by any
+    # PostgreSQL since 15.
     services.postgresql = mkIf cfg.database.createLocally {
+      enable = true;
       ensureDatabases = [ cfg.database.name ];
+      ensureUsers = [
+        {
+          name = cfg.user;
+          ensureDBOwnership = true;
+        }
+      ];
     };
 
     networking.firewall.allowedTCPPorts = optional cfg.openFirewall cfg.port;
