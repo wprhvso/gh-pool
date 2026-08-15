@@ -2,14 +2,15 @@ name: cd
 
 on:
   push:
-    tags:
-      - v*
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   # uv publish is the one step in this repository that cannot be taken back:
   # PyPI will not accept a version again once it has been uploaded, deleted or
   # not. Nothing goes out before the same checks that guard a commit have
-  # passed on the commit being tagged.
+  # passed on the commit being released.
   check:
     runs-on: ubuntu-latest
     strategy:
@@ -22,38 +23,57 @@ jobs:
         with:
           checks: ${{ matrix.check }}
 
-  # The tag names the image and pyproject.toml names the wheel, and nothing
-  # else compares them: a tag without a bump would ship an image whose version
-  # and whose `pip show` disagree, against a PyPI upload that either 400s or
-  # quietly does nothing.
+  # Every push to main lands here, and almost none of them are releases. PyPI
+  # is the record of what has already shipped: a push only releases when the
+  # version pyproject.toml declares is strictly higher than everything PyPI
+  # holds, which makes a release exactly a merged version bump.
   version:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.read.outputs.version }}
       prerelease: ${{ steps.read.outputs.prerelease }}
+      release: ${{ steps.read.outputs.release }}
     steps:
       - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v5
       - id: read
         run: |
           set -euo pipefail
-          tagged="${GITHUB_REF_NAME#v}"
           declared=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
-          if [ "$tagged" != "$declared" ]; then
-            echo "tag $GITHUB_REF_NAME does not match pyproject version $declared" >&2
-            exit 1
-          fi
-          echo "version=$tagged" >> "$GITHUB_OUTPUT"
+          echo "version=$declared" >> "$GITHUB_OUTPUT"
           # Only digits and dots is a release; an rc, an alpha, a dev or a
           # local segment is something else and must not become what anyone
           # gets by asking for no version at all.
-          case "$tagged" in
+          case "$declared" in
             *[!0-9.]*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
             *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
           esac
+          # A 404 means the project has never been published, so anything is
+          # newer. Ordering is PEP 440's, not the shell's: 0.2.10 is above
+          # 0.2.9 and 1.0.0rc1 is below 1.0.0.
+          curl -fsS https://pypi.org/pypi/gh-chrome/json -o pypi.json || echo '{}' > pypi.json
+          release=$(uv run --no-project --with packaging python - "$declared" <<'PY'
+          import json, sys
+          from packaging.version import InvalidVersion, Version
+
+          declared = Version(sys.argv[1])
+          published = []
+          for raw in json.load(open("pypi.json")).get("releases", {}):
+              try:
+                  published.append(Version(raw))
+              except InvalidVersion:
+                  pass
+          highest = max(published, default=None)
+          print("true" if highest is None or declared > highest else "false")
+          print(f"{declared} vs pypi {highest}", file=sys.stderr)
+          PY
+          )
+          echo "release=$release" >> "$GITHUB_OUTPUT"
 
   release:
     runs-on: ubuntu-latest
     needs: [check, version]
+    if: needs.version.outputs.release == 'true'
 
     permissions:
       contents: read
@@ -80,6 +100,7 @@ jobs:
   pypi:
     runs-on: ubuntu-latest
     needs: [check, version, release]
+    if: needs.version.outputs.release == 'true'
 
     environment: pypi
 
@@ -94,3 +115,21 @@ jobs:
           enable-cache: true
       - run: uv build --out-dir dist
       - run: uv publish
+
+  # The tag is a record of what shipped, so it is written once the upload that
+  # cannot be taken back has succeeded.
+  tag:
+    runs-on: ubuntu-latest
+    needs: [version, release, pypi]
+    if: needs.version.outputs.release == 'true'
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          set -euo pipefail
+          tag="v${{ needs.version.outputs.version }}"
+          git tag "$tag" "$GITHUB_SHA"
+          git push origin "$tag"
