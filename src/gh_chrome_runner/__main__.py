@@ -4,6 +4,7 @@ import logging
 import sys
 from uuid import UUID
 
+from gh_chrome_protocol import trace
 from gh_chrome_runner.config import settings
 from gh_chrome_runner.loop import Runner
 
@@ -17,9 +18,10 @@ def main() -> None:
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+        format=trace.LOG_FORMAT,
         stream=sys.stderr,
     )
+    trace.install_logging()
     if args.server:
         settings.url = args.server
     if not settings.token:

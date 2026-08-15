@@ -104,6 +104,36 @@ actions: `fulfill` answers without touching the network, `rewrite` swaps the
 request body, `capture` records url, method, headers and body and answers with
 `status` instead of letting it out.
 
+## Tracing
+
+A command is enqueued on one connection and executed on another, opened at
+session start and belonging to no request, so a `traceparent` header stops at
+the server unless something carries it further. It is stored on the command and
+handed to the runner in the envelope, which puts the runner's work under the
+span that asked for it rather than in a trace of its own.
+
+Nothing here depends on OpenTelemetry, and the base distribution is still
+`httpx` and `pydantic`. The header is validated, kept as it arrived and passed
+on; a version this code has never heard of is forwarded unchanged, and a
+malformed one is dropped rather than pointed at a parent that does not exist.
+Whoever instruments the client's `httpx` — the [ai][ai] gateway does — sends the
+header without being asked, so nothing in the client had to change.
+
+The server and the runner both put the trace id in every log line, which is
+what lets a request be followed across three processes and two machines:
+
+```
+2026-08-15 09:41:02 INFO    [4bf92f3577b34da6a3ce929d0e0e4736] gh_chrome_runner.loop: command click failed: timeout
+2026-08-15 09:41:02 INFO    [-] gh_chrome_runner.capture: segment 143 uploaded
+```
+
+A `-` is work that belongs to no request: the recorder, the heartbeat, the
+watchdog. The session's event reader is deliberately started from an empty
+context — it outlives by hours the call that opened the session, and a task
+keeps whatever context it was created in.
+
+[ai]: https://github.com/wprhvso/ai
+
 ## Server
 
 | Variable | Meaning |

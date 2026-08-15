@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse, Response
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from gh_chrome_protocol import trace
 from gh_chrome_server import (
     api_client,
     api_player,
@@ -94,9 +95,29 @@ class LimitBody:
         await self._app(scope, receive, send)
 
 
+class BindTrace:
+    """Puts the caller's trace on everything the request goes on to log.
+
+    Outermost, so a body turned away by LimitBody below is still reported
+    against the trace that sent it.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+        with trace.bound(trace.TraceContext.from_headers(Headers(scope=scope))):
+            await self._app(scope, receive, send)
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="gh-chrome", lifespan=lifespan)
     app.add_middleware(LimitBody, limit=settings.max_upload)
+    # Added last, so it wraps the one above rather than sitting inside it.
+    app.add_middleware(BindTrace)
     install_errors(app)
     app.include_router(api_client.router)
     app.include_router(api_client.profiles_router)

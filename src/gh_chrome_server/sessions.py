@@ -20,6 +20,7 @@ from gh_chrome_protocol import (
     SessionState,
     SessionStatus,
 )
+from gh_chrome_protocol.trace import TraceContext
 from gh_chrome_server.db import Database, Tx
 from gh_chrome_server.events import Events
 
@@ -199,7 +200,10 @@ class Sessions:
         await self._events.publish(tx, session_id, SessionClosed(reason=reason))
 
     async def enqueue(
-        self, session_id: UUID, request: CommandRequest
+        self,
+        session_id: UUID,
+        request: CommandRequest,
+        trace: TraceContext | None = None,
     ) -> tuple[UUID, int]:
         command_id = uuid4()
         async with self._db.tx() as tx:
@@ -214,8 +218,9 @@ class Sessions:
             params = SessionParams.model_validate(row["params"])
             timeout = request.timeout if request.timeout is not None else params.timeout
             await tx.run(
-                "insert into commands (id, session_id, seq, method, args, timeout_ms) "
-                "values (%s, %s, %s, %s, %s, %s)",
+                "insert into commands "
+                "(id, session_id, seq, method, args, timeout_ms, traceparent, tracestate) "
+                "values (%s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     command_id,
                     session_id,
@@ -223,6 +228,8 @@ class Sessions:
                     str(request.args.method),
                     Jsonb(request.args.model_dump(mode="json")),
                     int(timeout * 1000),
+                    trace.traceparent if trace is not None else None,
+                    trace.tracestate if trace is not None else None,
                 ),
             )
         return command_id, seq

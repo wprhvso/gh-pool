@@ -85,6 +85,8 @@ async def stream_commands(
                     seq=row["seq"],
                     args=row["args"],
                     timeout_ms=row["timeout_ms"],
+                    traceparent=row["traceparent"],
+                    tracestate=row["tracestate"],
                 ),
             )
 

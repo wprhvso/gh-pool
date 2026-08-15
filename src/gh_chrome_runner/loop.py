@@ -9,6 +9,7 @@ from uuid import UUID
 
 from gh_chrome_protocol import CommandEnvelope, CommandError, ErrorCode, RunnerConfig
 from gh_chrome_protocol.sse import parse_sse
+from gh_chrome_protocol.trace import TraceContext, bound
 from gh_chrome_runner import profile
 from gh_chrome_runner.actions import Actions
 from gh_chrome_runner.browser import Browser
@@ -127,8 +128,17 @@ class Runner:
         return False
 
     async def _execute(self, actions: Actions, envelope: CommandEnvelope) -> None:
+        # The command carries the trace of whoever asked for it, because the
+        # request that enqueued it never reached this process: the stream it
+        # arrived on was opened at session start and belongs to nobody.
+        trace = TraceContext.parse(envelope.traceparent, envelope.tracestate)
+        with bound(trace):
+            await self._run(actions, envelope)
+
+    async def _run(self, actions: Actions, envelope: CommandEnvelope) -> None:
         result: Any = None
         error: CommandError | None = None
+        log.debug("command %s started", envelope.args.method)
         try:
             # The waits inside the actions poll for as long as it takes; the
             # server's cancel is the only thing that used to bound them, and it
@@ -140,8 +150,19 @@ class Runner:
             error = CommandError(code=ErrorCode.CANCELLED, message="cancelled")
         except Exception as exc:
             error = actions.to_error(exc)
-        with contextlib.suppress(Exception):
+        if error is not None:
+            log.info("command %s failed: %s", envelope.args.method, error.code)
+        try:
             await self._server.complete(envelope.command_id, result, error)
+        except Exception:
+            # Suppressed rather than raised — there is nobody left to tell — but
+            # silent it should not be: the caller waits out its own timeout with
+            # an answer that was ready all along.
+            log.warning(
+                "could not hand back the result of %s",
+                envelope.args.method,
+                exc_info=True,
+            )
 
     async def _await_current(self) -> None:
         if self._current is None:

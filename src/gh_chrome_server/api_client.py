@@ -13,6 +13,7 @@ from gh_chrome_protocol import (
     SessionCreate,
     SessionState,
 )
+from gh_chrome_protocol.trace import TraceContext
 from gh_chrome_server import github, storage
 from gh_chrome_server.auth import Token
 from gh_chrome_server.config import settings
@@ -47,9 +48,16 @@ async def get_session(session_id: UUID, sessions: Ss, _: Token) -> SessionState:
 
 @router.post("/{session_id}/commands", status_code=status.HTTP_202_ACCEPTED)
 async def enqueue_command(
-    session_id: UUID, request: CommandRequest, sessions: Ss, _: Token
+    session_id: UUID,
+    request: CommandRequest,
+    http: Request,
+    sessions: Ss,
+    _: Token,
 ) -> CommandAccepted:
-    command_id, seq = await sessions.enqueue(session_id, request)
+    # Whoever instruments the caller's HTTP client put this here; the runner is
+    # on a connection of its own and would otherwise never learn of it.
+    trace = TraceContext.from_headers(http.headers)
+    command_id, seq = await sessions.enqueue(session_id, request, trace)
     return CommandAccepted(command_id=command_id, seq=seq)
 
 

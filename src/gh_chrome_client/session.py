@@ -4,6 +4,7 @@ import logging
 import random
 from collections.abc import AsyncIterator, Awaitable, Generator
 from contextlib import suppress
+from contextvars import Context
 from inspect import isawaitable
 from pathlib import Path
 from types import TracebackType
@@ -139,7 +140,12 @@ class Session:
         self._finished = asyncio.Event()
         self._closed = False
         self._last_seq = 0
-        self._reader = asyncio.create_task(self._read_events())
+        # Started from an empty context on purpose. This task outlives by hours
+        # the call that happened to open the session, and a task inherits the
+        # context it was created in: anything context-bound in the caller — a
+        # trace above all — would otherwise be held by the reader for the whole
+        # session and attributed to every reconnect it ever makes.
+        self._reader = asyncio.create_task(self._read_events(), context=Context())
 
     @property
     def id(self) -> UUID:

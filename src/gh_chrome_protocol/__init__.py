@@ -309,6 +309,11 @@ class CommandEnvelope(BaseModel):
     seq: int
     args: CommandArgs
     timeout_ms: int
+    # The trace the caller was in when it enqueued this, so the runner's work
+    # lands under the request that asked for it rather than in a trace of its
+    # own. A runner too old to know the fields ignores them.
+    traceparent: str | None = None
+    tracestate: str | None = None
 
 
 class CommandResult(BaseModel):
