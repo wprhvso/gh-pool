@@ -1,0 +1,42 @@
+name: pool
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'
+
+concurrency:
+  group: pool
+  cancel-in-progress: true
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: system deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            ffmpeg imagemagick p7zip-full jq curl git build-essential
+
+      - name: python deps
+        run: uv sync --frozen --no-dev
+
+      - name: run worker
+        env:
+          POOL_SERVER: ${{ secrets.POOL_SERVER }}
+          POOL_TOKEN: ${{ secrets.POOL_TOKEN }}
+          WORKER_ID: gh-${{ github.run_id }}-${{ matrix.shard }}
+        run: uv run pool-worker
