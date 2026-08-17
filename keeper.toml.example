@@ -1,0 +1,8 @@
+poll = "60s"
+ttl = "6h"
+jobs = 20
+workflow = "pool.yml"
+
+[repos]
+"alice/pool" = "ghp_alice"
+"bob/pool" = { token = "ghp_bob", jobs = 40, ref = "master" }

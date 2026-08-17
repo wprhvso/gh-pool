@@ -4,3 +4,4 @@ __pycache__/
 data/
 pool.db*
 .env
+keeper.toml
