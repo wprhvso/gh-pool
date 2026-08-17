@@ -18,6 +18,7 @@ keeper = ["pynacl>=1.5"]
 pool = "pool.cli:main"
 pool-server = "pool.server:main"
 pool-worker = "pool.worker:main"
+pool-keeper = "pool.keeper:main"
 
 [build-system]
 requires = ["hatchling"]

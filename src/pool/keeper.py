@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import argparse
 import base64
 import json
@@ -15,7 +14,7 @@ API = "https://api.github.com"
 KEYS = ("token", "workflow", "jobs", "ttl", "ref")
 UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 SECRETS = ("POOL_SERVER", "POOL_TOKEN")
-WORKFLOWS = Path(__file__).parent / ".github" / "workflows"
+WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 GRACE = 120
 
 
@@ -178,7 +177,7 @@ def each(repos, fn):
 
 
 def main():
-    p = argparse.ArgumentParser(prog="keeper")
+    p = argparse.ArgumentParser(prog="pool-keeper")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("-c", "--config", type=Path, required=True)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -189,20 +188,19 @@ def main():
     args = p.parse_args()
 
     repos, poll, pool = load(args.config)
-    if args.cmd == "build":
-        each(repos, lambda r: build(r, args.source / r.workflow, pool))
-        return
-
-    log(f"{len(repos)} repos, {sum(r.jobs for r in repos)} runners")
-    while True:
-        each(repos, reconcile)
-        if args.once:
+    try:
+        if args.cmd == "build":
+            each(repos, lambda r: build(r, args.source / r.workflow, pool))
             return
-        time.sleep(poll)
+        log(f"{len(repos)} repos, {sum(r.jobs for r in repos)} runners")
+        while True:
+            each(repos, reconcile)
+            if args.once:
+                return
+            time.sleep(poll)
+    except KeyboardInterrupt:
+        sys.exit(130)
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        sys.exit(130)
+    main()
