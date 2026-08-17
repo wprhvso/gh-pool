@@ -31,11 +31,19 @@ let
   wrapper = pkgs.writeShellScriptBin "pool" ''
     export POOL_SERVER=${lib.escapeShellArg cli.server}
     ${lib.optionalString (cli.tokenFile != null) ''
+      if [ ! -r ${lib.escapeShellArg cli.tokenFile} ]; then
+        echo "pool: не читается ${toString cli.tokenFile}" >&2
+        exit 1
+      fi
       POOL_CLIENT_TOKEN=$(cat ${lib.escapeShellArg cli.tokenFile})
       export POOL_CLIENT_TOKEN
     ''}
     exec ${cli.package}/bin/pool "$@"
   '';
+
+  keeperConfig = "%d/keeper.toml";
+
+  keeperBuild = "${keeper.package}/bin/pool-keeper build -c ${keeperConfig} --source ${keeper.workflows}";
 in
 {
   options.programs.pool = {
@@ -76,6 +84,16 @@ in
       type = types.path;
       description = "Конфиг с репами и токенами, см. keeper.toml.example.";
     };
+    build = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Раскладывать по репам воркфлоу и секреты POOL_SERVER/POOL_TOKEN перед запуском.";
+    };
+    workflows = mkOption {
+      type = types.path;
+      default = self + "/.github/workflows";
+      description = "Каталог с воркфлоу, откуда build берёт файл по имени из конфига.";
+    };
   };
 
   config = mkMerge [
@@ -87,7 +105,8 @@ in
       systemd.services.pool-worker = {
         description = "pool worker";
         wantedBy = [ "multi-user.target" ];
-        after = [ "network.target" ];
+        after = [ "network-online.target" ];
+        wants = [ "network-online.target" ];
 
         environment = {
           POOL_SERVER = worker.server;
@@ -115,10 +134,13 @@ in
       systemd.services.pool-keeper = {
         description = "pool keeper";
         wantedBy = [ "multi-user.target" ];
-        after = [ "network.target" ];
+        after = [ "network-online.target" ];
+        wants = [ "network-online.target" ];
 
         serviceConfig = {
-          ExecStart = "${keeper.package}/bin/pool-keeper run -c ${keeper.configFile}";
+          ExecStartPre = lib.optional keeper.build keeperBuild;
+          ExecStart = "${keeper.package}/bin/pool-keeper run -c ${keeperConfig}";
+          LoadCredential = [ "keeper.toml:${keeper.configFile}" ];
           DynamicUser = true;
           Restart = "always";
           RestartSec = 10;
