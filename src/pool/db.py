@@ -1,0 +1,98 @@
+import os
+
+from sqlalchemy import BigInteger, Float, String, Text, delete, select
+from sqlalchemy.dialects.postgresql import JSONB, insert
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://pool:pool@localhost/pool")
+
+engine = create_async_engine(URL, pool_size=5, max_overflow=5, pool_recycle=300)
+Session = async_sessionmaker(engine, expire_on_commit=False)
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Task(Base):
+    __tablename__ = "tasks"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    type: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[dict] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(16), index=True)
+    worker_id: Mapped[str | None] = mapped_column(String(128))
+    error: Mapped[str | None] = mapped_column(Text)
+    parent_id: Mapped[str | None] = mapped_column(String(32))
+    created_at: Mapped[float] = mapped_column(Float, index=True)
+    started_at: Mapped[float | None] = mapped_column(Float)
+    finished_at: Mapped[float | None] = mapped_column(Float)
+
+
+class Artifact(Base):
+    __tablename__ = "artifacts"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    path: Mapped[str] = mapped_column(Text)
+    size: Mapped[int] = mapped_column(BigInteger)
+    sha256: Mapped[str] = mapped_column(String(64))
+    task_id: Mapped[str | None] = mapped_column(String(32), index=True)
+    created_at: Mapped[float] = mapped_column(Float, index=True)
+
+
+TASK_COLUMNS = tuple(Task.__table__.columns.keys())
+ARTIFACT_COLUMNS = tuple(Artifact.__table__.columns.keys())
+
+
+def key_of(model):
+    return next(iter(model.__table__.primary_key.columns)).name
+
+
+def as_dict(row, model):
+    return {c: getattr(row, c) for c in model.__table__.columns.keys()}
+
+
+async def setup():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
+async def save(model, rows):
+    if not rows:
+        return
+    key = key_of(model)
+    stmt = insert(model).values(rows)
+    stmt = stmt.on_conflict_do_update(index_elements=[key], set_={c: stmt.excluded[c] for c in rows[0] if c != key})
+    async with Session.begin() as session:
+        await session.execute(stmt)
+
+
+async def fetch(model, value):
+    async with Session() as session:
+        row = await session.get(model, value)
+        return None if row is None else as_dict(row, model)
+
+
+async def drop(model, value):
+    async with Session.begin() as session:
+        await session.execute(delete(model).where(getattr(model, key_of(model)) == value))
+
+
+async def rows(model, query):
+    async with Session() as session:
+        return [as_dict(r, model) for r in await session.scalars(query)]
+
+
+async def tasks(status=None, limit=100):
+    q = select(Task).order_by(Task.created_at.desc()).limit(limit)
+    return await rows(Task, q.where(Task.status == status) if status else q)
+
+
+async def artifacts(prefix="", limit=100):
+    q = select(Artifact).order_by(Artifact.created_at.desc()).limit(limit)
+    return await rows(Artifact, q.where(Artifact.key.startswith(prefix)) if prefix else q)
+
+
+async def unfinished():
+    return await rows(Task, select(Task).where(Task.status.in_(("pending", "running"))))

@@ -1,61 +1,69 @@
+import hashlib
 import json
+import linecache
+import os
+import shutil
+import signal
 import subprocess
 import sys
-import time
-import urllib.request
 from pathlib import Path
 
-REGISTRY = {}
+from pool import rpc
+
+DEPS = Path(os.getenv("POOL_DEPS", "/tmp/pool-deps"))
 
 
-def task(name):
-    def deco(fn):
-        REGISTRY[name] = fn
-        return fn
-
-    return deco
-
-
-@task("echo")
-def echo(payload, result_path):
-    for i in range(payload.get("count", 3)):
-        print(f"tick {i}")
-        time.sleep(payload.get("delay", 1))
-    return {"echoed": payload}
+def install(deps):
+    target = DEPS / hashlib.sha256("\n".join(sorted(deps)).encode()).hexdigest()[:16]
+    if not (target / ".ok").exists():
+        print(f"[deps] {' '.join(deps)}")
+        uv = shutil.which("uv")
+        base = [uv, "pip", "install", "--python", sys.executable] if uv else [sys.executable, "-m", "pip", "install"]
+        subprocess.run([*base, "--target", str(target), *deps], check=True, stdout=sys.stdout, stderr=subprocess.STDOUT)
+        (target / ".ok").touch()
+    sys.path.insert(0, str(target))
 
 
-@task("shell")
-def shell(payload, result_path):
-    cmd = payload["cmd"]
-    print(f"$ {cmd}")
-    p = subprocess.run(cmd, shell=True, stdout=sys.stdout, stderr=subprocess.STDOUT)
-    if p.returncode != 0:
-        raise RuntimeError(f"exit code {p.returncode}")
-    return {"returncode": p.returncode}
+def expired(*_):
+    raise TimeoutError("task timed out")
 
 
-@task("fetch")
-def fetch(payload, result_path):
-    url = payload["url"]
-    print(f"fetching {url}")
-    total = 0
-    with urllib.request.urlopen(url, timeout=60) as r, open(result_path, "wb") as f:
-        while True:
-            chunk = r.read(1 << 16)
-            if not chunk:
-                break
-            f.write(chunk)
-            total += len(chunk)
-            if total % (1 << 22) < (1 << 16):
-                print(f"{total} bytes")
-    print(f"done, {total} bytes")
-
-
-@task("python")
-def python_eval(payload, result_path):
+def run(payload):
     code = payload["code"]
-    scope = {"payload": payload, "result_path": Path(result_path)}
-    exec(code, scope)
-    out = scope.get("result")
-    if out is not None:
-        return out
+    entry = payload.get("entry")
+    args = payload.get("args") or []
+    kwargs = payload.get("kwargs") or {}
+
+    if payload.get("deps"):
+        install(payload["deps"])
+    if payload.get("timeout"):
+        signal.signal(signal.SIGALRM, expired)
+        signal.setitimer(signal.ITIMER_REAL, float(payload["timeout"]))
+
+    name = f"<{entry or 'code'}>"
+    linecache.cache[name] = (len(code), None, code.splitlines(True), name)
+    scope = {"__name__": "__pool__", "args": args, "kwargs": kwargs, "emit": rpc.emit}
+    exec(compile(code, name, "exec"), scope)
+    if entry and not callable(scope.get(entry)):
+        raise NameError(f"{entry} is not defined by the submitted code")
+    value = scope[entry](*args, **kwargs) if entry else scope.get("result")
+    signal.setitimer(signal.ITIMER_REAL, 0)
+
+    if value is None:
+        return
+    try:
+        json.dumps(value)
+    except TypeError as e:
+        raise TypeError(f"returned value must be JSON: {e}") from None
+    rpc.emit("result", value)
+
+
+def python(payload):
+    try:
+        run(payload)
+    except Exception as e:
+        rpc.emit("error", type=type(e).__name__, message=str(e))
+        raise
+
+
+REGISTRY = {"python": python}

@@ -1,10 +1,9 @@
 import asyncio
-import json
+import hashlib
 import os
-import sqlite3
-import threading
 import time
 import uuid
+from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -12,69 +11,35 @@ import anyio
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 
+from pool import db
+
 DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
-DB_PATH = os.getenv("DB_PATH", "./pool.db")
+BLOB_DIR = Path(os.getenv("BLOB_DIR", str(DATA_DIR / "blobs")))
 WORKER_TOKEN = os.getenv("WORKER_TOKEN", "dev-worker")
 CLIENT_TOKEN = os.getenv("CLIENT_TOKEN", "dev-client")
-LOG_CAP = int(os.getenv("LOG_CAP", str(100 * 1024 * 1024)))
+EVENT_CAP = int(os.getenv("EVENT_CAP", str(100 * 1024 * 1024)))
 LOST_AFTER = float(os.getenv("LOST_AFTER", "300"))
 LEASE_WAIT = float(os.getenv("LEASE_WAIT", "30"))
 WORKER_STALE = float(os.getenv("WORKER_STALE", "120"))
+FLUSH_EVERY = float(os.getenv("FLUSH_EVERY", "0.2"))
 
 TERMINAL = ("done", "failed", "cancelled")
+FINISHED = (*TERMINAL, "lost")
 
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-_lock = threading.Lock()
-db = sqlite3.connect(DB_PATH, check_same_thread=False, isolation_level=None)
-db.row_factory = sqlite3.Row
-db.execute("PRAGMA journal_mode=WAL")
-db.execute("PRAGMA synchronous=NORMAL")
-db.execute("PRAGMA busy_timeout=5000")
-db.executescript(
-    """
-    CREATE TABLE IF NOT EXISTS tasks (
-        id TEXT PRIMARY KEY,
-        type TEXT NOT NULL,
-        payload TEXT NOT NULL,
-        status TEXT NOT NULL,
-        worker_id TEXT,
-        lease_token TEXT,
-        cancel_requested INTEGER NOT NULL DEFAULT 0,
-        error TEXT,
-        result_name TEXT,
-        parent_id TEXT,
-        created_at REAL NOT NULL,
-        started_at REAL,
-        finished_at REAL,
-        heartbeat_at REAL
-    );
-    CREATE INDEX IF NOT EXISTS idx_pending ON tasks(status, created_at);
-    CREATE TABLE IF NOT EXISTS workers (
-        id TEXT PRIMARY KEY,
-        seen_at REAL NOT NULL,
-        task_id TEXT
-    );
-    """
-)
+TASKS: dict[str, dict] = {}
+QUEUE: deque[str] = deque()
+WORKERS: dict[str, dict] = {}
+BLOBS: dict[str, dict] = {}
+DIRTY: set[str] = set()
+DIRTY_BLOBS: set[str] = set()
 
 new_task = asyncio.Event()
-log_locks: dict[str, asyncio.Lock] = {}
+event_locks: dict[str, asyncio.Lock] = {}
+flush_lock = asyncio.Lock()
+state = {"db": False}
 
-
-def q(sql, args=()):
-    with _lock:
-        return db.execute(sql, args).fetchall()
-
-
-def one(sql, args=()):
-    rows = q(sql, args)
-    return rows[0] if rows else None
-
-
-def run(sql, args=()):
-    with _lock:
-        db.execute(sql, args)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+BLOB_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def task_dir(tid):
@@ -83,13 +48,18 @@ def task_dir(tid):
     return d
 
 
-def log_path(tid):
-    return task_dir(tid) / "log.txt"
+def events_path(tid):
+    return task_dir(tid) / "events.txt"
 
 
-def log_size(tid):
-    p = log_path(tid)
+def events_size(tid):
+    p = events_path(tid)
     return p.stat().st_size if p.exists() else 0
+
+
+def blob_path(key):
+    h = hashlib.sha256(key.encode()).hexdigest()
+    return BLOB_DIR / h[:2] / h
 
 
 def auth_worker(h):
@@ -102,83 +72,120 @@ def auth_client(h):
         raise HTTPException(401, "bad client token")
 
 
-def get_task(tid):
-    row = one("SELECT * FROM tasks WHERE id=?", (tid,))
-    if not row:
-        raise HTTPException(404, "no such task")
-    return row
+def auth_any(h):
+    if h not in (f"Bearer {WORKER_TOKEN}", f"Bearer {CLIENT_TOKEN}"):
+        raise HTTPException(401, "bad token")
 
 
-def owned(tid, lease_token):
-    row = get_task(tid)
-    if not lease_token or row["lease_token"] != lease_token:
-        raise HTTPException(409, "stale lease")
-    return row
-
-
-def as_dict(row):
-    d = dict(row)
-    d["payload"] = json.loads(d["payload"])
-    d["cancel_requested"] = bool(d["cancel_requested"])
-    d["log_size"] = log_size(d["id"])
+def public(t):
+    d = {c: t.get(c) for c in db.TASK_COLUMNS}
+    d["cancel_requested"] = bool(t.get("cancel_requested"))
+    d["event_size"] = events_size(d["id"])
     return d
 
 
+async def find(tid):
+    t = TASKS.get(tid) or await db.fetch(db.Task, tid)
+    if t is None:
+        raise HTTPException(404, "no such task")
+    return t
+
+
+def owned(tid, lease_token):
+    t = TASKS.get(tid)
+    if t is None or not lease_token or t.get("lease_token") != lease_token:
+        raise HTTPException(409, "stale lease")
+    return t
+
+
 def grab(worker_id):
-    with _lock:
-        db.execute("BEGIN IMMEDIATE")
-        try:
-            row = db.execute(
-                "SELECT id, type, payload FROM tasks WHERE status='pending' ORDER BY created_at LIMIT 1"
-            ).fetchone()
-            if row is None:
-                db.execute("COMMIT")
-                return None
-            token = uuid.uuid4().hex
-            now = time.time()
-            db.execute(
-                "UPDATE tasks SET status='running', worker_id=?, lease_token=?, started_at=?, heartbeat_at=? WHERE id=?",
-                (worker_id, token, now, now, row["id"]),
-            )
-            db.execute(
-                "INSERT INTO workers(id, seen_at, task_id) VALUES(?,?,?) "
-                "ON CONFLICT(id) DO UPDATE SET seen_at=excluded.seen_at, task_id=excluded.task_id",
-                (worker_id, now, row["id"]),
-            )
-            db.execute("COMMIT")
-        except Exception:
-            db.execute("ROLLBACK")
-            raise
-    return {
-        "task_id": row["id"],
-        "type": row["type"],
-        "payload": json.loads(row["payload"]),
-        "lease_token": token,
-        "log_offset": log_size(row["id"]),
-    }
+    now = time.time()
+    while QUEUE:
+        t = TASKS.get(QUEUE.popleft())
+        if t is None or t["status"] != "pending":
+            continue
+        token = uuid.uuid4().hex
+        t.update(status="running", worker_id=worker_id, lease_token=token, started_at=now, heartbeat_at=now)
+        DIRTY.add(t["id"])
+        WORKERS[worker_id] = {"seen_at": now, "task_id": t["id"]}
+        return {
+            "task_id": t["id"],
+            "type": t["type"],
+            "payload": t["payload"],
+            "lease_token": token,
+            "event_offset": events_size(t["id"]),
+        }
+    return None
 
 
-async def reaper():
-    while True:
+async def flush():
+    async with flush_lock:
+        ids, keys = list(DIRTY), list(DIRTY_BLOBS)
+        if not ids and not keys:
+            return
+        DIRTY.difference_update(ids)
+        DIRTY_BLOBS.difference_update(keys)
         try:
-            now = time.time()
-            with _lock:
-                db.execute(
-                    "UPDATE tasks SET status='lost', finished_at=?, error='worker gone', lease_token=NULL "
-                    "WHERE status='running' AND heartbeat_at < ?",
-                    (now, now - LOST_AFTER),
-                )
-                db.execute("DELETE FROM workers WHERE seen_at < ?", (now - WORKER_STALE,))
+            await db.save(db.Task, [{c: TASKS[i].get(c) for c in db.TASK_COLUMNS} for i in ids if i in TASKS])
+            await db.save(db.Artifact, [BLOBS[k] for k in keys if k in BLOBS])
         except Exception as e:
-            print("reaper:", e)
-        await asyncio.sleep(30)
+            DIRTY.update(ids)
+            DIRTY_BLOBS.update(keys)
+            state["db"] = False
+            print("flush:", type(e).__name__, e)
+            return
+        state["db"] = True
+        for i in ids:
+            if i not in DIRTY and TASKS.get(i, {}).get("status") in FINISHED:
+                TASKS.pop(i, None)
+        for k in keys:
+            if k not in DIRTY_BLOBS:
+                BLOBS.pop(k, None)
+
+
+async def recover():
+    for t in await db.unfinished():
+        if t["id"] in TASKS:
+            continue
+        TASKS[t["id"]] = t
+        if t["status"] == "running":
+            t.update(status="lost", error="server restarted", finished_at=time.time())
+            DIRTY.add(t["id"])
+        else:
+            QUEUE.append(t["id"])
+    if QUEUE:
+        new_task.set()
+    print(f"recovered: {len(QUEUE)} pending")
+
+
+async def keeper():
+    started = False
+    while True:
+        if not started:
+            try:
+                await db.setup()
+                await recover()
+                started = state["db"] = True
+            except Exception as e:
+                print("db:", type(e).__name__, e)
+        now = time.time()
+        for t in list(TASKS.values()):
+            if t["status"] == "running" and t.get("heartbeat_at", now) < now - LOST_AFTER:
+                t.update(status="lost", error="worker gone", finished_at=now, lease_token=None)
+                DIRTY.add(t["id"])
+        for wid, w in list(WORKERS.items()):
+            if w["seen_at"] < now - WORKER_STALE:
+                WORKERS.pop(wid, None)
+        await flush()
+        await asyncio.sleep(FLUSH_EVERY)
 
 
 @asynccontextmanager
 async def lifespan(app):
-    t = asyncio.create_task(reaper())
+    t = asyncio.create_task(keeper())
     yield
     t.cancel()
+    await flush()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -191,12 +198,7 @@ async def lease(request: Request, authorization: str = Header(None)):
     worker_id = body.get("worker_id")
     if not worker_id:
         raise HTTPException(400, "worker_id required")
-    now = time.time()
-    run(
-        "INSERT INTO workers(id, seen_at, task_id) VALUES(?,?,NULL) "
-        "ON CONFLICT(id) DO UPDATE SET seen_at=excluded.seen_at, task_id=NULL",
-        (worker_id, now),
-    )
+    WORKERS[worker_id] = {"seen_at": time.time(), "task_id": None}
     deadline = time.monotonic() + LEASE_WAIT
     while True:
         t = grab(worker_id)
@@ -215,16 +217,16 @@ async def lease(request: Request, authorization: str = Header(None)):
 @app.post("/v1/tasks/{tid}/heartbeat")
 async def heartbeat(tid: str, x_lease_token: str = Header(None), authorization: str = Header(None)):
     auth_worker(authorization)
-    row = owned(tid, x_lease_token)
+    t = owned(tid, x_lease_token)
     now = time.time()
-    run("UPDATE tasks SET heartbeat_at=? WHERE id=?", (now, tid))
-    if row["worker_id"]:
-        run("UPDATE workers SET seen_at=? WHERE id=?", (now, row["worker_id"]))
-    return {"cancel": bool(row["cancel_requested"]), "log_offset": log_size(tid)}
+    t["heartbeat_at"] = now
+    if t["worker_id"] in WORKERS:
+        WORKERS[t["worker_id"]]["seen_at"] = now
+    return {"cancel": bool(t.get("cancel_requested"))}
 
 
-@app.post("/v1/tasks/{tid}/log")
-async def append_log(
+@app.post("/v1/tasks/{tid}/events")
+async def append_events(
     tid: str,
     request: Request,
     offset: int = Query(...),
@@ -233,16 +235,16 @@ async def append_log(
 ):
     auth_worker(authorization)
     owned(tid, x_lease_token)
-    lock = log_locks.setdefault(tid, asyncio.Lock())
+    lock = event_locks.setdefault(tid, asyncio.Lock())
     async with lock:
-        size = log_size(tid)
-        if size >= LOG_CAP:
+        size = events_size(tid)
+        if size >= EVENT_CAP:
             return {"offset": size, "accepting": False}
         if offset != size:
             return JSONResponse({"offset": size, "accepting": True}, status_code=409)
         data = await request.body()
         if data:
-            p = log_path(tid)
+            p = events_path(tid)
 
             def w():
                 with open(p, "ab") as f:
@@ -250,32 +252,7 @@ async def append_log(
                     return f.tell()
 
             size = await anyio.to_thread.run_sync(w)
-        return {"offset": size, "accepting": size < LOG_CAP}
-
-
-@app.post("/v1/tasks/{tid}/result")
-async def upload_result(
-    tid: str,
-    request: Request,
-    filename: str = Query("result.bin"),
-    x_lease_token: str = Header(None),
-    authorization: str = Header(None),
-):
-    auth_worker(authorization)
-    owned(tid, x_lease_token)
-    safe = os.path.basename(filename) or "result.bin"
-    final = task_dir(tid) / safe
-    part = final.with_suffix(final.suffix + ".part")
-    f = await anyio.to_thread.run_sync(lambda: open(part, "wb"))
-    try:
-        async for chunk in request.stream():
-            if chunk:
-                await anyio.to_thread.run_sync(f.write, chunk)
-    finally:
-        await anyio.to_thread.run_sync(f.close)
-    await anyio.to_thread.run_sync(os.replace, part, final)
-    run("UPDATE tasks SET result_name=? WHERE id=?", (safe, tid))
-    return {"ok": True, "size": final.stat().st_size, "name": safe}
+        return {"offset": size, "accepting": size < EVENT_CAP}
 
 
 @app.post("/v1/tasks/{tid}/complete")
@@ -286,20 +263,18 @@ async def complete(
     authorization: str = Header(None),
 ):
     auth_worker(authorization)
-    row = owned(tid, x_lease_token)
+    t = owned(tid, x_lease_token)
     body = await request.json()
     status = body.get("status", "done")
-    if status not in ("done", "failed", "cancelled"):
+    if status not in TERMINAL:
         raise HTTPException(400, "bad status")
-    if row["status"] in TERMINAL:
-        return {"ok": True, "status": row["status"], "note": "already terminal"}
-    run(
-        "UPDATE tasks SET status=?, error=?, finished_at=?, lease_token=NULL WHERE id=?",
-        (status, body.get("error"), time.time(), tid),
-    )
-    if row["worker_id"]:
-        run("UPDATE workers SET task_id=NULL, seen_at=? WHERE id=?", (time.time(), row["worker_id"]))
-    log_locks.pop(tid, None)
+    if t["status"] in FINISHED:
+        return {"ok": True, "status": t["status"], "note": "already terminal"}
+    t.update(status=status, error=body.get("error"), finished_at=time.time(), lease_token=None)
+    DIRTY.add(tid)
+    if t["worker_id"] in WORKERS:
+        WORKERS[t["worker_id"]]["task_id"] = None
+    event_locks.pop(tid, None)
     return {"ok": True, "status": status}
 
 
@@ -311,42 +286,45 @@ async def create_task(request: Request, authorization: str = Header(None)):
     if not ttype:
         raise HTTPException(400, "type required")
     tid = uuid.uuid4().hex
-    run(
-        "INSERT INTO tasks(id, type, payload, status, created_at) VALUES(?,?,?,'pending',?)",
-        (tid, ttype, json.dumps(body.get("payload", {})), time.time()),
-    )
+    TASKS[tid] = {
+        "id": tid,
+        "type": ttype,
+        "payload": body.get("payload") or {},
+        "status": "pending",
+        "worker_id": None,
+        "error": None,
+        "parent_id": body.get("parent_id"),
+        "created_at": time.time(),
+        "started_at": None,
+        "finished_at": None,
+    }
+    QUEUE.append(tid)
+    DIRTY.add(tid)
     new_task.set()
     return {"task_id": tid}
+
+
+@app.get("/v1/tasks")
+async def list_tasks(status: str = Query(None), limit: int = Query(100), authorization: str = Header(None)):
+    auth_client(authorization)
+    live = [t for t in TASKS.values() if not status or t["status"] == status]
+    seen = {t["id"] for t in live}
+    stored = [t for t in await db.tasks(status, limit) if t["id"] not in seen]
+    rows = sorted(live + stored, key=lambda t: t["created_at"], reverse=True)
+    return [public(t) for t in rows[:limit]]
 
 
 @app.get("/v1/tasks/{tid}")
 async def task_status(tid: str, authorization: str = Header(None)):
     auth_client(authorization)
-    return as_dict(get_task(tid))
+    return public(await find(tid))
 
 
-@app.get("/v1/tasks")
-async def list_tasks(
-    status: str = Query(None),
-    limit: int = Query(100),
-    authorization: str = Header(None),
-):
+@app.get("/v1/tasks/{tid}/events")
+async def read_events(tid: str, offset: int = Query(0), authorization: str = Header(None)):
     auth_client(authorization)
-    if status:
-        rows = q(
-            "SELECT * FROM tasks WHERE status=? ORDER BY created_at DESC LIMIT ?",
-            (status, limit),
-        )
-    else:
-        rows = q("SELECT * FROM tasks ORDER BY created_at DESC LIMIT ?", (limit,))
-    return [as_dict(r) for r in rows]
-
-
-@app.get("/v1/tasks/{tid}/log")
-async def read_log(tid: str, offset: int = Query(0), authorization: str = Header(None)):
-    auth_client(authorization)
-    row = get_task(tid)
-    p = log_path(tid)
+    t = await find(tid)
+    p = events_path(tid)
     size = p.stat().st_size if p.exists() else 0
     data = b""
     if offset < size:
@@ -361,52 +339,116 @@ async def read_log(tid: str, offset: int = Query(0), authorization: str = Header
         content=data,
         media_type="application/octet-stream",
         headers={
-            "X-Log-Offset": str(offset + len(data)),
-            "X-Task-Status": row["status"],
-            "X-Log-Size": str(size),
+            "X-Event-Offset": str(offset + len(data)),
+            "X-Task-Status": t["status"],
+            "X-Event-Size": str(size),
         },
     )
-
-
-@app.get("/v1/tasks/{tid}/result")
-async def download_result(tid: str, authorization: str = Header(None)):
-    auth_client(authorization)
-    row = get_task(tid)
-    if not row["result_name"]:
-        raise HTTPException(404, "no result")
-    p = task_dir(tid) / row["result_name"]
-    if not p.exists():
-        raise HTTPException(404, "no result file")
-    return FileResponse(p, filename=row["result_name"])
 
 
 @app.post("/v1/tasks/{tid}/cancel")
 async def cancel(tid: str, authorization: str = Header(None)):
     auth_client(authorization)
-    row = get_task(tid)
-    if row["status"] == "pending":
-        run(
-            "UPDATE tasks SET status='cancelled', finished_at=?, error='cancelled before start' WHERE id=?",
-            (time.time(), tid),
-        )
+    t = await find(tid)
+    if t["status"] == "pending":
+        t.update(status="cancelled", finished_at=time.time(), error="cancelled before start")
+        DIRTY.add(tid)
         return {"status": "cancelled"}
-    if row["status"] == "running":
-        run("UPDATE tasks SET cancel_requested=1 WHERE id=?", (tid,))
+    if t["status"] == "running":
+        t["cancel_requested"] = True
         return {"status": "running", "cancel_requested": True}
-    return {"status": row["status"], "note": "already terminal"}
+    return {"status": t["status"], "note": "already terminal"}
 
 
 @app.post("/v1/tasks/{tid}/retry")
 async def retry(tid: str, authorization: str = Header(None)):
     auth_client(authorization)
-    row = get_task(tid)
+    t = await find(tid)
     nid = uuid.uuid4().hex
-    run(
-        "INSERT INTO tasks(id, type, payload, status, parent_id, created_at) VALUES(?,?,?,'pending',?,?)",
-        (nid, row["type"], row["payload"], tid, time.time()),
-    )
+    TASKS[nid] = {
+        **{c: t[c] for c in db.TASK_COLUMNS},
+        "id": nid,
+        "status": "pending",
+        "worker_id": None,
+        "error": None,
+        "parent_id": tid,
+        "created_at": time.time(),
+        "started_at": None,
+        "finished_at": None,
+    }
+    QUEUE.append(nid)
+    DIRTY.add(nid)
     new_task.set()
     return {"task_id": nid, "parent_id": tid}
+
+
+def _write(f, digest, chunk):
+    digest.update(chunk)
+    f.write(chunk)
+
+
+@app.put("/v1/artifacts/{key:path}")
+async def put_artifact(key: str, request: Request, task_id: str = Query(None), authorization: str = Header(None)):
+    auth_any(authorization)
+    final = blob_path(key)
+    part = final.with_suffix(".part")
+    digest = hashlib.sha256()
+    size = 0
+
+    def start():
+        final.parent.mkdir(parents=True, exist_ok=True)
+        return open(part, "wb")
+
+    f = await anyio.to_thread.run_sync(start)
+    try:
+        async for chunk in request.stream():
+            if chunk:
+                size += len(chunk)
+                await anyio.to_thread.run_sync(_write, f, digest, chunk)
+    finally:
+        await anyio.to_thread.run_sync(f.close)
+    await anyio.to_thread.run_sync(os.replace, part, final)
+
+    row = {
+        "key": key,
+        "path": str(final),
+        "size": size,
+        "sha256": digest.hexdigest(),
+        "task_id": task_id,
+        "created_at": time.time(),
+    }
+    BLOBS[key] = row
+    DIRTY_BLOBS.add(key)
+    return row
+
+
+@app.get("/v1/artifacts")
+async def list_artifacts(prefix: str = Query(""), limit: int = Query(100), authorization: str = Header(None)):
+    auth_any(authorization)
+    live = [b for b in BLOBS.values() if b["key"].startswith(prefix)]
+    seen = {b["key"] for b in live}
+    stored = [b for b in await db.artifacts(prefix, limit) if b["key"] not in seen]
+    return sorted(live + stored, key=lambda b: b["created_at"], reverse=True)[:limit]
+
+
+@app.get("/v1/artifacts/{key:path}")
+async def get_artifact(key: str, authorization: str = Header(None)):
+    auth_any(authorization)
+    p = blob_path(key)
+    if not await anyio.to_thread.run_sync(p.exists):
+        raise HTTPException(404, "no such key")
+    return FileResponse(p, filename=os.path.basename(key) or "artifact")
+
+
+@app.delete("/v1/artifacts/{key:path}")
+async def del_artifact(key: str, authorization: str = Header(None)):
+    auth_any(authorization)
+    async with flush_lock:
+        DIRTY_BLOBS.discard(key)
+        BLOBS.pop(key, None)
+    await anyio.to_thread.run_sync(blob_path(key).unlink, True)
+    await db.drop(db.Artifact, key)
+    return {"ok": True}
 
 
 @app.get("/v1/workers")
@@ -414,19 +456,24 @@ async def workers(authorization: str = Header(None)):
     auth_client(authorization)
     now = time.time()
     return [
-        {"id": r["id"], "task_id": r["task_id"], "idle_for": round(now - r["seen_at"], 1)}
-        for r in q("SELECT * FROM workers ORDER BY seen_at DESC")
+        {"id": wid, "task_id": w["task_id"], "idle_for": round(now - w["seen_at"], 1)}
+        for wid, w in sorted(WORKERS.items(), key=lambda kv: -kv[1]["seen_at"])
     ]
 
 
 @app.get("/healthz")
 async def healthz():
-    counts = {
-        r["status"]: r["n"]
-        for r in q("SELECT status, COUNT(*) n FROM tasks GROUP BY status")
+    counts = {}
+    for t in TASKS.values():
+        counts[t["status"]] = counts.get(t["status"], 0) + 1
+    return {
+        "ok": True,
+        "tasks": counts,
+        "queue": len(QUEUE),
+        "workers": len(WORKERS),
+        "pending_writes": len(DIRTY) + len(DIRTY_BLOBS),
+        "db": state["db"],
     }
-    live = one("SELECT COUNT(*) n FROM workers WHERE seen_at > ?", (time.time() - WORKER_STALE,))
-    return {"ok": True, "tasks": counts, "workers": live["n"]}
 
 
 def main():
@@ -437,6 +484,7 @@ def main():
         host=os.getenv("HOST", "0.0.0.0"),
         port=int(os.getenv("PORT", "8000")),
         access_log=False,
+        timeout_graceful_shutdown=5,
     )
 
 
