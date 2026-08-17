@@ -227,6 +227,68 @@ uv run pool-keeper run -c keeper.toml
 
 Помни: лимит конкурентных джоб — 20 на free, 40 на Pro, потолок одной джобы — 6 часов.
 
+## Nix
+
+`flake.nix` собирает пакет из `uv.lock` через uv2nix, так что версии в Nix ровно те
+же, что у `uv sync`, и второй список зависимостей вести не нужно.
+
+```bash
+nix build            # venv со всеми точками входа в result/bin
+nix develop          # то же плюс uv, ruff и postgres под тесты
+nix run .# -- health
+```
+
+Два модуля NixOS: `nixosModules.server` и `nixosModules.client`.
+
+```nix
+{
+  inputs.pool.url = "github:wprhvso/pool";
+
+  # сервер: демон, база и юзер заводятся сами
+  imports = [ pool.nixosModules.server ];
+  services.pool.server = {
+    enable = true;
+    host = "0.0.0.0";
+    openFirewall = true;
+    environmentFile = "/run/secrets/pool";   # WORKER_TOKEN и CLIENT_TOKEN
+    settings.FLUSH_EVERY = "0.1";
+  };
+}
+```
+
+`postgresql = true` по умолчанию поднимает локальный Postgres и заводит в нём базу
+с ролью, доступ идёт юникс-сокетом. Своя база — снимите флаг и задайте
+`databaseUrl`. Токены в стор не кладутся, их читает systemd из `environmentFile`.
+
+Клиентская сторона — CLI и два демона, каждый включается отдельно:
+
+```nix
+{
+  imports = [ pool.nixosModules.client ];
+
+  programs.pool = {
+    enable = true;                            # обёртка pool с адресом и токеном
+    server = "https://pool.example.com";
+    tokenFile = "/run/secrets/pool-client";
+  };
+
+  services.pool.worker = {
+    enable = true;                            # локальный раннер рядом с гитхабовскими
+    server = "https://pool.example.com";
+    environmentFile = "/run/secrets/pool-worker";
+  };
+
+  services.pool.keeper = {
+    enable = true;                            # держит фронт раннеров на гитхабе
+    configFile = "/run/secrets/keeper.toml";
+  };
+}
+```
+
+Воркер выполняет присланный код, поэтому крутится под `DynamicUser` со своим
+кэшем и приватным `/tmp`. Изоляция это всё равно слабая: не ставьте воркер на
+машину, где есть что терять.
+
 ## Переменные
 
 Сервер: `DATABASE_URL`, `WORKER_TOKEN`, `CLIENT_TOKEN`, `DATA_DIR`, `BLOB_DIR`,
