@@ -11,6 +11,9 @@ dependencies = [
     "python-multipart>=0.0.9",
 ]
 
+[project.optional-dependencies]
+keeper = ["pynacl>=1.5"]
+
 [project.scripts]
 pool = "pool.cli:main"
 pool-server = "pool.server:main"

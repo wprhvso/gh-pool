@@ -3,6 +3,10 @@ ttl = "6h"
 jobs = 20
 workflow = "pool.yml"
 
+[pool]
+server = "https://pool.example.com"
+token = "change-me-worker"
+
 [repos]
 "alice/pool" = "ghp_alice"
 "bob/pool" = { token = "ghp_bob", jobs = 40, ref = "master" }
