@@ -110,7 +110,10 @@ def load(path: Path) -> tuple[list[Repo], float, dict[str, str]]:
     pool = {f"POOL_{k.upper()}": str(v) for k, v in raw.pop("pool", {}).items()}
     out = []
     for slug, value in repos.items():
-        cfg = {**raw, **({"token": value} if isinstance(value, str) else value)}
+        cfg: dict[str, Any] = {
+            **raw,
+            **({"token": value} if isinstance(value, str) else value),
+        }
         if "token" not in cfg:
             sys.exit(f"{slug}: no token")
         out.append(Repo(slug, **{k: cfg[k] for k in KEYS if k in cfg}))
@@ -147,9 +150,10 @@ def reconcile(r: Repo, serving: int | None = None) -> None:
     )
     r.stopping &= {x["id"] for x in runs}
 
+    ttl = secs(r.ttl)
     fresh, expired = [], []
     for run in runs:
-        (fresh if age(run) <= r.ttl else expired).append(run)
+        (fresh if age(run) <= ttl else expired).append(run)
 
     # runs идёт новыми вперёд. Лишние надо срезать с этого конца: свежий прогон
     # ещё разворачивает тулчейн и никого не обслуживает, а старый почти наверняка

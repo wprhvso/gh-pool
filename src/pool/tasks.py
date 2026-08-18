@@ -52,7 +52,12 @@ def run(payload: dict[str, Any]) -> None:
 
     name = f"<{entry or 'code'}>"
     linecache.cache[name] = (len(code), None, code.splitlines(True), name)
-    scope = {"__name__": "__pool__", "args": args, "kwargs": kwargs, "emit": rpc.emit}
+    scope: dict[str, Any] = {
+        "__name__": "__pool__",
+        "args": args,
+        "kwargs": kwargs,
+        "emit": rpc.emit,
+    }
     exec(compile(code, name, "exec"), scope)  # noqa: S102
     if entry and not callable(scope.get(entry)):
         raise NameError(f"{entry} is not defined by the submitted code")

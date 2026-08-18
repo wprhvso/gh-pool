@@ -4,13 +4,13 @@ import os
 import time
 import uuid
 from collections import deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from io import BufferedWriter
 from pathlib import Path
 from typing import Annotated, Any
 
-import anyio
+from anyio import to_thread
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 
@@ -33,10 +33,10 @@ STARTED = time.time()
 TERMINAL = ("done", "failed", "cancelled")
 FINISHED = (*TERMINAL, "lost")
 
-TASKS: dict[str, dict] = {}
+TASKS: dict[str, dict[str, Any]] = {}
 QUEUE: deque[str] = deque()
-WORKERS: dict[str, dict] = {}
-BLOBS: dict[str, dict] = {}
+WORKERS: dict[str, dict[str, Any]] = {}
+BLOBS: dict[str, dict[str, Any]] = {}
 DIRTY: set[str] = set()
 DIRTY_BLOBS: set[str] = set()
 
@@ -85,7 +85,7 @@ def auth_any(h: str | None) -> None:
 
 
 def public(t: dict[str, Any]) -> dict[str, Any]:
-    d = {c: t.get(c) for c in db.TASK_COLUMNS}
+    d: dict[str, Any] = {c: t.get(c) for c in db.TASK_COLUMNS}
     d["cancel_requested"] = bool(t.get("cancel_requested"))
     d["event_size"] = events_size(d["id"])
     return d
@@ -209,7 +209,7 @@ async def keeper() -> None:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     t = asyncio.create_task(keeper())
     yield
     t.cancel()
@@ -285,7 +285,7 @@ async def append_events(
                     f.write(data)
                     return f.tell()
 
-            size = await anyio.to_thread.run_sync(w)
+            size = await to_thread.run_sync(w)
         return {"offset": size, "accepting": size < EVENT_CAP}
 
 
@@ -385,7 +385,7 @@ async def read_events(
                 f.seek(offset)
                 return f.read()
 
-        data = await anyio.to_thread.run_sync(r)
+        data = await to_thread.run_sync(r)
     return Response(
         content=data,
         media_type="application/octet-stream",
@@ -461,15 +461,15 @@ async def put_artifact(
         final.parent.mkdir(parents=True, exist_ok=True)
         return part.open("wb")
 
-    f = await anyio.to_thread.run_sync(start)
+    f = await to_thread.run_sync(start)
     try:
         async for chunk in request.stream():
             if chunk:
                 size += len(chunk)
-                await anyio.to_thread.run_sync(_write, f, digest, chunk)
+                await to_thread.run_sync(_write, f, digest, chunk)
     finally:
-        await anyio.to_thread.run_sync(f.close)
-    await anyio.to_thread.run_sync(os.replace, part, final)
+        await to_thread.run_sync(f.close)
+    await to_thread.run_sync(os.replace, part, final)
 
     row = {
         "key": key,
@@ -503,7 +503,7 @@ async def get_artifact(
 ) -> FileResponse:
     auth_any(authorization)
     p = blob_path(key)
-    if not await anyio.to_thread.run_sync(p.exists):
+    if not await to_thread.run_sync(p.exists):
         raise HTTPException(404, "no such key")
     return FileResponse(p, filename=Path(key).name or "artifact")
 
@@ -516,7 +516,7 @@ async def del_artifact(
     async with flush_lock:
         DIRTY_BLOBS.discard(key)
         BLOBS.pop(key, None)
-    await anyio.to_thread.run_sync(blob_path(key).unlink, True)
+    await to_thread.run_sync(blob_path(key).unlink, True)
     await db.drop(db.Artifact, key)
     return {"ok": True}
 

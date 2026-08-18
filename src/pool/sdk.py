@@ -18,12 +18,13 @@ TERMINAL = ("done", "failed", "cancelled", "lost")
 
 class Failed(RuntimeError):
     def __init__(self, tid: str, status: str, error: str | None, tail: str) -> None:
-        self.event = next(
+        event = next(
             (e for e in reversed(rpc.parse(tail)) if e.get("kind") == "error"), None
         )
-        detail = self.event and (self.event.get("message") or self.event.get("value"))
-        if detail:
-            error = f"{self.event.get('type', 'error')}: {detail}"
+        self.event = event
+        detail = event and (event.get("message") or event.get("value"))
+        if event and detail:
+            error = f"{event.get('type', 'error')}: {detail}"
         super().__init__(
             f"task {tid} {status}"
             + (f": {error}" if error else "")
@@ -133,7 +134,11 @@ class Remote:
         return self.submit(*args, **kwargs).check()
 
     def submit(self, *args: Any, **kwargs: Any) -> Task:
-        payload = {"code": self.code, "args": list(args), "kwargs": kwargs}
+        payload: dict[str, Any] = {
+            "code": self.code,
+            "args": list(args),
+            "kwargs": kwargs,
+        }
         if self.entry:
             payload["entry"] = self.entry
         if self.deps:

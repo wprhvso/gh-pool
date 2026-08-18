@@ -54,7 +54,11 @@ async def test_a_task_that_keeps_beating_is_left_alone(client, monkeypatch):
 
 
 async def test_a_worker_that_stopped_asking_drops_off_the_listing(client, monkeypatch):
-    await take(client)
+    await client.post(
+        "/v1/lease",
+        json={"worker_id": "w1"},
+        headers={"Authorization": "Bearer dev-worker"},
+    )
     server.WORKERS["w1"]["seen_at"] = time.time() - 100
     reaper = await reaping(monkeypatch, WORKER_STALE=1.0)
 

@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        check: [ruff, format, pytest]
+        check: [ruff, format, pyright, pytest]
     steps:
       - uses: actions/checkout@v7
         with:

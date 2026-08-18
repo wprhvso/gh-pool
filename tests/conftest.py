@@ -103,4 +103,6 @@ async def take(client, worker_id="w1"):
     answer = await client.post(
         "/v1/lease", json={"worker_id": worker_id}, headers=as_worker()
     )
-    return None if answer.status_code == 204 else answer.json()
+    if answer.status_code == 204:
+        raise AssertionError("the queue had nothing to hand out")
+    return answer.json()

@@ -73,7 +73,7 @@ def put(
         with _call(key, "PUT", body, size, f"?task_id={tid}" if tid else "") as r:
             meta = json.loads(r.read())
     finally:
-        if hasattr(body, "close"):
+        if not isinstance(body, (bytes, bytearray)):
             body.close()
     emit("artifact", key=key, size=meta["size"], sha256=meta["sha256"])
     return meta

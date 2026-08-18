@@ -27,7 +27,7 @@ CHUNK = 1 << 20
 # Джиттер задаёт тот, кто запускает, чтобы флот не вымирал одной когортой.
 MAX_AGE = float(os.getenv("WORKER_MAX_AGE", "0"))
 
-CURRENT = None
+_current: "Spool | None" = None
 
 
 class Permanent(Exception):
@@ -42,8 +42,8 @@ def note(msg: str) -> None:
     line = f"[worker] {msg}\n".encode()
     sys.stderr.write(line.decode())
     sys.stderr.flush()
-    if CURRENT is not None:
-        CURRENT.write(line)
+    if _current is not None:
+        _current.write(line)
 
 
 class Spool:
@@ -173,15 +173,18 @@ async def heartbeat(
 
 
 async def pump(proc: asyncio.subprocess.Process, spool: Spool) -> None:
+    stdout = proc.stdout
+    if stdout is None:
+        raise RuntimeError("subprocess started without a stdout pipe")
     while True:
-        data = await proc.stdout.read(1 << 16)
+        data = await stdout.read(1 << 16)
         if not data:
             return
         spool.write(data)
 
 
 async def execute(client: httpx.AsyncClient, lease: dict[str, Any]) -> None:
-    global CURRENT  # noqa: PLW0603
+    global _current  # noqa: PLW0603
     tid = lease["task_id"]
     token = lease["lease_token"]
     ttype = lease["type"]
@@ -191,7 +194,7 @@ async def execute(client: httpx.AsyncClient, lease: dict[str, Any]) -> None:
     payload_path.write_text(json.dumps(lease["payload"]))
 
     spool = Spool(spool_path)
-    CURRENT = spool
+    _current = spool
     spool.sent = lease.get("event_offset", 0)
     spool.size = spool.sent
 
@@ -246,7 +249,7 @@ async def execute(client: httpx.AsyncClient, lease: dict[str, Any]) -> None:
         beat_task.cancel()
         spool.close()
         _cleanup(spool_path, payload_path)
-        CURRENT = None
+        _current = None
         return
 
     if killed and cancel.is_set():
@@ -271,7 +274,7 @@ async def execute(client: httpx.AsyncClient, lease: dict[str, Any]) -> None:
     beat_task.cancel()
     spool.close()
     _cleanup(spool_path, payload_path)
-    CURRENT = None
+    _current = None
 
 
 def _signal_group(proc: asyncio.subprocess.Process, sig: int) -> None:

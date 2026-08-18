@@ -12,7 +12,7 @@ SERVER = os.getenv("POOL_SERVER", "http://localhost:8000").rstrip("/")
 TOKEN = os.getenv("POOL_CLIENT_TOKEN", "dev-client")
 POLL = 0.5
 TERMINAL = ("done", "failed", "cancelled", "lost")
-CODES = {"done": 0, "failed": 1, "cancelled": 2, "lost": 3}
+CODES: dict[str | None, int] = {"done": 0, "failed": 1, "cancelled": 2, "lost": 3}
 
 http = httpx.Client(
     base_url=SERVER,

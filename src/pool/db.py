@@ -21,7 +21,7 @@ class Task(Base):
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     type: Mapped[str] = mapped_column(String(64))
-    payload: Mapped[dict] = mapped_column(JSONB)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
     status: Mapped[str] = mapped_column(String(16), index=True)
     worker_id: Mapped[str | None] = mapped_column(String(128))
     error: Mapped[str | None] = mapped_column(Text)
@@ -47,7 +47,7 @@ ARTIFACT_COLUMNS = tuple(Artifact.__table__.columns.keys())
 
 
 def key_of(model: type[Base]) -> str:
-    return next(iter(model.__table__.primary_key.columns)).name
+    return next(iter(model.__table__.primary_key.columns)).name  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def as_dict(row: Base, model: type[Base]) -> dict[str, Any]:

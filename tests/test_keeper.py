@@ -14,7 +14,7 @@ class FakeRepo(keeper.Repo):
         self.cancelled = []
         self.dispatched = 0
 
-    def api(self, path, method="GET", _body=None):
+    def api(self, path, method="GET", body=None):
         if path == "":
             return {"default_branch": "main"}
         if path.endswith("/runs?per_page=100"):
@@ -25,7 +25,7 @@ class FakeRepo(keeper.Repo):
         if path.endswith("/dispatches"):
             self.dispatched += 1
             return {}
-        raise AssertionError(f"unexpected call {method} {path}")
+        raise AssertionError(f"unexpected call {method} {path} {body}")
 
 
 def run(run_id, age_seconds, status="in_progress"):
