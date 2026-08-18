@@ -54,7 +54,9 @@ def gh(token, path, method="GET", body=None):
         with urllib.request.urlopen(req, timeout=30) as r:
             data = r.read()
     except urllib.error.HTTPError as e:
-        raise ApiError(e.code, f"{method} {path} -> {e.code} {e.read()[:200].decode()}") from None
+        raise ApiError(
+            e.code, f"{method} {path} -> {e.code} {e.read()[:200].decode()}"
+        ) from None
     return json.loads(data) if data else {}
 
 
@@ -132,7 +134,11 @@ def pool_serving(pool):
 def reconcile(r, serving=None):
     r.ref = r.ref or r.api("")["default_branch"]
     runs = r.api(f"/actions/workflows/{r.workflow}/runs?per_page=100")["workflow_runs"]
-    runs = sorted((x for x in runs if x["status"] != "completed"), key=lambda x: x["created_at"], reverse=True)
+    runs = sorted(
+        (x for x in runs if x["status"] != "completed"),
+        key=lambda x: x["created_at"],
+        reverse=True,
+    )
     r.stopping &= {x["id"] for x in runs}
 
     fresh, expired = [], []
@@ -144,7 +150,9 @@ def reconcile(r, serving=None):
     # держит CI-джобу. Срезав старые, мы роняем задачу в lost (терминально) и
     # отправляем джобу на второй круг вместе с полным бутстрапом.
     surplus = fresh[: max(0, len(fresh) - r.jobs)]
-    victims = [(run, "expired") for run in expired] + [(run, "surplus") for run in surplus]
+    victims = [(run, "expired") for run in expired] + [
+        (run, "surplus") for run in surplus
+    ]
     stopped = 0
     for run, why in victims:
         if run["id"] in r.stopping:
@@ -194,7 +202,11 @@ def secrets(r, values):
     box = SealedBox(PublicKey(key["key"].encode(), Base64Encoder))
     for name, value in values.items():
         sealed = base64.b64encode(box.encrypt(value.encode())).decode()
-        r.api(f"/actions/secrets/{name}", "PUT", {"encrypted_value": sealed, "key_id": key["key_id"]})
+        r.api(
+            f"/actions/secrets/{name}",
+            "PUT",
+            {"encrypted_value": sealed, "key_id": key["key_id"]},
+        )
     log(f"{r.slug} secrets set: {', '.join(values)}")
 
 
@@ -204,7 +216,9 @@ def build(r, source, pool):
         owner, name = r.slug.split("/", 1)
         login = gh(r.token, "/user")["login"]
         path = "/user/repos" if owner == login else f"/orgs/{owner}/repos"
-        repo = gh(r.token, path, "POST", {"name": name, "private": False, "auto_init": True})
+        repo = gh(
+            r.token, path, "POST", {"name": name, "private": False, "auto_init": True}
+        )
         log(f"{r.slug} created")
     elif repo["private"]:
         repo = r.api("", "PATCH", {"private": False})

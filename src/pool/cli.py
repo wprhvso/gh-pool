@@ -70,7 +70,11 @@ def follow(tid, offset=0):
             sys.stdout.buffer.flush()
         offset = int(r.headers.get("X-Event-Offset", offset))
         new_status = r.headers.get("X-Task-Status")
-        if new_status in TERMINAL and status == new_status and offset >= int(r.headers.get("X-Event-Size", 0)):
+        if (
+            new_status in TERMINAL
+            and status == new_status
+            and offset >= int(r.headers.get("X-Event-Size", 0))
+        ):
             break
         status = new_status
         if status in TERMINAL:
@@ -104,7 +108,11 @@ def cmd_events(args):
 
 
 def cmd_status(args):
-    print(json.dumps(call("GET", f"/v1/tasks/{args.id}").json(), indent=2, ensure_ascii=False))
+    print(
+        json.dumps(
+            call("GET", f"/v1/tasks/{args.id}").json(), indent=2, ensure_ascii=False
+        )
+    )
 
 
 def cmd_list(args):
@@ -138,7 +146,12 @@ def cmd_retry(args):
 
 def cmd_put(args):
     with open(args.file, "rb") as f:
-        meta = call("PUT", f"/v1/artifacts/{args.key}", content=f, params={"task_id": args.task} if args.task else None)
+        meta = call(
+            "PUT",
+            f"/v1/artifacts/{args.key}",
+            content=f,
+            params={"task_id": args.task} if args.task else None,
+        )
     print(json.dumps(meta.json()))
 
 
@@ -162,13 +175,17 @@ def cmd_rm(args):
 
 
 def cmd_artifacts(args):
-    rows = call("GET", "/v1/artifacts", params={"prefix": args.prefix, "limit": args.limit}).json()
+    rows = call(
+        "GET", "/v1/artifacts", params={"prefix": args.prefix, "limit": args.limit}
+    ).json()
     if not rows:
         print("nothing")
         return
     print(f"{'KEY':40} {'SIZE':>12} {'AGE':>6}  TASK")
     for a in rows:
-        print(f"{a['key'][:40]:40} {a['size']:>12} {ago(a['created_at']):>6}  {a.get('task_id') or '-'}")
+        print(
+            f"{a['key'][:40]:40} {a['size']:>12} {ago(a['created_at']):>6}  {a.get('task_id') or '-'}"
+        )
 
 
 def cmd_workers(args):

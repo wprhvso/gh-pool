@@ -109,7 +109,13 @@ def grab(worker_id):
         if t is None or t["status"] != "pending":
             continue
         token = uuid.uuid4().hex
-        t.update(status="running", worker_id=worker_id, lease_token=token, started_at=now, heartbeat_at=now)
+        t.update(
+            status="running",
+            worker_id=worker_id,
+            lease_token=token,
+            started_at=now,
+            heartbeat_at=now,
+        )
         DIRTY.add(t["id"])
         WORKERS[worker_id] = {"seen_at": now, "task_id": t["id"]}
         return {
@@ -130,7 +136,14 @@ async def flush():
         DIRTY.difference_update(ids)
         DIRTY_BLOBS.difference_update(keys)
         try:
-            await db.save(db.Task, [{c: TASKS[i].get(c) for c in db.TASK_COLUMNS} for i in ids if i in TASKS])
+            await db.save(
+                db.Task,
+                [
+                    {c: TASKS[i].get(c) for c in db.TASK_COLUMNS}
+                    for i in ids
+                    if i in TASKS
+                ],
+            )
             await db.save(db.Artifact, [BLOBS[k] for k in keys if k in BLOBS])
         except Exception as e:
             DIRTY.update(ids)
@@ -174,8 +187,16 @@ async def keeper():
                 print("db:", type(e).__name__, e)
         now = time.time()
         for t in list(TASKS.values()):
-            if t["status"] == "running" and t.get("heartbeat_at", now) < now - LOST_AFTER:
-                t.update(status="lost", error="worker gone", finished_at=now, lease_token=None)
+            if (
+                t["status"] == "running"
+                and t.get("heartbeat_at", now) < now - LOST_AFTER
+            ):
+                t.update(
+                    status="lost",
+                    error="worker gone",
+                    finished_at=now,
+                    lease_token=None,
+                )
                 DIRTY.add(t["id"])
         for wid, w in list(WORKERS.items()):
             if w["seen_at"] < now - WORKER_STALE:
@@ -214,12 +235,14 @@ async def lease(request: Request, authorization: str = Header(None)):
         try:
             await asyncio.wait_for(new_task.wait(), timeout=left)
             new_task.clear()
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return Response(status_code=204)
 
 
 @app.post("/v1/tasks/{tid}/heartbeat")
-async def heartbeat(tid: str, x_lease_token: str = Header(None), authorization: str = Header(None)):
+async def heartbeat(
+    tid: str, x_lease_token: str = Header(None), authorization: str = Header(None)
+):
     auth_worker(authorization)
     t = owned(tid, x_lease_token)
     now = time.time()
@@ -274,7 +297,12 @@ async def complete(
         raise HTTPException(400, "bad status")
     if t["status"] in FINISHED:
         return {"ok": True, "status": t["status"], "note": "already terminal"}
-    t.update(status=status, error=body.get("error"), finished_at=time.time(), lease_token=None)
+    t.update(
+        status=status,
+        error=body.get("error"),
+        finished_at=time.time(),
+        lease_token=None,
+    )
     DIRTY.add(tid)
     if t["worker_id"] in WORKERS:
         WORKERS[t["worker_id"]]["task_id"] = None
@@ -309,7 +337,11 @@ async def create_task(request: Request, authorization: str = Header(None)):
 
 
 @app.get("/v1/tasks")
-async def list_tasks(status: str = Query(None), limit: int = Query(100), authorization: str = Header(None)):
+async def list_tasks(
+    status: str = Query(None),
+    limit: int = Query(100),
+    authorization: str = Header(None),
+):
     auth_client(authorization)
     live = [t for t in TASKS.values() if not status or t["status"] == status]
     seen = {t["id"] for t in live}
@@ -325,7 +357,9 @@ async def task_status(tid: str, authorization: str = Header(None)):
 
 
 @app.get("/v1/tasks/{tid}/events")
-async def read_events(tid: str, offset: int = Query(0), authorization: str = Header(None)):
+async def read_events(
+    tid: str, offset: int = Query(0), authorization: str = Header(None)
+):
     auth_client(authorization)
     t = await find(tid)
     p = events_path(tid)
@@ -355,7 +389,9 @@ async def cancel(tid: str, authorization: str = Header(None)):
     auth_client(authorization)
     t = await find(tid)
     if t["status"] == "pending":
-        t.update(status="cancelled", finished_at=time.time(), error="cancelled before start")
+        t.update(
+            status="cancelled", finished_at=time.time(), error="cancelled before start"
+        )
         DIRTY.add(tid)
         return {"status": "cancelled"}
     if t["status"] == "running":
@@ -392,7 +428,12 @@ def _write(f, digest, chunk):
 
 
 @app.put("/v1/artifacts/{key:path}")
-async def put_artifact(key: str, request: Request, task_id: str = Query(None), authorization: str = Header(None)):
+async def put_artifact(
+    key: str,
+    request: Request,
+    task_id: str = Query(None),
+    authorization: str = Header(None),
+):
     auth_any(authorization)
     final = blob_path(key)
     part = final.with_suffix(".part")
@@ -427,7 +468,9 @@ async def put_artifact(key: str, request: Request, task_id: str = Query(None), a
 
 
 @app.get("/v1/artifacts")
-async def list_artifacts(prefix: str = Query(""), limit: int = Query(100), authorization: str = Header(None)):
+async def list_artifacts(
+    prefix: str = Query(""), limit: int = Query(100), authorization: str = Header(None)
+):
     auth_any(authorization)
     live = [b for b in BLOBS.values() if b["key"].startswith(prefix)]
     seen = {b["key"] for b in live}

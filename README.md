@@ -56,13 +56,13 @@ def title(url):
     return re.search(r"<title>(.*?)</title>", html, re.S).group(1)
 
 
-task = title.submit("https://example.com")    # отдать и не ждать
-for event in task.watch():                    # события по мере поступления
+task = title.submit("https://example.com")  # отдать и не ждать
+for event in task.watch():  # события по мере поступления
     print(event)
 
-done = title("https://example.com")           # выполнить и дождаться
-done.events()                                 # [{'kind': 'result', 'value': ..., 'at': ...}]
-tasks = title.map(urls)                       # по задаче на элемент, разом на весь пул
+done = title("https://example.com")  # выполнить и дождаться
+done.events()  # [{'kind': 'result', 'value': ..., 'at': ...}]
+tasks = title.map(urls)  # по задаче на элемент, разом на весь пул
 ```
 
 Функция уезжает на раннер исходником, поэтому обязана быть самодостаточной:
@@ -74,7 +74,9 @@ tasks = title.map(urls)                       # по задаче на элем�
 
 ```python
 def value(task):
-    return next((e["value"] for e in reversed(task.events()) if e["kind"] == "result"), None)
+    return next(
+        (e["value"] for e in reversed(task.events()) if e["kind"] == "result"), None
+    )
 ```
 
 - `pool.run(fn, *args, **kwargs)`, `pool.submit(...)`, `pool.map(fn, items)` — то же самое без декоратора.
@@ -145,10 +147,10 @@ JSON-сериализуемым, большое и бинарное кладёт
 Тупой key-value поверх диска: положил файл по ключу, забрал по тому же ключу.
 
 ```python
-pool.put("in/data.csv", Path("data.csv"))    # файл, байты или строка
-pool.get("in/data.csv")                      # -> bytes
-pool.download("in/data.csv", "copy.csv")     # потоком в файл
-pool.artifacts(prefix="in/")                 # размер, sha256, время, задача
+pool.put("in/data.csv", Path("data.csv"))  # файл, байты или строка
+pool.get("in/data.csv")  # -> bytes
+pool.download("in/data.csv", "copy.csv")  # потоком в файл
+pool.artifacts(prefix="in/")  # размер, sha256, время, задача
 pool.delete("in/data.csv")
 ```
 

@@ -8,8 +8,12 @@ on:
 permissions: {}
 
 jobs:
-  pytest:
+  python:
     runs-on: pool
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [format, pytest]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -17,7 +21,7 @@ jobs:
 
       - uses: wprhvso/qa-python@v1
         with:
-          checks: pytest
+          checks: ${{ matrix.check }}
 
   shell:
     runs-on: pool

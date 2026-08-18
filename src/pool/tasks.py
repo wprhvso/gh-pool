@@ -18,8 +18,17 @@ def install(deps):
     if not (target / ".ok").exists():
         print(f"[deps] {' '.join(deps)}")
         uv = shutil.which("uv")
-        base = [uv, "pip", "install", "--python", sys.executable] if uv else [sys.executable, "-m", "pip", "install"]
-        subprocess.run([*base, "--target", str(target), *deps], check=True, stdout=sys.stdout, stderr=subprocess.STDOUT)
+        base = (
+            [uv, "pip", "install", "--python", sys.executable]
+            if uv
+            else [sys.executable, "-m", "pip", "install"]
+        )
+        subprocess.run(
+            [*base, "--target", str(target), *deps],
+            check=True,
+            stdout=sys.stdout,
+            stderr=subprocess.STDOUT,
+        )
         (target / ".ok").touch()
     sys.path.insert(0, str(target))
 

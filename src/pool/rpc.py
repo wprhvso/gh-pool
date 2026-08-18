@@ -44,7 +44,9 @@ def _call(key, method, data=None, size=None, query=""):
         f"{SERVER}/v1/artifacts/{quote(str(key), safe='/')}{query}",
         data=data,
         method=method,
-        headers={"Authorization": f"Bearer {TOKEN}", "Content-Length": str(size)} if data else {"Authorization": f"Bearer {TOKEN}"},
+        headers={"Authorization": f"Bearer {TOKEN}", "Content-Length": str(size)}
+        if data
+        else {"Authorization": f"Bearer {TOKEN}"},
     )
     return urllib.request.urlopen(req, timeout=300)
 

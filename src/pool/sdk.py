@@ -14,11 +14,17 @@ TERMINAL = ("done", "failed", "cancelled", "lost")
 
 class Failed(RuntimeError):
     def __init__(self, tid, status, error, tail):
-        self.event = next((e for e in reversed(rpc.parse(tail)) if e.get("kind") == "error"), None)
+        self.event = next(
+            (e for e in reversed(rpc.parse(tail)) if e.get("kind") == "error"), None
+        )
         detail = self.event and (self.event.get("message") or self.event.get("value"))
         if detail:
             error = f"{self.event.get('type', 'error')}: {detail}"
-        super().__init__(f"task {tid} {status}" + (f": {error}" if error else "") + (f"\n{tail}" if tail else ""))
+        super().__init__(
+            f"task {tid} {status}"
+            + (f": {error}" if error else "")
+            + (f"\n{tail}" if tail else "")
+        )
         self.task_id = tid
         self.status = status
         self.error = error
@@ -62,10 +68,14 @@ class Task:
         return self
 
     def raw(self, offset=0):
-        return self.pool.call("GET", f"/v1/tasks/{self.id}/events", params={"offset": offset}).content
+        return self.pool.call(
+            "GET", f"/v1/tasks/{self.id}/events", params={"offset": offset}
+        ).content
 
     def tail(self, limit=4000):
-        head = self.pool.call("GET", f"/v1/tasks/{self.id}/events", params={"offset": 1 << 40})
+        head = self.pool.call(
+            "GET", f"/v1/tasks/{self.id}/events", params={"offset": 1 << 40}
+        )
         size = int(head.headers["X-Event-Size"])
         return self.raw(max(size - limit, 0)).decode(errors="replace")
 
@@ -81,11 +91,15 @@ class Task:
 
     def follow(self, offset=0):
         while True:
-            r = self.pool.call("GET", f"/v1/tasks/{self.id}/events", params={"offset": offset})
+            r = self.pool.call(
+                "GET", f"/v1/tasks/{self.id}/events", params={"offset": offset}
+            )
             if r.content:
                 yield r.content
             offset = int(r.headers["X-Event-Offset"])
-            if r.headers["X-Task-Status"] in TERMINAL and offset >= int(r.headers["X-Event-Size"]):
+            if r.headers["X-Task-Status"] in TERMINAL and offset >= int(
+                r.headers["X-Event-Size"]
+            ):
                 return
             time.sleep(0.5)
 
@@ -116,11 +130,15 @@ class Remote:
             payload["deps"] = self.deps
         if self.timeout:
             payload["timeout"] = self.timeout
-        body = self.pool.call("POST", "/v1/tasks", json={"type": TYPE, "payload": payload}).json()
+        body = self.pool.call(
+            "POST", "/v1/tasks", json={"type": TYPE, "payload": payload}
+        ).json()
         return Task(self.pool, body["task_id"])
 
     def spawn(self, items):
-        return [self.submit(*x) if isinstance(x, tuple) else self.submit(x) for x in items]
+        return [
+            self.submit(*x) if isinstance(x, tuple) else self.submit(x) for x in items
+        ]
 
     def map(self, items):
         return [t.check() for t in self.spawn(items)]
@@ -129,8 +147,12 @@ class Remote:
 class Pool:
     def __init__(self, server=None, token=None, timeout=30.0):
         self.http = httpx.Client(
-            base_url=(server or os.getenv("POOL_SERVER", "http://localhost:8000")).rstrip("/"),
-            headers={"Authorization": f"Bearer {token or os.getenv('POOL_CLIENT_TOKEN', 'dev-client')}"},
+            base_url=(
+                server or os.getenv("POOL_SERVER", "http://localhost:8000")
+            ).rstrip("/"),
+            headers={
+                "Authorization": f"Bearer {token or os.getenv('POOL_CLIENT_TOKEN', 'dev-client')}"
+            },
             timeout=httpx.Timeout(timeout, read=300.0),
         )
 
@@ -167,8 +189,12 @@ class Pool:
         params = {"task_id": task_id} if task_id else None
         if isinstance(data, Path):
             with data.open("rb") as f:
-                return self.call("PUT", f"/v1/artifacts/{key}", content=f, params=params).json()
-        return self.call("PUT", f"/v1/artifacts/{key}", content=data, params=params).json()
+                return self.call(
+                    "PUT", f"/v1/artifacts/{key}", content=f, params=params
+                ).json()
+        return self.call(
+            "PUT", f"/v1/artifacts/{key}", content=data, params=params
+        ).json()
 
     def get(self, key):
         return self.call("GET", f"/v1/artifacts/{key}").content
@@ -179,22 +205,26 @@ class Pool:
                 r.read()
                 raise RuntimeError(f"GET {key} -> {r.status_code} {r.text[:200]}")
             with open(path, "wb") as f:
-                for chunk in r.iter_bytes():
-                    f.write(chunk)
+                f.writelines(r.iter_bytes())
         return path
 
     def delete(self, key):
         return self.call("DELETE", f"/v1/artifacts/{key}").json()
 
     def artifacts(self, prefix="", limit=100):
-        return self.call("GET", "/v1/artifacts", params={"prefix": prefix, "limit": limit}).json()
+        return self.call(
+            "GET", "/v1/artifacts", params={"prefix": prefix, "limit": limit}
+        ).json()
 
     def task(self, tid):
         return Task(self, tid)
 
     def tasks(self, status=None, limit=30):
         params = {"limit": limit} | ({"status": status} if status else {})
-        return [Task(self, t["id"]) for t in self.call("GET", "/v1/tasks", params=params).json()]
+        return [
+            Task(self, t["id"])
+            for t in self.call("GET", "/v1/tasks", params=params).json()
+        ]
 
     def health(self):
         return self.call("GET", "/healthz").json()

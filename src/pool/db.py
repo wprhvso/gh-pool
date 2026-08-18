@@ -63,7 +63,9 @@ async def save(model, rows):
         return
     key = key_of(model)
     stmt = insert(model).values(rows)
-    stmt = stmt.on_conflict_do_update(index_elements=[key], set_={c: stmt.excluded[c] for c in rows[0] if c != key})
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[key], set_={c: stmt.excluded[c] for c in rows[0] if c != key}
+    )
     async with Session.begin() as session:
         await session.execute(stmt)
 
@@ -76,7 +78,9 @@ async def fetch(model, value):
 
 async def drop(model, value):
     async with Session.begin() as session:
-        await session.execute(delete(model).where(getattr(model, key_of(model)) == value))
+        await session.execute(
+            delete(model).where(getattr(model, key_of(model)) == value)
+        )
 
 
 async def rows(model, query):
@@ -91,7 +95,9 @@ async def tasks(status=None, limit=100):
 
 async def artifacts(prefix="", limit=100):
     q = select(Artifact).order_by(Artifact.created_at.desc()).limit(limit)
-    return await rows(Artifact, q.where(Artifact.key.startswith(prefix)) if prefix else q)
+    return await rows(
+        Artifact, q.where(Artifact.key.startswith(prefix)) if prefix else q
+    )
 
 
 async def unfinished():

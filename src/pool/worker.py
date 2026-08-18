@@ -113,7 +113,7 @@ async def sender(client, spool, tid, token, finished):
                 return
             try:
                 await asyncio.wait_for(spool.event.wait(), timeout=1.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
             spool.event.clear()
             continue
@@ -138,7 +138,9 @@ async def sender(client, spool, tid, token, finished):
 async def heartbeat(client, tid, token, cancel, stale):
     while True:
         try:
-            r = await req(client, "POST", f"/v1/tasks/{tid}/heartbeat", headers=hdr(token))
+            r = await req(
+                client, "POST", f"/v1/tasks/{tid}/heartbeat", headers=hdr(token)
+            )
         except Permanent as e:
             note(f"heartbeat rejected: {e}")
             stale.set()
@@ -210,7 +212,7 @@ async def execute(client, lease):
         _signal_group(proc, signal.SIGTERM)
         try:
             await asyncio.wait_for(asyncio.shield(wait_task), timeout=KILL_GRACE)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             note("grace expired, killing")
             _signal_group(proc, signal.SIGKILL)
             await wait_task
@@ -266,7 +268,10 @@ def _signal_group(proc, sig):
 
 
 async def _first(*events):
-    await asyncio.wait([asyncio.create_task(e.wait()) for e in events], return_when=asyncio.FIRST_COMPLETED)
+    await asyncio.wait(
+        [asyncio.create_task(e.wait()) for e in events],
+        return_when=asyncio.FIRST_COMPLETED,
+    )
 
 
 def _cleanup(*paths):
@@ -314,7 +319,7 @@ def run_exec(ttype, payload_file):
         sys.exit(2)
 
     def on_term(*_):
-        raise Cancelled()
+        raise Cancelled
 
     signal.signal(signal.SIGTERM, on_term)
     payload = json.loads(Path(payload_file).read_text())
