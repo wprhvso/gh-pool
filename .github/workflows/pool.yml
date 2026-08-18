@@ -16,6 +16,7 @@ env:
   ANDROID_BUILD_TOOLS: "37.0.0"
   ANDROID_NDK_VERSION: "26.3.11579264"
   CARGO_AUDIT_VERSION: "0.22.2"
+  KASMVNC_VERSION: "1.5.0"
   TOOLS: /opt/pool-tools/bin
   GRADLE_CACHE_URL: https://gradle-cache.murasya.ru/cache/
   ATTIC_CACHE: https://cache.murasya.ru/main
@@ -81,6 +82,15 @@ jobs:
             liblist-moreutils-perl libtry-tiny-perl libdatetime-perl \
             libdatetime-timezone-perl
           sudo mkdir -p "$TOOLS"
+          arch=$(dpkg --print-architecture)
+          for codename in "$(. /etc/os-release && echo "$VERSION_CODENAME")" noble; do
+            deb=kasmvncserver_${codename}_${KASMVNC_VERSION}_${arch}.deb
+            url=https://github.com/kasmtech/KasmVNC/releases/download/v${KASMVNC_VERSION}/$deb
+            if curl -fsSL --retry 3 --retry-all-errors -o "$RUNNER_TEMP/$deb" "$url"; then
+              sudo apt-get install -y -qq --no-install-recommends "$RUNNER_TEMP/$deb" && break
+            fi
+          done
+          command -v Xkasmvnc || echo "::warning::KasmVNC не встал — живой рабочий стол недоступен"
           echo "$TOOLS" >>"$GITHUB_PATH"
 
       # Инсталлятор nix не идемпотентен: на переиспользуемом воркере вторая
