@@ -1,0 +1,133 @@
+import asyncio
+import time
+
+from conftest import as_client, submit, take
+
+from pool import server
+
+
+async def until(condition, timeout=2.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if condition():
+            return True
+        await asyncio.sleep(0.01)
+    return False
+
+
+async def reaping(monkeypatch, **settings):
+    for name, value in settings.items():
+        monkeypatch.setattr(server, name, value)
+    monkeypatch.setattr(server, "FLUSH_EVERY", 0.01)
+    return asyncio.ensure_future(server.keeper())
+
+
+async def test_a_task_whose_worker_went_quiet_is_declared_lost(
+    client, blank, monkeypatch
+):
+    tid = await submit(client)
+    await take(client)
+    server.TASKS[tid]["heartbeat_at"] = time.time() - 100
+    reaper = await reaping(monkeypatch, LOST_AFTER=1.0)
+
+    try:
+        assert await until(lambda: any(r["id"] == tid for r in blank.saved))
+    finally:
+        reaper.cancel()
+
+    written = next(r for r in blank.saved if r["id"] == tid)
+    assert written["status"] == "lost"
+    assert written["error"] == "worker gone"
+
+
+async def test_a_task_that_keeps_beating_is_left_alone(client, monkeypatch):
+    tid = await submit(client)
+    await take(client)
+    reaper = await reaping(monkeypatch, LOST_AFTER=60.0)
+
+    try:
+        await asyncio.sleep(0.1)
+    finally:
+        reaper.cancel()
+
+    assert server.TASKS[tid]["status"] == "running"
+
+
+async def test_a_worker_that_stopped_asking_drops_off_the_listing(client, monkeypatch):
+    await take(client)
+    server.WORKERS["w1"]["seen_at"] = time.time() - 100
+    reaper = await reaping(monkeypatch, WORKER_STALE=1.0)
+
+    try:
+        assert await until(lambda: "w1" not in server.WORKERS)
+    finally:
+        reaper.cancel()
+
+
+async def test_work_left_over_from_a_previous_server_is_picked_up(client, blank):
+    blank.pending = [
+        {"id": "waiting", "status": "pending", "payload": {}, "type": "python"},
+        {"id": "gone", "status": "running", "payload": {}, "type": "python"},
+    ]
+
+    await server.recover()
+
+    assert list(server.QUEUE) == ["waiting"]
+    assert server.TASKS["gone"]["status"] == "lost"
+    assert server.TASKS["gone"]["error"] == "server restarted"
+
+
+async def test_a_finished_task_leaves_memory_once_it_is_written_down(client):
+    tid = await submit(client)
+    leased = await take(client)
+    await client.post(
+        f"/v1/tasks/{tid}/complete",
+        json={"status": "done"},
+        headers={
+            "Authorization": "Bearer dev-worker",
+            "X-Lease-Token": leased["lease_token"],
+        },
+    )
+
+    await server.flush()
+
+    assert tid not in server.TASKS
+
+
+async def test_nothing_is_forgotten_while_the_database_refuses(client, blank):
+    tid = await submit(client)
+    blank.broken = True
+
+    await server.flush()
+
+    assert tid in server.DIRTY
+    assert server.state["db"] is False
+
+
+async def test_health_says_when_the_server_came_up(client):
+    answer = (await client.get("/healthz")).json()
+
+    assert answer["ok"] is True
+    assert answer["started_at"] <= time.time()
+    assert answer["uptime"] >= 0
+
+
+async def test_health_counts_the_queue_and_the_workers(client):
+    await submit(client)
+    await submit(client)
+    await take(client)
+
+    answer = (await client.get("/healthz")).json()
+
+    assert answer["queue"] == 1
+    assert answer["workers"] == 1
+    assert answer["tasks"] == {"pending": 1, "running": 1}
+
+
+async def test_tasks_can_be_listed_newest_first(client):
+    first = await submit(client)
+    second = await submit(client)
+
+    answer = await client.get("/v1/tasks", headers=as_client())
+
+    assert [row["id"] for row in answer.json()][:2] == [second, first]
