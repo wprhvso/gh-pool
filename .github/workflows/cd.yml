@@ -12,7 +12,7 @@ jobs:
   # not. Nothing goes out before the same checks that guard a commit have
   # passed on the commit being released.
   check:
-    runs-on: ubuntu-latest
+    runs-on: pool
     strategy:
       fail-fast: false
       matrix:
@@ -28,7 +28,7 @@ jobs:
   # version pyproject.toml declares is strictly higher than everything PyPI
   # holds, which makes a release exactly a merged version bump.
   version:
-    runs-on: ubuntu-latest
+    runs-on: pool
     outputs:
       version: ${{ steps.read.outputs.version }}
       prerelease: ${{ steps.read.outputs.prerelease }}
@@ -71,7 +71,7 @@ jobs:
           echo "release=$release" >> "$GITHUB_OUTPUT"
 
   release:
-    runs-on: ubuntu-latest
+    runs-on: pool
     needs: [check, version]
     if: needs.version.outputs.release == 'true'
 
@@ -98,7 +98,7 @@ jobs:
             --LATEST="${{ needs.version.outputs.prerelease == 'false' }}"
 
   pypi:
-    runs-on: ubuntu-latest
+    runs-on: pool
     needs: [check, version, release]
     if: needs.version.outputs.release == 'true'
 
@@ -119,7 +119,7 @@ jobs:
   # The tag is a record of what shipped, so it is written once the upload that
   # cannot be taken back has succeeded.
   tag:
-    runs-on: ubuntu-latest
+    runs-on: pool
     needs: [version, release, pypi]
     if: needs.version.outputs.release == 'true'
 

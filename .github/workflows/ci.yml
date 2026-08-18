@@ -7,7 +7,7 @@ on:
 
 jobs:
   python:
-    runs-on: ubuntu-latest
+    runs-on: pool
     strategy:
       fail-fast: false
       matrix:
@@ -22,7 +22,7 @@ jobs:
   # end-to-end suite skips itself there. This one gives it everything it asks
   # for: a database, a screen, a browser and a recorder.
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: pool
     services:
       postgres:
         image: postgres:17
@@ -56,7 +56,7 @@ jobs:
           pytest-args: tests/e2e -ra --durations=15
 
   nix:
-    runs-on: ubuntu-latest
+    runs-on: pool
     steps:
       - uses: actions/checkout@v7
       - uses: wprhvso/qa-nix@v1
@@ -64,7 +64,7 @@ jobs:
           checks: fmt,statix,deadnix,flake
 
   shell:
-    runs-on: ubuntu-latest
+    runs-on: pool
     steps:
       - uses: actions/checkout@v7
       - uses: wprhvso/qa-shell@v1

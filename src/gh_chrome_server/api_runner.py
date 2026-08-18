@@ -182,7 +182,9 @@ async def put_profile(
 
 
 @router.get("/{session_id}/files/{file_id}")
-async def get_upload(session_id: UUID, file_id: UUID, db: Db, _: Runner) -> FileResponse:
+async def get_upload(
+    session_id: UUID, file_id: UUID, db: Db, _: Runner
+) -> FileResponse:
     row = await db.one(
         "select name from files where id = %s and session_id = %s",
         (file_id, session_id),
