@@ -6,7 +6,6 @@ on:
 env:
   GO_VERSION: "1.26.3"
   GOLANGCI_VERSION: "v2.12.2"
-  GOVULNCHECK_VERSION: "v1.6.0"
   KTLINT_VERSION: "1.8.0"
   DETEKT_VERSION: "1.23.8"
   SHELLCHECK_VERSION: "v0.11.0"
@@ -127,7 +126,7 @@ jobs:
           export PATH=/nix/var/nix/profiles/default/bin:$PATH
           nix profile install --accept-flake-config \
             nixpkgs#nixfmt-rfc-style nixpkgs#statix nixpkgs#deadnix \
-            nixpkgs#stylua nixpkgs#selene nixpkgs#attic-client
+            nixpkgs#stylua nixpkgs#selene nixpkgs#attic-client nixpkgs#govulncheck
           echo "$HOME/.nix-profile/bin" >>"$GITHUB_PATH"
 
       # Конфиг клиента ложится в $HOME, который у вложенных джоб тот же, так что
@@ -163,7 +162,9 @@ jobs:
           curl -fsSL --retry 3 --retry-all-errors \
             "https://raw.githubusercontent.com/golangci/golangci-lint/${GOLANGCI_VERSION}/install.sh" \
             | sh -s -- -b "$TOOLS" "$GOLANGCI_VERSION"
-          GOBIN="$TOOLS" go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+          # govulncheck приезжает из nixpkgs вместе с остальными qa-тулами: сборка
+          # из исходников занимала почти весь этот шаг ради той же версии.
+          govulncheck -version 2>/dev/null | head -2
 
       - name: rust
         run: |
@@ -295,4 +296,11 @@ jobs:
           POOL_SERVER: ${{ secrets.POOL_SERVER }}
           POOL_TOKEN: ${{ secrets.POOL_TOKEN }}
           WORKER_ID: gh-${{ github.run_id }}
-        run: uv run pool-worker
+        run: |
+          # Уходим заметно раньше timeout-minutes и вразнобой: иначе когорта,
+          # поднятая одним холодным стартом, вымирает разом и ёмкость проваливается.
+          # Воркер дорабатывает текущую задачу и только потом выходит.
+          WORKER_MAX_AGE=$((16200 + RANDOM % 2700))
+          export WORKER_MAX_AGE
+          echo "воркер отработает $((WORKER_MAX_AGE / 60)) мин"
+          uv run pool-worker

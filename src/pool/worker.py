@@ -4,6 +4,7 @@ import os
 import random
 import signal
 import sys
+import time
 import traceback
 import uuid
 from pathlib import Path
@@ -18,6 +19,10 @@ SPOOL_CAP = int(os.getenv("SPOOL_CAP", str(256 * 1024 * 1024)))
 HEARTBEAT = 15.0
 KILL_GRACE = 30.0
 CHUNK = 1 << 20
+# Ноль — жить до таймаута самой джобы. Иначе воркер уходит сам, но только между
+# задачами: снятый на середине уносит задачу в lost, а CI-джобу — на второй круг.
+# Джиттер задаёт тот, кто запускает, чтобы флот не вымирал одной когортой.
+MAX_AGE = float(os.getenv("WORKER_MAX_AGE", "0"))
 
 CURRENT = None
 
@@ -276,7 +281,11 @@ async def loop():
     timeout = httpx.Timeout(60.0, read=90.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
         note(f"worker {WORKER_ID} up, server {SERVER}")
+        born = time.monotonic()
         while True:
+            if MAX_AGE and time.monotonic() - born > MAX_AGE:
+                note(f"worker {WORKER_ID} retiring after {MAX_AGE:.0f}s")
+                return
             r = await req(
                 client,
                 "POST",

@@ -15,11 +15,21 @@ KEYS = ("token", "workflow", "jobs", "ttl", "ref")
 UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 SECRETS = ("POOL_SERVER", "POOL_TOKEN")
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
-GRACE = 120
+# Окно между dispatch и появлением прогона в списке — только на видимость API.
+GRACE = 30
+# Прогон не обслуживает сразу: бутстрап тулчейна ~140 с. Пока он моложе этого,
+# считаем его прогревающимся; старше и всё ещё не обслуживает — это зомби, и
+# место под него надо освободить, а не ждать шесть часов.
+BOOT_GRACE = 240
 # Сколько прогонов keeper вправе погасить за один тик. Массовая отмена — это
 # массовая потеря задач: пул считает их lost только через LOST_AFTER и не
 # перезапускает, а CI-джобы уходят на второй круг.
 RETIRE_BUDGET = 1
+# Сколько поднимать за тик, чтобы холодный старт не шёл стадом.
+MAX_LAUNCH = 5
+# WORKERS на сервере в памяти: сразу после его рестарта он пуст. Столько ждём,
+# прежде чем верить нулям (2 × WORKER_STALE сервера).
+POOL_WARMUP = 240
 
 
 class ApiError(RuntimeError):
@@ -101,7 +111,25 @@ def load(path):
     return out, secs(raw.get("poll", 60)), pool
 
 
-def reconcile(r):
+def pool_serving(pool):
+    """Сколько воркеров реально лизят задачи. None — судить нельзя, считаем по прогонам."""
+    base = (pool.get("POOL_SERVER") or "").rstrip("/")
+    if not base:
+        return None
+    try:
+        with urllib.request.urlopen(f"{base}/healthz", timeout=10) as resp:
+            data = json.loads(resp.read())
+    except (OSError, ValueError) as e:
+        log(f"pool healthz недоступен: {e}")
+        return None
+    up = time.time() - float(data.get("started_at") or 0)
+    if up < POOL_WARMUP:
+        log(f"pool поднялся {up:.0f}с назад, счётчик воркеров ещё не наполнился")
+        return None
+    return int(data.get("workers") or 0)
+
+
+def reconcile(r, serving=None):
     r.ref = r.ref or r.api("")["default_branch"]
     runs = r.api(f"/actions/workflows/{r.workflow}/runs?per_page=100")["workflow_runs"]
     runs = sorted((x for x in runs if x["status"] != "completed"), key=lambda x: x["created_at"], reverse=True)
@@ -131,12 +159,23 @@ def reconcile(r):
 
     now = time.time()
     r.recent = [t for t in r.recent if now - t < GRACE]
-    live = min(len(fresh), r.jobs) + len(r.recent)
-    launch = max(0, r.jobs - live)
+    young = [x for x in fresh if age(x) < BOOT_GRACE]
+    if serving is None:
+        alive = min(len(fresh), r.jobs)
+    else:
+        # Обслуживающие почти наверняка из прогретых, молодые ещё бутстрапятся.
+        # Прогретый, но не обслуживающий — зомби: раньше он числился живым до
+        # самого ttl, и ёмкость тихо проседала.
+        alive = min(serving, len(fresh) - len(young)) + len(young)
+    live = min(alive, r.jobs) + len(r.recent)
+    launch = min(max(0, r.jobs - live), MAX_LAUNCH)
     for _ in range(launch):
         r.api(f"/actions/workflows/{r.workflow}/dispatches", "POST", {"ref": r.ref})
         r.recent.append(now)
-    log(f"{r.slug} fresh={len(fresh)} recent={len(r.recent)} live={live}/{r.jobs} launch={launch} retire={stopped}")
+    log(
+        f"{r.slug} serving={serving} young={len(young)} fresh={len(fresh)} "
+        f"recent={len(r.recent)} live={live}/{r.jobs} launch={launch} retire={stopped}"
+    )
 
 
 def secrets(r, values):
@@ -211,7 +250,10 @@ def main():
             return
         log(f"{len(repos)} repos, {sum(r.jobs for r in repos)} runners")
         while True:
-            each(repos, reconcile)
+            # /healthz отдаёт общее число воркеров без разбивки по репозиториям,
+            # так что доверять ему можно только когда репозиторий один.
+            serving = pool_serving(pool) if len(repos) == 1 else None
+            each(repos, lambda r: reconcile(r, serving))  # noqa: B023
             if args.once:
                 return
             time.sleep(poll)
