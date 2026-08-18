@@ -1,0 +1,26 @@
+name: ci
+
+on: push
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [ruff, format, pyright, pytest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: wprhvso/qa-python@v1
+        with:
+          checks: ${{ matrix.check }}
+
+  nix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: wprhvso/qa-nix@v1
+        with:
+          checks: fmt,statix,deadnix,flake

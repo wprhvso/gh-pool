@@ -1,0 +1,24 @@
+name: test
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  test:
+    runs-on: pool
+    timeout-minutes: 5
+
+    steps:
+      - name: Where am I
+        run: |
+          echo "runner:  ${RUNNER_NAME}"
+          echo "os:      ${RUNNER_OS}"
+          echo "workdir: ${PWD}"
+          uname -a
+
+      - name: Do something
+        run: |
+          echo "раннер приехал из пула"
+          sleep 5
