@@ -9,8 +9,13 @@ import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from importlib import metadata
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
+
+import structlog
+from opentelemetry.metrics import get_meter
+from yaol import from_env, setup, shutdown, span
 
 API = "https://api.github.com"
 KEYS = ("token", "workflow", "jobs", "ttl", "ref")
@@ -68,8 +73,28 @@ def secs(v: str | float) -> float:
     return float(v) if isinstance(v, (int, float)) else float(v[:-1]) * UNITS[v[-1]]
 
 
+_log: Final = structlog.get_logger("pool.keeper")
+
+_meter: Final = get_meter("pool.keeper")
+_launched: Final = _meter.create_counter(
+    "pool.keeper.runs.launched",
+    unit="1",
+    description="Workflow runs dispatched by the keeper",
+)
+_retired: Final = _meter.create_counter(
+    "pool.keeper.runs.retired",
+    unit="1",
+    description="Workflow runs cancelled by the keeper",
+)
+_serving: Final = _meter.create_gauge(
+    "pool.keeper.workers.serving",
+    unit="1",
+    description="Workers the pool reports as leasing tasks",
+)
+
+
 def log(msg: str) -> None:
-    print(f"{time.strftime('%H:%M:%S')} {msg}", flush=True)  # noqa: T201
+    _log.info(msg)
 
 
 def age(run: dict[str, Any]) -> float:
@@ -141,6 +166,11 @@ def pool_serving(pool: dict[str, str]) -> int | None:
 
 
 def reconcile(r: Repo, serving: int | None = None) -> None:
+    with span("pool.keeper.reconcile", {"repo": r.slug}):
+        _reconcile(r, serving)
+
+
+def _reconcile(r: Repo, serving: int | None = None) -> None:
     r.ref = r.ref or r.api("")["default_branch"]
     runs = r.api(f"/actions/workflows/{r.workflow}/runs?per_page=100")["workflow_runs"]
     runs = sorted(
@@ -190,9 +220,23 @@ def reconcile(r: Repo, serving: int | None = None) -> None:
     for _ in range(launch):
         r.api(f"/actions/workflows/{r.workflow}/dispatches", "POST", {"ref": r.ref})
         r.recent.append(now)
-    log(
-        f"{r.slug} serving={serving} young={len(young)} fresh={len(fresh)} "
-        f"recent={len(r.recent)} live={live}/{r.jobs} launch={launch} retire={stopped}"
+    if serving is not None:
+        _serving.set(serving, {"repo": r.slug})
+    if launch:
+        _launched.add(launch, {"repo": r.slug})
+    if stopped:
+        _retired.add(stopped, {"repo": r.slug})
+    _log.info(
+        "tick",
+        repo=r.slug,
+        serving=serving,
+        young=len(young),
+        fresh=len(fresh),
+        recent=len(r.recent),
+        live=live,
+        jobs=r.jobs,
+        launch=launch,
+        retire=stopped,
     )
 
 
@@ -256,6 +300,13 @@ def each(repos: list[Repo], fn: Callable[[Repo], None]) -> None:
             log(f"{r.slug} {type(e).__name__}: {e}")
 
 
+def version() -> str:
+    try:
+        return metadata.version("pool")
+    except metadata.PackageNotFoundError:
+        return "0.0.0"
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="pool-keeper")
     common = argparse.ArgumentParser(add_help=False)
@@ -267,22 +318,26 @@ def main() -> None:
     b.add_argument("--source", type=Path, default=WORKFLOWS)
     args = p.parse_args()
 
-    repos, poll, pool = load(args.config)
+    setup(from_env("pool-keeper", service_version=version()))
     try:
-        if args.cmd == "build":
-            each(repos, lambda r: build(r, args.source / r.workflow, pool))
-            return
-        log(f"{len(repos)} repos, {sum(r.jobs for r in repos)} runners")
-        while True:
-            # /healthz отдаёт общее число воркеров без разбивки по репозиториям,
-            # так что доверять ему можно только когда репозиторий один.
-            serving = pool_serving(pool) if len(repos) == 1 else None
-            each(repos, lambda r: reconcile(r, serving))  # noqa: B023
-            if args.once:
+        repos, poll, pool = load(args.config)
+        try:
+            if args.cmd == "build":
+                each(repos, lambda r: build(r, args.source / r.workflow, pool))
                 return
-            time.sleep(poll)
-    except KeyboardInterrupt:
-        sys.exit(130)
+            log(f"{len(repos)} repos, {sum(r.jobs for r in repos)} runners")
+            while True:
+                # /healthz отдаёт общее число воркеров без разбивки по репозиториям,
+                # так что доверять ему можно только когда репозиторий один.
+                serving = pool_serving(pool) if len(repos) == 1 else None
+                each(repos, lambda r: reconcile(r, serving))  # noqa: B023
+                if args.once:
+                    return
+                time.sleep(poll)
+        except KeyboardInterrupt:
+            sys.exit(130)
+    finally:
+        shutdown()
 
 
 if __name__ == "__main__":

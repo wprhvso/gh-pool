@@ -49,6 +49,18 @@ in
       description = "Файл с WORKER_TOKEN и CLIENT_TOKEN, читается systemd, в стор не попадает.";
     };
 
+    otlpEndpoint = mkOption {
+      type = types.str;
+      default = "http://127.0.0.1:4317";
+      description = "OTLP gRPC endpoint, куда уходят трейсы, метрики и логи.";
+    };
+
+    env = mkOption {
+      type = types.str;
+      default = "prod";
+      description = "Окружение в ресурсных атрибутах телеметрии.";
+    };
+
     settings = mkOption {
       type = types.attrsOf types.str;
       default = { };
@@ -102,6 +114,8 @@ in
         PORT = toString cfg.port;
         DATA_DIR = cfg.dataDir;
         DATABASE_URL = cfg.databaseUrl;
+        OTEL_EXPORTER_OTLP_ENDPOINT = cfg.otlpEndpoint;
+        ENV = cfg.env;
       }
       // cfg.settings;
 

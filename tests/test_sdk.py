@@ -81,6 +81,14 @@ def test_nothing_optional_is_sent_when_there_is_nothing_to_send():
     assert "entry" not in payload
 
 
+def test_the_trace_context_rides_along_in_the_payload():
+    pool = FakePool()
+
+    sdk.Remote(pool, "result = 1").submit()
+
+    assert isinstance(pool.sent[0][2]["json"]["payload"]["trace"], dict)
+
+
 def test_waiting_stops_as_soon_as_the_task_is_finished(monkeypatch):
     monkeypatch.setattr(sdk.time, "sleep", lambda _: None)
     pool = FakePool([{"status": "running"}, {"status": "running"}, {"status": "done"}])

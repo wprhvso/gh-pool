@@ -4,17 +4,23 @@ import os
 import time
 import uuid
 from collections import deque
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager
+from importlib import metadata
 from io import BufferedWriter
 from pathlib import Path
 from typing import Annotated, Any
 
+import structlog
 from anyio import to_thread
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
+from opentelemetry import metrics
+from opentelemetry.metrics import CallbackOptions, Observation
 
 from pool import db
+
+log = structlog.get_logger()
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
 BLOB_DIR = Path(os.getenv("BLOB_DIR", str(DATA_DIR / "blobs")))
@@ -47,6 +53,68 @@ state = {"db": False}
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 BLOB_DIR.mkdir(parents=True, exist_ok=True)
+
+meter = metrics.get_meter("pool.server")
+
+
+def _observe_queue(options: CallbackOptions) -> Iterable[Observation]:
+    return [Observation(len(QUEUE))]
+
+
+def _observe_workers(options: CallbackOptions) -> Iterable[Observation]:
+    busy = sum(1 for w in WORKERS.values() if w.get("task_id"))
+    return [
+        Observation(busy, {"state": "busy"}),
+        Observation(len(WORKERS) - busy, {"state": "idle"}),
+    ]
+
+
+def _observe_tasks(options: CallbackOptions) -> Iterable[Observation]:
+    counts: dict[str, int] = {}
+    for t in list(TASKS.values()):
+        status = t["status"]
+        counts[status] = counts.get(status, 0) + 1
+    return [Observation(n, {"status": s}) for s, n in counts.items()]
+
+
+queue_depth = meter.create_observable_gauge(
+    "pool.queue.depth",
+    callbacks=[_observe_queue],
+    unit="{task}",
+    description="Tasks waiting to be leased",
+)
+worker_gauge = meter.create_observable_gauge(
+    "pool.workers",
+    callbacks=[_observe_workers],
+    unit="{worker}",
+    description="Known workers by lease state",
+)
+task_gauge = meter.create_observable_gauge(
+    "pool.tasks",
+    callbacks=[_observe_tasks],
+    unit="{task}",
+    description="In-memory tasks by status",
+)
+lease_wait = meter.create_histogram(
+    "pool.task.lease.wait",
+    unit="s",
+    description="Time a task spent queued before it was leased",
+)
+tasks_created = meter.create_counter(
+    "pool.tasks.created",
+    unit="{task}",
+    description="Tasks accepted into the queue",
+)
+tasks_completed = meter.create_counter(
+    "pool.tasks.completed",
+    unit="{task}",
+    description="Tasks that reached a terminal status",
+)
+tasks_lost = meter.create_counter(
+    "pool.tasks.lost",
+    unit="{task}",
+    description="Tasks declared lost",
+)
 
 
 def task_dir(tid: str) -> Path:
@@ -121,6 +189,7 @@ def grab(worker_id: str) -> dict[str, Any] | None:
         )
         DIRTY.add(t["id"])
         WORKERS[worker_id] = {"seen_at": now, "task_id": t["id"]}
+        lease_wait.record(max(now - t["created_at"], 0.0), {"type": t["type"]})
         return {
             "task_id": t["id"],
             "type": t["type"],
@@ -152,7 +221,13 @@ async def flush() -> None:
             DIRTY.update(ids)
             DIRTY_BLOBS.update(keys)
             state["db"] = False
-            print("flush:", type(e).__name__, e)  # noqa: T201
+            log.warning(
+                "flush_failed",
+                error=type(e).__name__,
+                detail=str(e),
+                tasks=len(ids),
+                blobs=len(keys),
+            )
             return
         state["db"] = True
         for i in ids:
@@ -171,11 +246,12 @@ async def recover() -> None:
         if t["status"] == "running":
             t.update(status="lost", error="server restarted", finished_at=time.time())
             DIRTY.add(t["id"])
+            tasks_lost.add(1, {"reason": "server_restarted"})
         else:
             QUEUE.append(t["id"])
     if QUEUE:
         new_task.set()
-    print(f"recovered: {len(QUEUE)} pending")  # noqa: T201
+    log.info("recovered", pending=len(QUEUE))
 
 
 async def keeper() -> None:
@@ -187,7 +263,7 @@ async def keeper() -> None:
                 await recover()
                 started = state["db"] = True
             except Exception as e:
-                print("db:", type(e).__name__, e)  # noqa: T201
+                log.warning("db_unavailable", error=type(e).__name__, detail=str(e))
         now = time.time()
         for t in list(TASKS.values()):
             if (
@@ -201,6 +277,7 @@ async def keeper() -> None:
                     lease_token=None,
                 )
                 DIRTY.add(t["id"])
+                tasks_lost.add(1, {"reason": "worker_gone"})
         for wid, w in list(WORKERS.items()):
             if w["seen_at"] < now - WORKER_STALE:
                 WORKERS.pop(wid, None)
@@ -314,6 +391,7 @@ async def complete(
     if t["worker_id"] in WORKERS:
         WORKERS[t["worker_id"]]["task_id"] = None
     event_locks.pop(tid, None)
+    tasks_completed.add(1, {"status": status, "type": t["type"]})
     return {"ok": True, "status": status}
 
 
@@ -342,6 +420,7 @@ async def create_task(
     QUEUE.append(tid)
     DIRTY.add(tid)
     new_task.set()
+    tasks_created.add(1, {"type": ttype})
     return {"task_id": tid}
 
 
@@ -408,6 +487,7 @@ async def cancel(
             status="cancelled", finished_at=time.time(), error="cancelled before start"
         )
         DIRTY.add(tid)
+        tasks_completed.add(1, {"status": "cancelled", "type": t["type"]})
         return {"status": "cancelled"}
     if t["status"] == "running":
         t["cancel_requested"] = True
@@ -436,6 +516,7 @@ async def retry(
     QUEUE.append(nid)
     DIRTY.add(nid)
     new_task.set()
+    tasks_created.add(1, {"type": t["type"], "retry": True})
     return {"task_id": nid, "parent_id": tid}
 
 
@@ -550,16 +631,47 @@ async def healthz() -> dict[str, Any]:
     }
 
 
+def version() -> str:
+    try:
+        return metadata.version("pool")
+    except metadata.PackageNotFoundError:
+        return "0.0.0"
+
+
 def main() -> None:
     import uvicorn
-
-    uvicorn.run(
-        app,
-        host=os.getenv("HOST", "0.0.0.0"),  # noqa: S104
-        port=int(os.getenv("PORT", "8000")),
-        access_log=False,
-        timeout_graceful_shutdown=5,
+    from yaol import (
+        from_env,
+        instrument_asyncpg,
+        instrument_fastapi,
+        instrument_runtime,
+        instrument_sqlalchemy,
+        setup,
+        shutdown,
     )
+
+    setup(
+        from_env(
+            "pool-server",
+            service_version=version(),
+            environment=os.getenv("ENV", "prod"),
+        )
+    )
+    instrument_fastapi(app)
+    instrument_asyncpg()
+    instrument_sqlalchemy(db.engine)
+    instrument_runtime()
+    log.info("starting_pool_server", version=version())
+    try:
+        uvicorn.run(
+            app,
+            host=os.getenv("HOST", "0.0.0.0"),  # noqa: S104
+            port=int(os.getenv("PORT", "8000")),
+            access_log=False,
+            timeout_graceful_shutdown=5,
+        )
+    finally:
+        shutdown()
 
 
 if __name__ == "__main__":

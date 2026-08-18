@@ -81,6 +81,16 @@ in
         POOL_TASKS = "mypkg.tasks";
       };
     };
+    otlpEndpoint = mkOption {
+      type = types.str;
+      default = "http://127.0.0.1:4317";
+      description = "OTLP gRPC endpoint, куда уходят трейсы, метрики и логи.";
+    };
+    env = mkOption {
+      type = types.str;
+      default = "prod";
+      description = "Окружение в ресурсных атрибутах телеметрии.";
+    };
   };
 
   options.services.pool.keeper = {
@@ -99,6 +109,16 @@ in
       type = types.path;
       default = self + "/.github/workflows";
       description = "Каталог с воркфлоу, откуда build берёт файл по имени из конфига.";
+    };
+    otlpEndpoint = mkOption {
+      type = types.str;
+      default = "http://127.0.0.1:4317";
+      description = "OTLP gRPC endpoint, куда уходят трейсы, метрики и логи.";
+    };
+    env = mkOption {
+      type = types.str;
+      default = "prod";
+      description = "Окружение в ресурсных атрибутах телеметрии.";
     };
   };
 
@@ -119,6 +139,8 @@ in
           WORKER_ID = worker.id;
           SPOOL_DIR = "/tmp";
           POOL_DEPS = "/var/cache/pool-worker/deps";
+          OTEL_EXPORTER_OTLP_ENDPOINT = worker.otlpEndpoint;
+          ENV = worker.env;
         }
         // worker.settings;
 
@@ -142,6 +164,11 @@ in
         wantedBy = [ "multi-user.target" ];
         after = [ "network-online.target" ];
         wants = [ "network-online.target" ];
+
+        environment = {
+          OTEL_EXPORTER_OTLP_ENDPOINT = keeper.otlpEndpoint;
+          ENV = keeper.env;
+        };
 
         serviceConfig = {
           ExecStartPre = lib.optional keeper.build keeperBuild;

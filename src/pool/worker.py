@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import json
+import logging
 import os
 import random
 import signal
@@ -8,11 +9,25 @@ import sys
 import time
 import traceback
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from importlib import metadata
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, Final, NoReturn
 
 import httpx
+from opentelemetry.context import Context
+from opentelemetry.metrics import get_meter
+from yaol import (
+    SpanKind,
+    extract_context,
+    fail,
+    from_env,
+    instrument_httpx,
+    instrument_runtime,
+    setup,
+    shutdown,
+    span,
+)
 
 SERVER = os.getenv("POOL_SERVER", "http://localhost:8000").rstrip("/")
 TOKEN = os.getenv("POOL_TOKEN", "dev-worker")
@@ -28,6 +43,18 @@ CHUNK = 1 << 20
 MAX_AGE = float(os.getenv("WORKER_MAX_AGE", "0"))
 
 _current: "Spool | None" = None
+
+_meter: Final = get_meter("pool.worker")
+_executed: Final = _meter.create_counter(
+    "pool.worker.tasks.executed",
+    unit="1",
+    description="Tasks this worker ran to a terminal status",
+)
+_task_seconds: Final = _meter.create_histogram(
+    "pool.worker.task.duration",
+    unit="s",
+    description="Wall time of a task from lease to completion",
+)
 
 
 class Permanent(Exception):
@@ -183,7 +210,34 @@ async def pump(proc: asyncio.subprocess.Process, spool: Spool) -> None:
         spool.write(data)
 
 
+def task_context(lease: dict[str, Any]) -> Context:
+    payload = lease.get("payload")
+    carrier = payload.get("trace") if isinstance(payload, dict) else None
+    return extract_context(carrier if isinstance(carrier, Mapping) else {})
+
+
 async def execute(client: httpx.AsyncClient, lease: dict[str, Any]) -> None:
+    started = time.monotonic()
+    attributes = {
+        "pool.task.id": str(lease.get("task_id")),
+        "pool.task.type": str(lease.get("type")),
+        "pool.worker.id": WORKER_ID,
+    }
+    with span(
+        "pool.task",
+        attributes,
+        context=task_context(lease),
+        kind=SpanKind.CONSUMER,
+    ) as active:
+        status = await _run(client, lease)
+        active.set_attribute("pool.task.status", status)
+    _executed.add(
+        1, {"pool.task.status": status, "pool.task.type": attributes["pool.task.type"]}
+    )
+    _task_seconds.record(time.monotonic() - started, {"pool.task.status": status})
+
+
+async def _run(client: httpx.AsyncClient, lease: dict[str, Any]) -> str:
     global _current  # noqa: PLW0603
     tid = lease["task_id"]
     token = lease["lease_token"]
@@ -243,6 +297,7 @@ async def execute(client: httpx.AsyncClient, lease: dict[str, Any]) -> None:
 
     if stale.is_set():
         note("dropping the rest, nobody is waiting")
+        fail("stale lease")
         finished.set()
         spool.event.set()
         send_task.cancel()
@@ -250,7 +305,7 @@ async def execute(client: httpx.AsyncClient, lease: dict[str, Any]) -> None:
         spool.close()
         _cleanup(spool_path, payload_path)
         _current = None
-        return
+        return "lost"
 
     if killed and cancel.is_set():
         status, error = "cancelled", "cancelled by client"
@@ -258,6 +313,7 @@ async def execute(client: httpx.AsyncClient, lease: dict[str, Any]) -> None:
         status, error = "done", None
     else:
         status, error = "failed", f"exit code {rc}"
+        fail(f"exit code {rc}")
     note(f"finished: {status}")
 
     finished.set()
@@ -275,6 +331,7 @@ async def execute(client: httpx.AsyncClient, lease: dict[str, Any]) -> None:
     spool.close()
     _cleanup(spool_path, payload_path)
     _current = None
+    return status
 
 
 def _signal_group(proc: asyncio.subprocess.Process, sig: int) -> None:
@@ -350,12 +407,39 @@ def run_exec(ttype: str, payload_file: str) -> NoReturn:
     sys.exit(0)
 
 
+def version() -> str:
+    try:
+        return metadata.version("pool")
+    except metadata.PackageNotFoundError:
+        return "0.0.0"
+
+
+def logs_off_stdout() -> None:
+    for handler in logging.getLogger().handlers:
+        if isinstance(handler, logging.StreamHandler) and handler.stream is sys.stdout:
+            _ = handler.setStream(sys.stderr)
+
+
 def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "exec":
         run_exec(sys.argv[2], sys.argv[3])
         return
-    with contextlib.suppress(KeyboardInterrupt):
-        asyncio.run(loop())
+    with contextlib.redirect_stdout(sys.stderr):
+        setup(
+            from_env(
+                "pool-worker",
+                service_version=version(),
+                environment=os.getenv("ENV", "prod"),
+            )
+        )
+    logs_off_stdout()
+    instrument_httpx()
+    instrument_runtime()
+    try:
+        with contextlib.suppress(KeyboardInterrupt):
+            asyncio.run(loop())
+    finally:
+        shutdown()
 
 
 if __name__ == "__main__":

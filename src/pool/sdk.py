@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import IO, Any, Self
 
 import httpx
+from yaol import SpanKind, inject_headers, span
 
 from pool import rpc
 
@@ -145,9 +146,16 @@ class Remote:
             payload["deps"] = self.deps
         if self.timeout:
             payload["timeout"] = self.timeout
-        body = self.pool.call(
-            "POST", "/v1/tasks", json={"type": TYPE, "payload": payload}
-        ).json()
+        with span(
+            "pool.submit",
+            {"pool.task.type": TYPE, "pool.task.entry": self.entry or "code"},
+            kind=SpanKind.PRODUCER,
+        ) as active:
+            payload["trace"] = dict(inject_headers())
+            body = self.pool.call(
+                "POST", "/v1/tasks", json={"type": TYPE, "payload": payload}
+            ).json()
+            active.set_attribute("pool.task.id", str(body["task_id"]))
         return Task(self.pool, body["task_id"])
 
     def spawn(self, items: Iterable[Any]) -> list[Task]:

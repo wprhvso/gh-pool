@@ -1,12 +1,17 @@
 import argparse
+import contextlib
 import json
+import logging
 import os
 import sys
 import time
+from dataclasses import replace
+from importlib import metadata
 from pathlib import Path
 from typing import Any, NoReturn
 
 import httpx
+from yaol import SpanKind, from_env, inject_headers, setup, shutdown, span
 
 SERVER = os.getenv("POOL_SERVER", "http://localhost:8000").rstrip("/")
 TOKEN = os.getenv("POOL_CLIENT_TOKEN", "dev-client")
@@ -93,8 +98,14 @@ def finish(tid: str, status: str | None) -> NoReturn:
 
 
 def cmd_submit(args: argparse.Namespace) -> None:
-    body = {"type": args.type, "payload": parse_payload(args)}
-    tid = call("POST", "/v1/tasks", json=body).json()["task_id"]
+    payload = parse_payload(args)
+    with span(
+        "pool.submit", {"pool.task.type": args.type}, kind=SpanKind.PRODUCER
+    ) as active:
+        payload["trace"] = dict(inject_headers())
+        body = {"type": args.type, "payload": payload}
+        tid = call("POST", "/v1/tasks", json=body).json()["task_id"]
+        active.set_attribute("pool.task.id", str(tid))
     if not args.follow:
         print(tid)
         return
@@ -204,6 +215,28 @@ def cmd_health(args: argparse.Namespace) -> None:
     print(json.dumps(call("GET", "/healthz").json(), indent=2))
 
 
+def version() -> str:
+    try:
+        return metadata.version("pool")
+    except metadata.PackageNotFoundError:
+        return "0.0.0"
+
+
+def observe() -> None:
+    with contextlib.redirect_stdout(sys.stderr):
+        setup(
+            replace(
+                from_env("pool-cli", service_version=version()),
+                log_level="WARNING",
+                export_logs=False,
+                export_metrics=False,
+            )
+        )
+    for handler in logging.getLogger().handlers:
+        if isinstance(handler, logging.StreamHandler) and handler.stream is sys.stdout:
+            _ = handler.setStream(sys.stderr)
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="pool")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -264,10 +297,13 @@ def main() -> None:
     sub.add_parser("health").set_defaults(fn=cmd_health)
 
     args = p.parse_args()
+    observe()
     try:
         args.fn(args)
     except KeyboardInterrupt:
         sys.exit(130)
+    finally:
+        shutdown(timeout_millis=2000)
 
 
 if __name__ == "__main__":
