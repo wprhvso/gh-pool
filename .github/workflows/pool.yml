@@ -18,6 +18,8 @@ env:
   ANDROID_NDK_VERSION: "26.3.11579264"
   CARGO_AUDIT_VERSION: "0.22.2"
   TOOLS: /opt/pool-tools/bin
+  ATTIC_CACHE: https://cache.murasya.ru/main
+  ATTIC_PUBLIC_KEY: main:SVD81ZpWoLp4D1U6xdyfPEEcaez5fH6DdSlQUBikZZ4=
 
 jobs:
   worker:
@@ -54,14 +56,38 @@ jobs:
       # Инсталлятор nix не идемпотентен: на переиспользуемом воркере вторая
       # попытка падает на уже существующем /etc/bash.bashrc.backup-before-nix.
       # Поэтому ставим ровно один раз здесь, а qa-nix потом установку пропускает.
+      # nix.conf и netrc — файлы на машине, а не переменные окружения, поэтому
+      # их видят и вложенные джобы раннера. Настраиваем кеш один раз здесь, и
+      # тянуть из него будут все репозитории, которым он и не нужен явно.
       - name: nix
+        env:
+          ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
         run: |
           if ! command -v nix >/dev/null; then
             curl -fsSL --retry 3 https://nixos.org/nix/install | sh -s -- --daemon --yes --no-channel-add
           fi
           sudo mkdir -p /etc/nix
-          printf 'experimental-features = nix-command flakes\nmax-jobs = auto\n' \
-            | sudo tee /etc/nix/nix.conf >/dev/null
+          if [[ -n $ATTIC_TOKEN ]]; then
+            printf 'machine cache.murasya.ru password %s\n' "$ATTIC_TOKEN" \
+              | sudo tee /etc/nix/netrc >/dev/null
+            sudo chmod 600 /etc/nix/netrc
+            cache_conf=$(
+              printf 'extra-substituters = %s\n' "$ATTIC_CACHE"
+              printf 'extra-trusted-public-keys = %s\n' "$ATTIC_PUBLIC_KEY"
+              printf 'netrc-file = /etc/nix/netrc\n'
+            )
+          else
+            echo "::warning::ATTIC_TOKEN пуст — воркер идёт без приватного кеша"
+            cache_conf=""
+          fi
+          {
+            printf 'experimental-features = nix-command flakes\n'
+            printf 'max-jobs = auto\n'
+            # Кеш может лежать, а сборка от этого падать не должна.
+            printf 'fallback = true\n'
+            printf 'connect-timeout = 5\n'
+            printf '%s' "$cache_conf"
+          } | sudo tee /etc/nix/nix.conf >/dev/null
           sudo systemctl restart nix-daemon
           echo /nix/var/nix/profiles/default/bin >>"$GITHUB_PATH"
 
@@ -70,8 +96,21 @@ jobs:
           export PATH=/nix/var/nix/profiles/default/bin:$PATH
           nix profile install --accept-flake-config \
             nixpkgs#nixfmt-rfc-style nixpkgs#statix nixpkgs#deadnix \
-            nixpkgs#stylua nixpkgs#selene
+            nixpkgs#stylua nixpkgs#selene nixpkgs#attic-client
           echo "$HOME/.nix-profile/bin" >>"$GITHUB_PATH"
+
+      # Конфиг клиента ложится в $HOME, который у вложенных джоб тот же, так что
+      # логинимся один раз тут — дальше attic push работает без токена в репе.
+      - name: attic login
+        env:
+          ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
+        run: |
+          if [[ -z $ATTIC_TOKEN ]]; then
+            echo "ATTIC_TOKEN пуст — пропускаю"
+            exit 0
+          fi
+          export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
+          attic login murasya https://cache.murasya.ru "$ATTIC_TOKEN"
 
       - name: uv
         run: |
