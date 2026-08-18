@@ -19,8 +19,10 @@ from fastapi.security import (
     HTTPBasicCredentials,
     HTTPBearer,
 )
+from starlette.requests import HTTPConnection
 
 from gh_chrome_server.config import settings
+from gh_chrome_server.sessions import Sessions
 
 REALM = "gh-chrome"
 BASIC_USER = "admin"
@@ -85,7 +87,33 @@ async def require_socket_ticket(websocket: WebSocket, session_id: UUID) -> None:
         raise WebSocketException(status.WS_1008_POLICY_VIOLATION, "invalid ticket")
 
 
+async def _expected_runner_token(connection: HTTPConnection, session_id: UUID) -> str:
+    sessions: Sessions = connection.app.state.sessions
+    return await sessions.runner_token(session_id) or ""
+
+
+async def require_runner(
+    request: Request,
+    session_id: UUID,
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
+) -> None:
+    expected = await _expected_runner_token(request, session_id)
+    if not expected or not secrets.compare_digest(credentials.credentials, expected):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "invalid runner token")
+
+
+async def require_socket_runner(websocket: WebSocket, session_id: UUID) -> None:
+    scheme, _, value = websocket.headers.get("authorization", "").partition(" ")
+    expected = await _expected_runner_token(websocket, session_id)
+    if scheme.lower() != "bearer" or not expected:
+        raise WebSocketException(status.WS_1008_POLICY_VIOLATION, "invalid token")
+    if not secrets.compare_digest(value, expected):
+        raise WebSocketException(status.WS_1008_POLICY_VIOLATION, "invalid token")
+
+
 Token = Annotated[None, Depends(require_token)]
+Runner = Annotated[None, Depends(require_runner)]
 Basic = Annotated[None, Depends(require_basic)]
 SocketToken = Annotated[None, Depends(require_socket_token)]
+SocketRunner = Annotated[None, Depends(require_socket_runner)]
 SocketTicket = Annotated[None, Depends(require_socket_ticket)]

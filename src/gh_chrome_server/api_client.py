@@ -14,7 +14,7 @@ from gh_chrome_protocol import (
     SessionState,
 )
 from gh_chrome_protocol.trace import TraceContext
-from gh_chrome_server import github, storage
+from gh_chrome_server import pool, storage
 from gh_chrome_server.auth import Token
 from gh_chrome_server.config import settings
 from gh_chrome_server.deps import Db, Ev, Ss
@@ -33,9 +33,12 @@ async def create_session(
     request: SessionCreate, sessions: Ss, _: Token
 ) -> SessionState:
     state = await sessions.create(request)
+    token = await sessions.runner_token(state.id)
     try:
-        await github.dispatch(state.id)
-    except github.DispatchError:
+        if token is None:
+            raise pool.DispatchError("session vanished before dispatch")
+        await pool.dispatch(state.id, token)
+    except pool.DispatchError:
         await sessions.finish(state.id, CloseReason.DEAD)
         raise
     return state

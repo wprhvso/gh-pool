@@ -4,7 +4,7 @@ Chrome on a GitHub Actions runner, driven from your machine over HTTPS, with the
 session recorded and seekable in a browser.
 
 ```
-your code ──POST──▶ server (VPS) ──SSE──▶ runner (GitHub Actions)
+your code ──POST──▶ server (VPS) ──SSE──▶ runner (a pool worker)
      ▲                  │  postgres            │  Xvnc + openbox + Chrome
      └────── SSE ───────┘  segments            │  XTEST input
                            profiles            └──▶ ffmpeg ──POST──▶ server
@@ -13,8 +13,8 @@ your browser ──HTTPS──▶ server ◀─one websocket─ runner ──▶
 ```
 
 The control plane is server-sent events downstream and POST upstream. `new()`
-returns a session id at once; the server dispatches the workflow and the runner
-connects back with that id. Commands go into a strictly sequential queue and
+returns a session id at once; the server submits a task to the pool and the
+runner, started inside a worker that is already up, connects back with that id. Commands go into a strictly sequential queue and
 return a handle you await. Input goes through XTEST on a real cursor, not
 through CDP.
 
@@ -142,12 +142,13 @@ keeps whatever context it was created in.
 | `GH_CHROME_DATABASE_URL` | libpq connection string |
 | `GH_CHROME_STORAGE` | directory for recordings, profiles and uploads |
 | `GH_CHROME_PUBLIC_URL` | origin the runner connects back to |
-| `GH_CHROME_GITHUB_REPO` | repository the browser workflow lives in |
-| `GH_CHROME_GITHUB_PAT` | token with the `actions:write` scope |
+| `GH_CHROME_POOL_SERVER` | base URL of the [pool](https://github.com/wprhvso/pool) |
+| `GH_CHROME_POOL_TOKEN` | pool client token |
+| `GH_CHROME_RUNNER_SPEC` | what to install for the runner, defaults to the server's own version |
 
-Run `gh-chrome-server`. In the repository that hosts the workflow add
-`GH_CHROME_URL` and `GH_CHROME_TOKEN` as secrets; `GH_CHROME_PROXY` sends the
-runner's traffic through a proxy of your own.
+Run `gh-chrome-server`. The runner needs no secrets of its own: the server mints
+a token for each session and hands it to the pool task along with the session id.
+`GH_CHROME_PROXY` sends the runner's traffic through a proxy of your own.
 
 On NixOS the flake ships the server as a module:
 

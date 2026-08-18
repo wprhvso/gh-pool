@@ -16,7 +16,7 @@ from gh_chrome_protocol import (
     RunnerEvent,
 )
 from gh_chrome_server import storage
-from gh_chrome_server.auth import SocketToken, Token
+from gh_chrome_server.auth import Runner, SocketRunner
 from gh_chrome_server.config import settings
 from gh_chrome_server.deps import Db, Ss, Tn
 from gh_chrome_server.sessions import SessionUnavailable
@@ -36,7 +36,7 @@ class Close(BaseModel):
 
 
 @router.get("/{session_id}/config")
-async def get_config(session_id: UUID, sessions: Ss, _: Token) -> RunnerConfig:
+async def get_config(session_id: UUID, sessions: Ss, _: Runner) -> RunnerConfig:
     state = await sessions.get(session_id)
     return RunnerConfig(
         session_id=state.id,
@@ -51,7 +51,7 @@ async def get_config(session_id: UUID, sessions: Ss, _: Token) -> RunnerConfig:
 
 @router.get("/{session_id}/stream")
 async def stream_commands(
-    session_id: UUID, request: Request, sessions: Ss, _: Token
+    session_id: UUID, request: Request, sessions: Ss, _: Runner
 ) -> Response:
     await sessions.require_live(session_id)
     await sessions.mark_ready(session_id)
@@ -95,7 +95,7 @@ async def stream_commands(
 
 @router.websocket("/{session_id}/tunnel")
 async def serve_tunnel(
-    session_id: UUID, websocket: WebSocket, tunnels: Tn, _: SocketToken
+    session_id: UUID, websocket: WebSocket, tunnels: Tn, _: SocketRunner
 ) -> None:
     await websocket.accept()
     await tunnels.serve(session_id, websocket)
@@ -105,7 +105,7 @@ async def serve_tunnel(
     "/{session_id}/commands/{command_id}", status_code=status.HTTP_204_NO_CONTENT
 )
 async def complete_command(
-    session_id: UUID, command_id: UUID, result: CommandResult, sessions: Ss, _: Token
+    session_id: UUID, command_id: UUID, result: CommandResult, sessions: Ss, _: Runner
 ) -> None:
     error = (
         CommandError.model_validate(result.error) if result.error is not None else None
@@ -114,25 +114,25 @@ async def complete_command(
 
 
 @router.post("/{session_id}/heartbeat", status_code=status.HTTP_204_NO_CONTENT)
-async def heartbeat(session_id: UUID, sessions: Ss, _: Token) -> None:
+async def heartbeat(session_id: UUID, sessions: Ss, _: Runner) -> None:
     if not await sessions.heartbeat(session_id):
         raise SessionUnavailable("session is not live")
 
 
 @router.post("/{session_id}/events", status_code=status.HTTP_204_NO_CONTENT)
 async def publish_event(
-    session_id: UUID, event: RunnerEvent, sessions: Ss, _: Token
+    session_id: UUID, event: RunnerEvent, sessions: Ss, _: Runner
 ) -> None:
     await sessions.publish_runner_event(session_id, event.data)
 
 
 @router.post("/{session_id}/closed", status_code=status.HTTP_204_NO_CONTENT)
-async def confirm_close(session_id: UUID, sessions: Ss, _: Token) -> None:
+async def confirm_close(session_id: UUID, sessions: Ss, _: Runner) -> None:
     await sessions.finish(session_id, CloseReason.CLOSED)
 
 
 @router.put("/{session_id}/init", status_code=status.HTTP_204_NO_CONTENT)
-async def put_init_segment(session_id: UUID, request: Request, _: Token) -> None:
+async def put_init_segment(session_id: UUID, request: Request, _: Runner) -> None:
     await storage.write_atomic(
         storage.segments_dir(session_id) / "init.m4s",
         request.stream(),
@@ -142,7 +142,7 @@ async def put_init_segment(session_id: UUID, request: Request, _: Token) -> None
 
 @router.put("/{session_id}/segments/{number}", status_code=status.HTTP_204_NO_CONTENT)
 async def put_segment(
-    session_id: UUID, number: int, request: Request, _: Token
+    session_id: UUID, number: int, request: Request, _: Runner
 ) -> None:
     if number < 1:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "bad segment number")
@@ -154,7 +154,7 @@ async def put_segment(
 
 
 @router.get("/{session_id}/profile")
-async def get_profile(session_id: UUID, sessions: Ss, _: Token) -> FileResponse:
+async def get_profile(session_id: UUID, sessions: Ss, _: Runner) -> FileResponse:
     state = await sessions.get(session_id)
     if state.profile is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "session has no profile")
@@ -166,7 +166,7 @@ async def get_profile(session_id: UUID, sessions: Ss, _: Token) -> FileResponse:
 
 @router.put("/{session_id}/profile", status_code=status.HTTP_204_NO_CONTENT)
 async def put_profile(
-    session_id: UUID, request: Request, sessions: Ss, db: Db, _: Token
+    session_id: UUID, request: Request, sessions: Ss, db: Db, _: Runner
 ) -> None:
     state = await sessions.get(session_id)
     if state.profile is None or not state.persist:
@@ -182,7 +182,7 @@ async def put_profile(
 
 
 @router.get("/{session_id}/files/{file_id}")
-async def get_upload(session_id: UUID, file_id: UUID, db: Db, _: Token) -> FileResponse:
+async def get_upload(session_id: UUID, file_id: UUID, db: Db, _: Runner) -> FileResponse:
     row = await db.one(
         "select name from files where id = %s and session_id = %s",
         (file_id, session_id),
@@ -197,7 +197,7 @@ async def get_upload(session_id: UUID, file_id: UUID, db: Db, _: Token) -> FileR
 
 @router.put("/{session_id}/downloads/{name}", status_code=status.HTTP_204_NO_CONTENT)
 async def put_download(
-    session_id: UUID, name: str, request: Request, sessions: Ss, db: Db, _: Token
+    session_id: UUID, name: str, request: Request, sessions: Ss, db: Db, _: Runner
 ) -> None:
     safe = storage.safe_name(name)
     size = await storage.write_atomic(

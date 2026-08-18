@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime
 from uuid import UUID, uuid4
 
@@ -53,6 +54,14 @@ class Sessions:
             raise SessionNotFound(f"unknown session {session_id}")
         return _state(row)
 
+    async def runner_token(self, session_id: UUID) -> str | None:
+        row = await self._db.one(
+            "select runner_token from sessions "
+            "where id = %s and status in ('pending', 'active')",
+            (session_id,),
+        )
+        return None if row is None else row["runner_token"]
+
     async def live(self, session_id: UUID) -> bool:
         """Whether the session is still worth a runner's time.
 
@@ -97,14 +106,16 @@ class Sessions:
                     )
             stale = await self._claim_profile(tx, request.profile)
             row = await tx.one(
-                "insert into sessions (id, params, profile, persist, state_stale) "
-                "values (%s, %s, %s, %s, %s) returning *",
+                "insert into sessions "
+                "(id, params, profile, persist, state_stale, runner_token) "
+                "values (%s, %s, %s, %s, %s, %s) returning *",
                 (
                     session_id,
                     Jsonb(request.params.model_dump(mode="json")),
                     request.profile,
                     request.persist,
                     stale,
+                    secrets.token_urlsafe(32),
                 ),
             )
         if row is None:

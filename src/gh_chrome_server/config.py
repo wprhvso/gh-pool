@@ -12,10 +12,11 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
     public_url: str = "http://127.0.0.1:8000"
-    github_repo: str = ""
-    github_workflow: str = "chrome.yml"
-    github_ref: str = "main"
-    github_pat: str = ""
+    pool_server: str = ""
+    pool_token: str = ""
+    runner_spec: str = ""
+    runner_timeout: float = 21600.0
+    runner_workdir: Path = Path("/tmp/gh-chrome")  # noqa: S108
     heartbeat_timeout: float = 30.0
     ready_timeout: float = 600.0
     watchdog_interval: float = 5.0

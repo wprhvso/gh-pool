@@ -38,9 +38,8 @@ let
       GH_CHROME_PUBLIC_URL = cfg.publicUrl;
       GH_CHROME_STORAGE = cfg.storage;
       GH_CHROME_DATABASE_URL = databaseUrl;
-      GH_CHROME_GITHUB_REPO = cfg.github.repo;
-      GH_CHROME_GITHUB_WORKFLOW = cfg.github.workflow;
-      GH_CHROME_GITHUB_REF = cfg.github.ref;
+      GH_CHROME_POOL_SERVER = cfg.pool.server;
+      GH_CHROME_RUNNER_SPEC = cfg.pool.runnerSpec;
       GH_CHROME_HEARTBEAT_TIMEOUT = toString cfg.timeouts.heartbeat;
       GH_CHROME_READY_TIMEOUT = toString cfg.timeouts.ready;
       GH_CHROME_WATCHDOG_INTERVAL = toString cfg.watchdogInterval;
@@ -155,7 +154,7 @@ in
       default = [ ];
       example = [ "/var/lib/secrets/gh-chrome" ];
       description = ''
-        Files holding the secrets (GH_CHROME_TOKEN, GH_CHROME_GITHUB_PAT and,
+        Files holding the secrets (GH_CHROME_TOKEN, GH_CHROME_POOL_TOKEN and,
         unless `database.url` is set, GH_CHROME_DATABASE_URL). systemd applies
         EnvironmentFile after Environment, so values defined here override the
         generated environment.
@@ -196,27 +195,25 @@ in
       };
     };
 
-    github = {
-      repo = mkOption {
+    pool = {
+      server = mkOption {
         type = types.nullOr types.str;
         default = null;
-        example = "wprhvso/gh-chrome";
+        example = "http://127.0.0.1:8084";
         description = ''
-          Repository the browser workflow is dispatched in. Left null when it
-          travels with the PAT in an environment file.
+          Base URL of the pool a session's runner is started in. Left null when
+          it travels with the client token in an environment file.
         '';
       };
 
-      workflow = mkOption {
-        type = types.str;
-        default = "chrome.yml";
-        description = "Workflow that hosts a single browser session.";
-      };
-
-      ref = mkOption {
-        type = types.str;
-        default = "main";
-        description = "Ref the workflow is dispatched on.";
+      runnerSpec = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "gh-chrome[runner]==0.2.1";
+        description = ''
+          Requirement the pool task installs before it starts the runner.
+          Null follows the version of the server itself.
+        '';
       };
     };
 
@@ -253,7 +250,7 @@ in
         assertion = cfg.environmentFiles != [ ];
         message = ''
           services.gh-chrome.environmentFiles must provide GH_CHROME_TOKEN and
-          GH_CHROME_GITHUB_PAT; the server refuses to start without a token.
+          GH_CHROME_POOL_TOKEN; the server refuses to start without a token.
         '';
       }
       {

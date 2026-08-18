@@ -41,7 +41,7 @@ from gh_chrome_protocol import (
 from gh_chrome_protocol.sse import parse_sse
 from gh_chrome_runner.config import settings as runner_settings
 from gh_chrome_runner.http import ServerClient
-from gh_chrome_server import github
+from gh_chrome_server import pool
 from gh_chrome_server.app import create_app
 from gh_chrome_server.config import settings as server_settings
 
@@ -243,6 +243,7 @@ class Server:
 
     def __init__(self, database_url: str, storage: Path) -> None:
         self.dispatched: list[UUID] = []
+        self.runner_tokens: dict[UUID, str] = {}
         self.launcher: Callable[[UUID], None] | None = None
         self.dispatch_error: str | None = None
         self._database_url = database_url
@@ -269,7 +270,7 @@ class Server:
         # Read once, when the app is built: the limit is a middleware, so that
         # a body is turned away before the parser spools it anywhere.
         self._patch.setattr(server_settings, "max_upload", max_upload)
-        self._patch.setattr(github, "dispatch", self._dispatch)
+        self._patch.setattr(pool, "dispatch", self._dispatch)
         self._background = Background(create_app())
         self._background.start()
         self._patch.setattr(server_settings, "public_url", self.url)
@@ -303,10 +304,12 @@ class Server:
     def max_upload(self) -> int:
         return server_settings.max_upload
 
-    async def _dispatch(self, session_id: UUID) -> None:
+    async def _dispatch(self, session_id: UUID, runner_token: str) -> None:
         self.dispatched.append(session_id)
+        self.runner_tokens[session_id] = runner_token
+        runner_settings.token = runner_token
         if self.dispatch_error is not None:
-            raise github.DispatchError(self.dispatch_error)
+            raise pool.DispatchError(self.dispatch_error)
         if self.launcher is not None:
             await asyncio.to_thread(self.launcher, session_id)
 
