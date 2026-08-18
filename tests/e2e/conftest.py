@@ -92,11 +92,28 @@ def server(
 
 @pytest.fixture
 async def api(server: Server) -> AsyncIterator[httpx.AsyncClient]:
-    """The server's own API, for what the client library does not reach."""
+    """The server's own API, for what the client library does not reach.
+
+    A runner endpoint takes the token its session was given, not the shared one.
+    """
+
+    async def as_the_runner(request: httpx.Request) -> None:
+        parts = request.url.path.strip("/").split("/")
+        if len(parts) < 2 or parts[0] != "runner":
+            return
+        try:
+            session_id = uuid.UUID(parts[1])
+        except ValueError:
+            return
+        token = server.runner_tokens.get(session_id)
+        if token:
+            request.headers["Authorization"] = f"Bearer {token}"
+
     async with httpx.AsyncClient(
         base_url=server.url,
         headers={"Authorization": f"Bearer {TOKEN}"},
         timeout=30.0,
+        event_hooks={"request": [as_the_runner]},
     ) as client:
         yield client
 
