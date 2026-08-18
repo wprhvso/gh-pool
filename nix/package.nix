@@ -2,7 +2,7 @@
   lib,
   callPackage,
   callPackages,
-  python313,
+  python314,
   pyproject-nix,
   uv2nix,
   pyproject-build-systems,
@@ -27,7 +27,7 @@ let
     });
   };
 
-  pythonSet = (callPackage pyproject-nix.build.packages { python = python313; }).overrideScope (
+  pythonSet = (callPackage pyproject-nix.build.packages { python = python314; }).overrideScope (
     lib.composeManyExtensions [
       pyproject-build-systems.overlays.wheel
       (workspace.mkPyprojectOverlay { inherit sourcePreference; })

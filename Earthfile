@@ -3,7 +3,7 @@ VERSION 0.8
 PROJECT wprhvso/gh-browser
 
 ARG --global IMAGE=ghcr.io/wprhvso/gh-chrome
-ARG --global PYTHON=3.13
+ARG --global PYTHON=3.14
 
 deps:
     FROM ghcr.io/astral-sh/uv:python$PYTHON-bookworm-slim
