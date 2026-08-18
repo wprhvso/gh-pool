@@ -235,6 +235,47 @@ def test_the_archive_is_downloaded_once(
     )
 
 
+def test_the_tree_is_extracted_once_into_one_template(cache: Path) -> None:
+    version = _plant(cache, JOB)
+    agent_mod.agent(jit="x", version=version, name="pool-16", idle=5, lifetime=30)
+    agent_mod.agent(jit="x", version=version, name="pool-17", idle=5, lifetime=30)
+
+    assert len(list(cache.glob("tpl-*"))) == 1
+    assert not list(cache.glob("runner-*"))
+
+
+def test_the_template_survives_a_run_untouched(cache: Path) -> None:
+    version = _plant(cache, JOB)
+    agent_mod.agent(jit="x", version=version, name="pool-18", idle=5, lifetime=30)
+    tpl = next(iter(cache.glob("tpl-*")))
+    listener = tpl / agent_mod.LISTENER
+    before = listener.stat()
+
+    agent_mod.agent(jit="x", version=version, name="pool-19", idle=5, lifetime=30)
+    after = listener.stat()
+
+    assert (after.st_ino, after.st_mtime) == (before.st_ino, before.st_mtime)
+    assert not after.st_mode & 0o222
+
+
+def test_the_archive_is_unpacked_once(
+    cache: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    version = _plant(cache, JOB)
+    calls: list[Path] = []
+    real = agent_mod.unpack
+
+    def counted(archive: Path, root: Path) -> Path:
+        calls.append(archive)
+        return real(archive, root)
+
+    monkeypatch.setattr(agent_mod, "unpack", counted)
+    agent_mod.agent(jit="x", version=version, name="pool-20", idle=5, lifetime=30)
+    agent_mod.agent(jit="x", version=version, name="pool-21", idle=5, lifetime=30)
+
+    assert len(calls) == 1
+
+
 def test_a_wrong_checksum_throws_the_archive_away(cache: Path) -> None:
     version = _plant(cache, JOB)
     with pytest.raises(RuntimeError):

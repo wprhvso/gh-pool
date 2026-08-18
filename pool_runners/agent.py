@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import hashlib
 import json
 import os
@@ -27,6 +28,8 @@ STARTED = "Running job:"
 FINISHED = "completed with result:"
 LISTENER = "bin/Runner.Listener"
 AGENT = "pool-runners"
+LOCK = ".tpl.lock"
+WRITE = 0o222
 GRACE = 20.0
 BUSY_GRACE = 400.0
 STALE = 6 * 3600.0
@@ -83,12 +86,34 @@ def cache() -> Path:
 
 def sweep(path: Path) -> None:
     stale = time.time() - STALE
-    for leftover in path.glob("runner-*"):
+    for leftover in [*path.glob("runner-*"), *path.glob("tpl-*")]:
         try:
             if leftover.is_dir() and leftover.stat().st_mtime < stale:
+                thaw(leftover)
                 shutil.rmtree(leftover, ignore_errors=True)
         except OSError:
             continue
+
+
+def freeze(path: Path) -> None:
+    # шаблон общий: любая запись в него из задачи — порча для всех,
+    # без права записи это громкий EACCES вместо тихой беды
+    for here, folders, files in os.walk(path):
+        for name in (*files, *folders):
+            spot = Path(here, name)
+            with contextlib.suppress(OSError):
+                spot.chmod(spot.stat().st_mode & ~WRITE)
+    path.chmod(path.stat().st_mode & ~WRITE)
+
+
+def thaw(path: Path) -> None:
+    with contextlib.suppress(OSError):
+        path.chmod(path.stat().st_mode | 0o200)
+    for here, folders, _files in os.walk(path):
+        for name in folders:
+            spot = Path(here, name)
+            with contextlib.suppress(OSError):
+                spot.chmod(spot.stat().st_mode | 0o200)
 
 
 def digest(path: Path) -> str:
@@ -150,6 +175,55 @@ def unpack(archive: Path, root: Path) -> Path:
         archive.unlink(missing_ok=True)
         raise
     listener.chmod(0o755)
+    return listener
+
+
+def template(archive: Path, version: str) -> Path:
+    room = cache()
+    tpl = room / f"tpl-{arch()}-{version}"
+    if (tpl / LISTENER).exists():
+        os.utime(tpl)
+        return tpl
+    with (room / LOCK).open("a") as guard:
+        fcntl.flock(guard, fcntl.LOCK_EX)
+        if (tpl / LISTENER).exists():
+            os.utime(tpl)
+            return tpl
+        if tpl.exists():
+            thaw(tpl)
+            shutil.rmtree(tpl, ignore_errors=True)
+        staging = Path(tempfile.mkdtemp(prefix=f"{tpl.name}.", dir=room))
+        try:
+            unpack(archive, staging)
+            freeze(staging)
+            try:
+                os.replace(staging, tpl)
+            except OSError:
+                # гонку выиграл сосед — берём его шаблон
+                thaw(staging)
+                shutil.rmtree(staging, ignore_errors=True)
+        finally:
+            if staging.exists():
+                thaw(staging)
+                shutil.rmtree(staging, ignore_errors=True)
+    os.utime(tpl)
+    return tpl
+
+
+def populate(tpl: Path, root: Path) -> Path:
+    try:
+        shutil.copytree(tpl, root, copy_function=os.link, dirs_exist_ok=True)
+    except OSError:
+        thaw(root)
+        shutil.rmtree(root, ignore_errors=True)
+        shutil.copytree(tpl, root, copy_function=shutil.copy2, dirs_exist_ok=True)
+    # файлы — жёсткие ссылки на шаблон и остаются нетронутыми,
+    # а каталоги раннеру нужны для _work, _diag, .runner и прочего
+    thaw(root)
+    listener = root / LISTENER
+    mode = listener.stat().st_mode
+    if not mode & 0o111:
+        listener.chmod(mode | 0o111)
     return listener
 
 
@@ -325,6 +399,7 @@ def agent(
     label: str = "",
 ) -> dict[str, Any]:
     archive = tarball(version, sha256)
+    tpl = template(archive, version)
     root = Path(tempfile.mkdtemp(prefix="runner-", dir=cache()))
     state = State()
     done = threading.Event()
@@ -335,7 +410,7 @@ def agent(
         "runner", state="starting", name=name, version=version, repo=slug, label=label
     )
     try:
-        listener = unpack(archive, root)
+        listener = populate(tpl, root)
         proc = subprocess.Popen(
             [str(listener), "run"],
             cwd=root,
