@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     pool_server: str = ""
     pool_token: str = ""
     runner_spec: str = ""
+    runner_python: str = "3.14"
     runner_timeout: float = 21600.0
     runner_workdir: Path = Path("/tmp/gh-chrome")  # noqa: S108
     heartbeat_timeout: float = 30.0

@@ -7,25 +7,33 @@ from gh_chrome_server.config import settings
 
 CODE = """
 import os
-import sys
+import subprocess
 from pathlib import Path
 
 
-def run(session_id, url, token, workdir):
+def run(session_id, url, token, workdir, spec, python):
     root = Path(workdir) / session_id
     root.mkdir(parents=True, exist_ok=True)
-    os.environ["GH_CHROME_URL"] = url
-    os.environ["GH_CHROME_TOKEN"] = token
-    os.environ["GH_CHROME_WORKDIR"] = str(root)
-
-    from gh_chrome_runner.__main__ import main
-
-    sys.argv = ["gh-chrome-runner", "--session", session_id]
-    try:
-        main()
-    except SystemExit as exit_code:
-        if exit_code.code:
-            raise
+    env = dict(os.environ)
+    env["GH_CHROME_URL"] = url
+    env["GH_CHROME_TOKEN"] = token
+    env["GH_CHROME_WORKDIR"] = str(root)
+    subprocess.run(
+        [
+            "uv",
+            "run",
+            "--no-project",
+            "--python",
+            python,
+            "--with",
+            spec,
+            "gh-chrome-runner",
+            "--session",
+            session_id,
+        ],
+        env=env,
+        check=True,
+    )
     return session_id
 """
 
@@ -51,13 +59,14 @@ async def dispatch(session_id: UUID, runner_token: str) -> None:
         "payload": {
             "code": CODE,
             "entry": "run",
-            "deps": [runner_spec()],
             "timeout": settings.runner_timeout,
             "kwargs": {
                 "session_id": str(session_id),
                 "url": settings.public_url,
                 "token": runner_token,
                 "workdir": str(settings.runner_workdir),
+                "spec": runner_spec(),
+                "python": settings.runner_python,
             },
         },
     }
