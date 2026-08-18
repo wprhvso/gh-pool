@@ -29,6 +29,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Первая же джоба на свежем воркере иначе платит скачивание раннера (~200 МБ)
+      # из своего времени. Кладём архив туда, откуда его возьмёт pool-runners:
+      # agent.cache() — это $HOME/.cache/pool-runners, имя файла фиксировано.
+      # Версию резолвим так же, как gh.release_version(). Расхождение безопасно —
+      # промах кеша означает сегодняшнее поведение.
+      - name: preseed runner (background)
+        run: |
+          cache=$HOME/.cache/pool-runners
+          mkdir -p "$cache"
+          chmod 700 "$cache"
+          echo "RUNNER_CACHE=$cache" >>"$GITHUB_ENV"
+          # Кавычки одинарные намеренно: тело раскрывается в дочернем процессе.
+          # shellcheck disable=SC2016
+          nohup setsid bash -c '
+            set -uo pipefail
+            cache=$HOME/.cache/pool-runners
+            latest=https://github.com/actions/runner/releases/latest
+            url=$(curl -fsSLI -o /dev/null -w "%{url_effective}" --retry 3 "$latest") || exit 1
+            version=${url##*/tag/v}
+            case "$version" in "" | *[!0-9.]*) exit 1 ;; esac
+            case "$(uname -m)" in x86_64) cpu=x64 ;; aarch64) cpu=arm64 ;; *) exit 1 ;; esac
+            name=actions-runner-linux-$cpu-$version.tar.gz
+            if [ ! -s "$cache/$name" ]; then
+              curl -fsSL --retry 3 -o "$cache/$name.part" \
+                "https://github.com/actions/runner/releases/download/v$version/$name" || exit 1
+              mv "$cache/$name.part" "$cache/$name"
+            fi
+            printf "%s" "$version" >"$cache/.preseeded"
+          ' >"$RUNNER_TEMP/preseed.log" 2>&1 &
+          echo "предзагрузка раннера пошла фоном"
+
       # Образ ubuntu-latest занимает почти весь диск предустановленными SDK,
       # которыми пул не пользуется. Без этого не влезают nix, NDK и Rust nightly.
       - name: free disk
@@ -36,7 +67,6 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android/sdk/ndk/2[789]* \
             /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
             /usr/local/share/powershell /usr/share/swift
-          sudo docker image prune -af
           df -h /
 
       - name: system deps
@@ -241,6 +271,21 @@ jobs:
             printf '%-16s %s\n' "$t" "$(command -v "$t" || echo MISSING)"
           done
           df -h /
+
+      # Предзагрузка шла параллельно бутстрапу и к этому моменту почти наверняка
+      # закончилась. Не дождались — не беда, agent скачает архив сам.
+      - name: wait for preseed
+        run: |
+          for _ in $(seq 1 30); do
+            if [ -s "$RUNNER_CACHE/.preseeded" ]; then
+              echo "раннер $(cat "$RUNNER_CACHE/.preseeded") лежит в кеше"
+              ls -la "$RUNNER_CACHE"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::warning::предзагрузка раннера не успела"
+          tail -5 "$RUNNER_TEMP/preseed.log" 2>/dev/null || true
 
       - name: python deps
         run: uv sync --frozen --no-dev

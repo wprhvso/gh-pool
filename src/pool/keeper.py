@@ -16,6 +16,10 @@ UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 SECRETS = ("POOL_SERVER", "POOL_TOKEN")
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 GRACE = 120
+# Сколько прогонов keeper вправе погасить за один тик. Массовая отмена — это
+# массовая потеря задач: пул считает их lost только через LOST_AFTER и не
+# перезапускает, а CI-джобы уходят на второй круг.
+RETIRE_BUDGET = 1
 
 
 class ApiError(RuntimeError):
@@ -106,20 +110,33 @@ def reconcile(r):
     fresh, expired = [], []
     for run in runs:
         (fresh if age(run) <= r.ttl else expired).append(run)
-    for run in expired + fresh[r.jobs :]:
-        if run["id"] not in r.stopping:
-            r.stopping.add(run["id"])
-            r.api(f"/actions/runs/{run['id']}/cancel", "POST")
-            log(f"{r.slug} stopping run {run['id']}")
+
+    # runs идёт новыми вперёд. Лишние надо срезать с этого конца: свежий прогон
+    # ещё разворачивает тулчейн и никого не обслуживает, а старый почти наверняка
+    # держит CI-джобу. Срезав старые, мы роняем задачу в lost (терминально) и
+    # отправляем джобу на второй круг вместе с полным бутстрапом.
+    surplus = fresh[: max(0, len(fresh) - r.jobs)]
+    victims = [(run, "expired") for run in expired] + [(run, "surplus") for run in surplus]
+    stopped = 0
+    for run, why in victims:
+        if run["id"] in r.stopping:
+            continue
+        if stopped >= RETIRE_BUDGET:
+            log(f"{r.slug} {len(victims) - stopped} more to retire, next tick")
+            break
+        r.stopping.add(run["id"])
+        r.api(f"/actions/runs/{run['id']}/cancel", "POST")
+        stopped += 1
+        log(f"{r.slug} stopping run {run['id']} reason={why} age={age(run):.0f}s")
 
     now = time.time()
     r.recent = [t for t in r.recent if now - t < GRACE]
     live = min(len(fresh), r.jobs) + len(r.recent)
-    for _ in range(r.jobs - live):
+    launch = max(0, r.jobs - live)
+    for _ in range(launch):
         r.api(f"/actions/workflows/{r.workflow}/dispatches", "POST", {"ref": r.ref})
         r.recent.append(now)
-    if live < r.jobs:
-        log(f"{r.slug} {live}/{r.jobs} alive, launched {r.jobs - live}")
+    log(f"{r.slug} fresh={len(fresh)} recent={len(r.recent)} live={live}/{r.jobs} launch={launch} retire={stopped}")
 
 
 def secrets(r, values):
