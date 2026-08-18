@@ -1,48 +1,67 @@
 {
   description = "Self-hosted GitHub Actions runners on top of a pool";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+    pyproject-nix = {
+      url = "github:pyproject-nix/pyproject.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    uv2nix = {
+      url = "github:pyproject-nix/uv2nix";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    pyproject-build-systems = {
+      url = "github:pyproject-nix/build-system-pkgs";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.uv2nix.follows = "uv2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
 
   outputs =
-    { self, nixpkgs }:
+    {
+      self,
+      nixpkgs,
+      pyproject-nix,
+      uv2nix,
+      pyproject-build-systems,
+      ...
+    }:
     let
       inherit (nixpkgs) lib;
 
-      systems = [
+      forAllSystems = lib.genAttrs [
         "x86_64-linux"
         "aarch64-linux"
       ];
 
-      forAllSystems = lib.genAttrs systems;
+      workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
+      overlay = workspace.mkPyprojectOverlay { sourcePreference = "wheel"; };
+      deps = workspace.deps.default;
+
+      pythonSet =
+        pkgs:
+        (pkgs.callPackage pyproject-nix.build.packages { python = pkgs.python314; }).overrideScope (
+          lib.composeManyExtensions [
+            pyproject-build-systems.overlays.wheel
+            overlay
+          ]
+        );
 
       package =
         pkgs:
-        pkgs.python313Packages.buildPythonApplication {
-          pname = "pool-runners";
-          version = "0.1.0";
-          pyproject = true;
-          src = lib.fileset.toSource {
-            root = ./.;
-            fileset = lib.fileset.unions [
-              ./pyproject.toml
-              ./README.md
-              ./pool_runners
-              ./tests
-            ];
-          };
-          build-system = [ pkgs.python313Packages.hatchling ];
-          nativeCheckInputs = [ pkgs.python313Packages.pytest ];
-          checkPhase = ''
-            runHook preCheck
-            HOME=$TMPDIR PYTHONPATH=$PWD:$PYTHONPATH pytest -q
-            runHook postCheck
-          '';
-          meta = {
-            description = "Self-hosted GitHub Actions runners on top of a pool";
+        ((pythonSet pkgs).mkVirtualEnv "pool-runners-env" deps).overrideAttrs (old: {
+          meta = (old.meta or { }) // {
             mainProgram = "pool-runners";
+            description = "Self-hosted GitHub Actions runners on top of a pool";
             platforms = lib.platforms.linux;
           };
-        };
+        });
     in
     {
       overlays.default = final: _prev: { pool-runners = package final; };
@@ -66,8 +85,8 @@
         {
           default = pkgs.mkShell {
             packages = [
+              self.packages.${system}.pool-runners
               pkgs.just
-              pkgs.python313
               pkgs.ruff
               pkgs.uv
             ];
@@ -76,7 +95,9 @@
         }
       );
 
-      checks = forAllSystems (system: { inherit (self.packages.${system}) pool-runners; });
+      checks = forAllSystems (system: {
+        inherit (self.packages.${system}) pool-runners;
+      });
 
       formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.nixfmt);
 

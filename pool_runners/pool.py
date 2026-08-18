@@ -4,6 +4,8 @@ import logging
 import urllib.parse
 from typing import TYPE_CHECKING, Any
 
+from yaol import inject_headers
+
 from pool_runners.config import ADOPT_LIMIT, ALIVE, POOL_TIMEOUT
 from pool_runners.errors import RunnerError
 from pool_runners.http import Reply, fetch
@@ -65,6 +67,7 @@ class Pool:
         timeout: float | None = None,
     ) -> str:
         payload: dict[str, Any] = {"code": code, "entry": entry, "kwargs": kwargs}
+        payload["trace"] = dict(inject_headers())
         if timeout:
             payload["timeout"] = timeout
         answer = self.call("POST", "/v1/tasks", body={"type": TYPE, "payload": payload})

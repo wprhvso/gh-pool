@@ -12,6 +12,9 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from opentelemetry.metrics import get_meter
+from yaol import attached, capture, fail, record_exception, span
+
 from pool_runners.api import ScaleSet
 from pool_runners.budget import REST
 from pool_runners.config import (
@@ -52,6 +55,28 @@ _TIMEOUT_GRACE = 480.0
 
 CODE = (Path(__file__).resolve().parent / "agent.py").read_text(encoding="utf-8")
 FORCE = threading.Event()
+
+_meter = get_meter("pool_runners")
+JOBS_ACQUIRED = _meter.create_counter(
+    "pool_runners.jobs_acquired",
+    unit="{job}",
+    description="job'ы, забранные из очереди GitHub",
+)
+RUNNERS_LAUNCHED = _meter.create_counter(
+    "pool_runners.runners_launched",
+    unit="{runner}",
+    description="попытки отправить раннера в пул",
+)
+FLEET_SIZE = _meter.create_gauge(
+    "pool_runners.fleet_size",
+    unit="{runner}",
+    description="раннеры, которые контроллер считает своими",
+)
+LAUNCH_DURATION = _meter.create_histogram(
+    "pool_runners.launch_duration",
+    unit="s",
+    description="время раскидывания партии раннеров по пулу",
+)
 
 
 class Latest:
@@ -142,49 +167,59 @@ def _read_jobs(raw_body: str) -> tuple[list[int], list[str]]:
 
 
 def _launch(ctx: Ctx, version: str) -> bool:
-    try:
-        runner_id, name, jit = ctx.api.jit(ctx.scale_set_id)
-    except RunnerError as exc:
-        log.warning("%s: не выписал JIT: %s", ctx.slug, exc)
-        return False
+    with span("runner.launch", {"repo": ctx.slug, "runner.version": version}) as active:
+        try:
+            runner_id, name, jit = ctx.api.jit(ctx.scale_set_id)
+        except RunnerError as exc:
+            log.warning("%s: не выписал JIT: %s", ctx.slug, exc)
+            record_exception(exc)
+            RUNNERS_LAUNCHED.add(1, {"repo": ctx.slug, "outcome": "failure"})
+            return False
 
-    try:
-        task_id = ctx.pool.submit(
-            CODE,
-            "agent",
-            {
-                "jit": jit,
-                "version": version,
-                "name": name,
-                "work": ctx.target.work,
-                "idle": ctx.target.idle,
-                "lifetime": ctx.target.lifetime,
-                "sha256": ctx.target.sha256,
-                "slug": ctx.slug,
-                "label": ctx.target.label,
-            },
-            timeout=ctx.target.lifetime + _TIMEOUT_GRACE,
-        )
-    except RunnerError as exc:
-        log.warning("%s: пул не принял раннера: %s", ctx.slug, exc)
-        ctx.api.forget(runner_id)
-        return False
+        active.set_attribute("runner.name", name)
+        try:
+            task_id = ctx.pool.submit(
+                CODE,
+                "agent",
+                {
+                    "jit": jit,
+                    "version": version,
+                    "name": name,
+                    "work": ctx.target.work,
+                    "idle": ctx.target.idle,
+                    "lifetime": ctx.target.lifetime,
+                    "sha256": ctx.target.sha256,
+                    "slug": ctx.slug,
+                    "label": ctx.target.label,
+                },
+                timeout=ctx.target.lifetime + _TIMEOUT_GRACE,
+            )
+        except RunnerError as exc:
+            log.warning("%s: пул не принял раннера: %s", ctx.slug, exc)
+            record_exception(exc)
+            RUNNERS_LAUNCHED.add(1, {"repo": ctx.slug, "outcome": "failure"})
+            ctx.api.forget(runner_id)
+            return False
 
-    ctx.fleet.born(task_id, name, runner_id)
-    log.info("%s: раннер %s уехал в пул задачей %s", ctx.slug, name, task_id)
-    return True
+        active.set_attribute("pool.task_id", task_id)
+        ctx.fleet.born(task_id, name, runner_id)
+        RUNNERS_LAUNCHED.add(1, {"repo": ctx.slug, "outcome": "success"})
+        log.info("%s: раннер %s уехал в пул задачей %s", ctx.slug, name, task_id)
+        return True
 
 
 def _launch_many(ctx: Ctx, count: int, version: str) -> int:
     if count == 1:
         return int(_launch(ctx, version))
     stumbled = threading.Event()
+    parent = capture()
 
     def once() -> bool:
         if stumbled.is_set():
             return False
-        if _launch(ctx, version):
-            return True
+        with attached(parent):
+            if _launch(ctx, version):
+                return True
         stumbled.set()
         return False
 
@@ -223,36 +258,44 @@ def _scale(ctx: Ctx, stats: Stats, note: str, *, shrink: bool = False) -> None:
     # При промахе часового кеша это сетевой HEAD на github.com. Под ctx.scaling он
     # держал весь батч и обе ветки разом — сообщения и сверку, — поэтому резолвим
     # до блокировки. Попадание в кеш стоит чтения словаря.
-    try:
-        version = ctx.target.version or release_version()
-    except RunnerError as exc:
-        log.warning("%s: не выяснил версию раннера: %s", ctx.slug, exc)
-        version = ""
+    with span("runners.scale", {"repo": ctx.slug, "scale.note": note}) as active:
+        try:
+            version = ctx.target.version or release_version()
+        except RunnerError as exc:
+            log.warning("%s: не выяснил версию раннера: %s", ctx.slug, exc)
+            record_exception(exc)
+            version = ""
 
-    with ctx.scaling:
-        if ctx.closing.is_set():
-            return
-        want = min(ctx.target.jobs, stats.assigned)
-        have = ctx.fleet.size()
-        need = want - have
+        with ctx.scaling:
+            if ctx.closing.is_set():
+                return
+            want = min(ctx.target.jobs, stats.assigned)
+            have = ctx.fleet.size()
+            need = want - have
 
-        log.info("%s | %s: want=%s have=%s need=%s", stats, note, want, have, need)
-        if need < 0:
-            if shrink:
-                _shrink(ctx, -need)
-            return
-        if not need or not version:
-            return
+            active.set_attributes({"scale.want": want, "scale.have": have})
+            log.info("%s | %s: want=%s have=%s need=%s", stats, note, want, have, need)
+            if need < 0:
+                if shrink:
+                    _shrink(ctx, -need)
+                return
+            if not need or not version:
+                return
 
-        started = time.monotonic()
-        sent = _launch_many(ctx, need, version)
-        log.info(
-            "%s: раскидал раннеров %s/%s за %.1f с",
-            ctx.slug,
-            sent,
-            need,
-            time.monotonic() - started,
-        )
+            started = time.monotonic()
+            sent = _launch_many(ctx, need, version)
+            spent = time.monotonic() - started
+            LAUNCH_DURATION.record(spent, {"repo": ctx.slug})
+            active.set_attribute("scale.launched", sent)
+            if sent < need:
+                fail(f"раннеров уехало {sent} из {need}")
+            log.info(
+                "%s: раскидал раннеров %s/%s за %.1f с",
+                ctx.slug,
+                sent,
+                need,
+                spent,
+            )
 
 
 def _acquire(ctx: Ctx, session: Session, ids: list[int]) -> int:
@@ -264,7 +307,9 @@ def _acquire(ctx: Ctx, session: Session, ids: list[int]) -> int:
         if exc.status == _UNAUTHORIZED:
             raise
         log.warning("%s: не забрал job'ы %s: %s", ctx.slug, ids, exc)
+        record_exception(exc)
         return 0
+    JOBS_ACQUIRED.add(taken, {"repo": ctx.slug})
     log.info("%s: забрал job'ов: %s из %s", ctx.slug, taken, len(ids))
     return taken
 
@@ -274,16 +319,24 @@ def _handle(ctx: Ctx, session: Session, message: dict[str, Any]) -> None:
     if kind != QUEUE_MESSAGE_TYPE:
         log.debug("пропускаю сообщение типа %r", kind)
         return
-    raw = message.get("statistics")
-    stats = ctx.latest.get() if raw is None else ctx.latest.set(Stats.parse(raw))
-    offered, retired = _read_jobs(str(message.get("body") or ""))
-    for name in retired:
-        if ctx.fleet.spend(name):
-            log.info("%s: раннер %s своё отработал", ctx.slug, name)
-    taken = _acquire(ctx, session, offered)
-    if taken:
-        stats = ctx.latest.took(taken)
-    _scale(ctx, stats, "сообщение")
+    with span(
+        "queue.message",
+        {"repo": ctx.slug, "queue.message_id": int(message.get("messageId") or 0)},
+    ) as active:
+        raw = message.get("statistics")
+        stats = ctx.latest.get() if raw is None else ctx.latest.set(Stats.parse(raw))
+        offered, retired = _read_jobs(str(message.get("body") or ""))
+        active.set_attributes(
+            {"queue.offered": len(offered), "queue.retired": len(retired)}
+        )
+        for name in retired:
+            if ctx.fleet.spend(name):
+                log.info("%s: раннер %s своё отработал", ctx.slug, name)
+        taken = _acquire(ctx, session, offered)
+        if taken:
+            stats = ctx.latest.took(taken)
+        active.set_attribute("queue.acquired", taken)
+        _scale(ctx, stats, "сообщение")
 
 
 def _pick_up(ctx: Ctx, session: Session, stats: Stats, note: str) -> None:
@@ -403,6 +456,7 @@ def _reconcile_loop(ctx: Ctx, stop: threading.Event) -> None:
     while not stop.wait(FLEET_INTERVAL):
         try:
             _reconcile(ctx)
+            FLEET_SIZE.set(ctx.fleet.size(), {"repo": ctx.slug})
             if time.monotonic() - asked > STATS_INTERVAL:
                 ctx.latest.set(ctx.api.statistics(ctx.scale_set_id))
                 asked = time.monotonic()

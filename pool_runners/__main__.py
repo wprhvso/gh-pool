@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import logging
 import sys
 import threading
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from yaol import from_env, instrument_runtime, setup, shutdown
 
 from pool_runners.budget import REST
 from pool_runners.config import (
@@ -34,6 +38,21 @@ log = logging.getLogger("runners")
 
 _EXIT_USAGE = 2
 _EXIT_ERROR = 1
+
+
+def _version() -> str:
+    try:
+        return importlib.metadata.version("pool-runners")
+    except importlib.metadata.PackageNotFoundError:
+        return "0.0.0"
+
+
+def _observe() -> None:
+    config = from_env("pool-runners", service_version=_version())
+    if debug():
+        config = replace(config, log_level="DEBUG")
+    setup(config)
+    instrument_runtime()
 
 
 def _attempt(
@@ -136,20 +155,7 @@ def _targets(args: argparse.Namespace) -> tuple[list[Target], Server]:
     return [env_target(slug) for slug in args.repos], env_server()
 
 
-def main(argv: Sequence[str]) -> int:
-    parser = argparse.ArgumentParser(prog="pool-runners")
-    parser.add_argument("repos", nargs="*")
-    parser.add_argument("-c", "--config", type=Path)
-    parser.add_argument("--check", action="store_true")
-    args = parser.parse_args(argv)
-
-    logging.basicConfig(
-        level=logging.DEBUG if debug() else logging.INFO,
-        format="%(asctime)s %(levelname)-7s [%(threadName)s] %(message)s",
-        datefmt="%H:%M:%S",
-        stream=sys.stderr,
-    )
-
+def _serve(args: argparse.Namespace) -> int:
     try:
         targets, server = _targets(args)
     except RunnerError as exc:
@@ -178,6 +184,20 @@ def main(argv: Sequence[str]) -> int:
         thread.join()
 
     return _EXIT_ERROR if any(code != 0 for code in results.values()) else 0
+
+
+def main(argv: Sequence[str]) -> int:
+    parser = argparse.ArgumentParser(prog="pool-runners")
+    parser.add_argument("repos", nargs="*")
+    parser.add_argument("-c", "--config", type=Path)
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args(argv)
+
+    _observe()
+    try:
+        return _serve(args)
+    finally:
+        shutdown()
 
 
 def cli() -> int:
