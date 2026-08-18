@@ -18,6 +18,7 @@ env:
   ANDROID_NDK_VERSION: "26.3.11579264"
   CARGO_AUDIT_VERSION: "0.22.2"
   TOOLS: /opt/pool-tools/bin
+  GRADLE_CACHE_URL: https://gradle-cache.murasya.ru/cache/
   ATTIC_CACHE: https://cache.murasya.ru/main
   ATTIC_PUBLIC_KEY: main:SVD81ZpWoLp4D1U6xdyfPEEcaez5fH6DdSlQUBikZZ4=
 
@@ -153,6 +154,25 @@ jobs:
             "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
           sudo unzip -q -o /tmp/gradle.zip -d /opt
           echo "/opt/gradle-${GRADLE_VERSION}/bin" >>"$GITHUB_PATH"
+
+      # ~/.gradle тот же, что у вложенных джоб, поэтому учётные данные кеша
+      # кладём сюда, а не в каждый android-репозиторий.
+      - name: gradle remote cache
+        env:
+          GRADLE_CACHE_USER: ${{ secrets.GRADLE_CACHE_USER }}
+          GRADLE_CACHE_PASSWORD: ${{ secrets.GRADLE_CACHE_PASSWORD }}
+        run: |
+          if [[ -z $GRADLE_CACHE_USER || -z $GRADLE_CACHE_PASSWORD ]]; then
+            echo "::warning::учётных данных нет — gradle пойдёт без удалённого кеша"
+            exit 0
+          fi
+          mkdir -p "$HOME/.gradle"
+          {
+            printf 'gradleCacheUrl=%s\n' "$GRADLE_CACHE_URL"
+            printf 'gradleCacheUsername=%s\n' "$GRADLE_CACHE_USER"
+            printf 'gradleCachePassword=%s\n' "$GRADLE_CACHE_PASSWORD"
+          } >"$HOME/.gradle/gradle.properties"
+          chmod 600 "$HOME/.gradle/gradle.properties"
 
       - name: android sdk
         run: |
