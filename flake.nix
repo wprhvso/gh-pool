@@ -43,7 +43,7 @@
 
       pythonSet =
         pkgs:
-        (pkgs.callPackage pyproject-nix.build.packages { python = pkgs.python312; }).overrideScope (
+        (pkgs.callPackage pyproject-nix.build.packages { python = pkgs.python314; }).overrideScope (
           lib.composeManyExtensions [
             pyproject-build-systems.overlays.wheel
             overlay
