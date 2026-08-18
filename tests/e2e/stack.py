@@ -8,6 +8,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -213,8 +214,8 @@ def start_cluster(base: Path) -> Cluster | None:
     binaries = _postgres_bin()
     if binaries is None or os.geteuid() == 0:
         return None
-    data, sockets = base / "pgdata", base / "pgsock"
-    sockets.mkdir(parents=True, exist_ok=True)
+    data = base / "pgdata"
+    sockets = Path(tempfile.mkdtemp(prefix="pgs"))
     _run(
         str(binaries / "initdb"),
         "-D", str(data),
@@ -234,6 +235,7 @@ def start_cluster(base: Path) -> Cluster | None:
     def stop() -> None:
         with contextlib.suppress(RuntimeError):
             _run(str(binaries / "pg_ctl"), "-D", str(data), "-m", "immediate", "stop")
+        shutil.rmtree(sockets, ignore_errors=True)
 
     return Cluster(f"postgresql://postgres@/postgres?host={sockets}", stop)
 
