@@ -115,9 +115,6 @@ def _check(targets: list[Target], server: Server) -> int:
                 target.jobs,
                 version,
             )
-            if not info.get("private") and not target.public:
-                log.error("%s: публичная репа без public = true в конфиге", target.slug)
-                ok = False
         except RunnerError as exc:
             log.error("%s: %s", target.slug, exc)
             ok = False

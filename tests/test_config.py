@@ -17,7 +17,7 @@ token = "клиентский"
 
 [repos]
 "alice/app" = "ghp_alice"
-"bob/service" = { token = "ghp_bob", jobs = 40, lifetime = "2h", public = true }
+"bob/service" = { token = "ghp_bob", jobs = 40, lifetime = "2h" }
 """
 
 
@@ -47,12 +47,10 @@ def test_defaults_flow_down_to_every_repo(tmp_path: Path) -> None:
     assert alice.jobs == 8
     assert alice.idle == 120
     assert alice.label == "gpu"
-    assert alice.public is False
 
     assert bob.jobs == 40
     assert bob.lifetime == 7200
     assert bob.idle == 120
-    assert bob.public is True
 
 
 def test_repo_without_token_is_refused(tmp_path: Path) -> None:
@@ -82,7 +80,6 @@ def test_env_form(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUNNERS_LABEL", "своя")
     monkeypatch.setenv("RUNNERS_JOBS", "3")
     monkeypatch.setenv("RUNNERS_IDLE", "45s")
-    monkeypatch.setenv("RUNNERS_PUBLIC", "1")
 
     target = env_target("owner/name")
 
@@ -92,7 +89,6 @@ def test_env_form(monkeypatch: pytest.MonkeyPatch) -> None:
         3,
         45.0,
     )
-    assert target.public is True
 
 
 def test_env_form_needs_a_token(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -269,22 +269,13 @@ def test_cleanup_takes_everything_down() -> None:
     assert ctx.fleet.size() == 0
 
 
-def test_a_public_repo_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ctrl, "preflight", lambda _target: {"private": False})
-
-    with pytest.raises(RunnerError, match="публичная"):
-        ctrl._start(
-            Target(slug="owner/app", token="ghp"), Server(url="https://pool", token="t")
-        )
-
-
-def test_a_public_repo_can_be_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_public_repo_is_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ctrl, "preflight", lambda _target: {"private": False})
     monkeypatch.setattr(ctrl, "ScaleSet", FakeScaleSet)
     monkeypatch.setattr(ctrl, "Pool", FakePool)
 
     ctx = ctrl._start(
-        Target(slug="owner/app", token="ghp", public=True),
+        Target(slug="owner/app", token="ghp"),
         Server(url="https://pool", token="t"),
     )
     assert ctx.scale_set_id == 42

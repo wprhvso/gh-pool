@@ -59,7 +59,7 @@ REPO_PATTERN = re.compile(r"[^/\s]+/[^/\s]+")
 UNITS = {"s": 1.0, "m": 60.0, "h": 3600.0, "d": 86400.0}
 TEXT_KEYS = ("token", "label", "work", "version", "sha256")
 TIME_KEYS = ("idle", "lifetime", "drain")
-KEYS = (*TEXT_KEYS, *TIME_KEYS, "jobs", "public")
+KEYS = (*TEXT_KEYS, *TIME_KEYS, "jobs")
 
 
 def secs(value: object) -> float:
@@ -96,7 +96,6 @@ class Target:
     work: str = "_work"
     version: str = ""
     sha256: str = ""
-    public: bool = False
 
     def check(self) -> Target:
         if not REPO_PATTERN.fullmatch(self.slug):
@@ -126,8 +125,6 @@ def _target(slug: str, raw: dict[str, object]) -> Target:
         value = raw[key]
         if key == "jobs":
             fields[key] = count(value, f"{slug}.jobs")
-        elif key == "public":
-            fields[key] = bool(value)
         elif key in TIME_KEYS:
             fields[key] = secs(value)
         else:
@@ -182,8 +179,6 @@ def env_target(slug: str) -> Target:
     jobs = os.environ.get("RUNNERS_JOBS", "").strip()
     if jobs:
         target = replace(target, jobs=count(jobs, "RUNNERS_JOBS"))
-    if os.environ.get("RUNNERS_PUBLIC"):
-        target = replace(target, public=True)
     return target.check()
 
 

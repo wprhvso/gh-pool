@@ -11,4 +11,4 @@ token = "change-me-client"
 [repos]
 "alice/app" = "github_pat_alice"
 "alice/heavy" = { token = "github_pat_alice", jobs = 40, label = "pool-big", lifetime = "3h" }
-"bob/oss" = { token = "github_pat_bob", public = true, version = "2.330.0" }
+"bob/oss" = { token = "github_pat_bob", version = "2.330.0" }

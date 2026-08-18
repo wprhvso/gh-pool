@@ -550,12 +550,7 @@ def _cleanup(ctx: Ctx, session: Session | None) -> None:
 
 
 def _start(target: Target, server: Server) -> Ctx:
-    info = preflight(target)
-    if not info.get("private") and not target.public:
-        raise RunnerError(
-            f"{target.slug} — публичная репа: job'ы из форков попадут в твой пул. "
-            "Если это осознанно, поставь public = true"
-        )
+    preflight(target)
 
     api = ScaleSet(target)
     scale_set, _created = api.ensure(target.label)
