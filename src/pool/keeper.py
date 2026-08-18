@@ -6,9 +6,11 @@ import time
 import tomllib
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 API = "https://api.github.com"
 KEYS = ("token", "workflow", "jobs", "ttl", "ref")
@@ -33,13 +35,15 @@ POOL_WARMUP = 240
 
 
 class ApiError(RuntimeError):
-    def __init__(self, code, text):
+    def __init__(self, code: int, text: str) -> None:
         super().__init__(text)
         self.code = code
 
 
-def gh(token, path, method="GET", body=None):
-    req = urllib.request.Request(
+def gh(
+    token: str, path: str, method: str = "GET", body: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    req = urllib.request.Request(  # noqa: S310
         API + path,
         data=json.dumps(body).encode() if body else None,
         method=method,
@@ -51,7 +55,7 @@ def gh(token, path, method="GET", body=None):
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=30) as r:
+        with urllib.request.urlopen(req, timeout=30) as r:  # noqa: S310
             data = r.read()
     except urllib.error.HTTPError as e:
         raise ApiError(
@@ -60,15 +64,15 @@ def gh(token, path, method="GET", body=None):
     return json.loads(data) if data else {}
 
 
-def secs(v):
+def secs(v: str | float) -> float:
     return float(v) if isinstance(v, (int, float)) else float(v[:-1]) * UNITS[v[-1]]
 
 
-def log(msg):
-    print(f"{time.strftime('%H:%M:%S')} {msg}", flush=True)
+def log(msg: str) -> None:
+    print(f"{time.strftime('%H:%M:%S')} {msg}", flush=True)  # noqa: T201
 
 
-def age(run):
+def age(run: dict[str, Any]) -> float:
     return time.time() - datetime.fromisoformat(run["created_at"]).timestamp()
 
 
@@ -80,16 +84,18 @@ class Repo:
     jobs: int = 20
     ttl: str | float = "6h"
     ref: str = ""
-    recent: list = field(default_factory=list)
-    stopping: set = field(default_factory=set)
+    recent: list[float] = field(default_factory=list)
+    stopping: set[int] = field(default_factory=set)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.ttl = secs(self.ttl)
 
-    def api(self, path, method="GET", body=None):
+    def api(
+        self, path: str, method: str = "GET", body: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         return gh(self.token, f"/repos/{self.slug}{path}", method, body)
 
-    def get(self, path):
+    def get(self, path: str) -> dict[str, Any] | None:
         try:
             return self.api(path)
         except ApiError as e:
@@ -98,7 +104,7 @@ class Repo:
             raise
 
 
-def load(path):
+def load(path: Path) -> tuple[list[Repo], float, dict[str, str]]:
     raw = tomllib.loads(path.read_text())
     repos = raw.pop("repos", {})
     pool = {f"POOL_{k.upper()}": str(v) for k, v in raw.pop("pool", {}).items()}
@@ -113,13 +119,13 @@ def load(path):
     return out, secs(raw.get("poll", 60)), pool
 
 
-def pool_serving(pool):
+def pool_serving(pool: dict[str, str]) -> int | None:
     """Сколько воркеров реально лизят задачи. None — судить нельзя, считаем по прогонам."""
     base = (pool.get("POOL_SERVER") or "").rstrip("/")
     if not base:
         return None
     try:
-        with urllib.request.urlopen(f"{base}/healthz", timeout=10) as resp:
+        with urllib.request.urlopen(f"{base}/healthz", timeout=10) as resp:  # noqa: S310
             data = json.loads(resp.read())
     except (OSError, ValueError) as e:
         log(f"pool healthz недоступен: {e}")
@@ -131,7 +137,7 @@ def pool_serving(pool):
     return int(data.get("workers") or 0)
 
 
-def reconcile(r, serving=None):
+def reconcile(r: Repo, serving: int | None = None) -> None:
     r.ref = r.ref or r.api("")["default_branch"]
     runs = r.api(f"/actions/workflows/{r.workflow}/runs?per_page=100")["workflow_runs"]
     runs = sorted(
@@ -186,7 +192,7 @@ def reconcile(r, serving=None):
     )
 
 
-def secrets(r, values):
+def secrets(r: Repo, values: dict[str, str]) -> None:
     if not values:
         have = {s["name"] for s in r.api("/actions/secrets")["secrets"]}
         missing = [s for s in SECRETS if s not in have]
@@ -210,7 +216,7 @@ def secrets(r, values):
     log(f"{r.slug} secrets set: {', '.join(values)}")
 
 
-def build(r, source, pool):
+def build(r: Repo, source: Path, pool: dict[str, str]) -> None:
     repo = r.get("")
     if repo is None:
         owner, name = r.slug.split("/", 1)
@@ -238,7 +244,7 @@ def build(r, source, pool):
     secrets(r, pool)
 
 
-def each(repos, fn):
+def each(repos: list[Repo], fn: Callable[[Repo], None]) -> None:
     for r in repos:
         try:
             fn(r)
@@ -246,7 +252,7 @@ def each(repos, fn):
             log(f"{r.slug} {type(e).__name__}: {e}")
 
 
-def main():
+def main() -> None:
     p = argparse.ArgumentParser(prog="pool-keeper")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("-c", "--config", type=Path, required=True)

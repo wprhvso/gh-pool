@@ -4,8 +4,11 @@ import os
 import time
 import uuid
 from collections import deque
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from io import BufferedWriter
 from pathlib import Path
+from typing import Annotated, Any
 
 import anyio
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
@@ -46,63 +49,63 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 BLOB_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def task_dir(tid):
+def task_dir(tid: str) -> Path:
     d = DATA_DIR / tid
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
-def events_path(tid):
+def events_path(tid: str) -> Path:
     return task_dir(tid) / "events.txt"
 
 
-def events_size(tid):
+def events_size(tid: str) -> int:
     p = events_path(tid)
     return p.stat().st_size if p.exists() else 0
 
 
-def blob_path(key):
+def blob_path(key: str) -> Path:
     h = hashlib.sha256(key.encode()).hexdigest()
     return BLOB_DIR / h[:2] / h
 
 
-def auth_worker(h):
+def auth_worker(h: str | None) -> None:
     if h != f"Bearer {WORKER_TOKEN}":
         raise HTTPException(401, "bad worker token")
 
 
-def auth_client(h):
+def auth_client(h: str | None) -> None:
     if h != f"Bearer {CLIENT_TOKEN}":
         raise HTTPException(401, "bad client token")
 
 
-def auth_any(h):
+def auth_any(h: str | None) -> None:
     if h not in (f"Bearer {WORKER_TOKEN}", f"Bearer {CLIENT_TOKEN}"):
         raise HTTPException(401, "bad token")
 
 
-def public(t):
+def public(t: dict[str, Any]) -> dict[str, Any]:
     d = {c: t.get(c) for c in db.TASK_COLUMNS}
     d["cancel_requested"] = bool(t.get("cancel_requested"))
     d["event_size"] = events_size(d["id"])
     return d
 
 
-async def find(tid):
+async def find(tid: str) -> dict[str, Any]:
     t = TASKS.get(tid) or await db.fetch(db.Task, tid)
     if t is None:
         raise HTTPException(404, "no such task")
     return t
 
 
-def owned(tid, lease_token):
+def owned(tid: str, lease_token: str | None) -> dict[str, Any]:
     t = TASKS.get(tid)
     if t is None or not lease_token or t.get("lease_token") != lease_token:
         raise HTTPException(409, "stale lease")
     return t
 
 
-def grab(worker_id):
+def grab(worker_id: str) -> dict[str, Any] | None:
     now = time.time()
     while QUEUE:
         t = TASKS.get(QUEUE.popleft())
@@ -128,7 +131,7 @@ def grab(worker_id):
     return None
 
 
-async def flush():
+async def flush() -> None:
     async with flush_lock:
         ids, keys = list(DIRTY), list(DIRTY_BLOBS)
         if not ids and not keys:
@@ -149,7 +152,7 @@ async def flush():
             DIRTY.update(ids)
             DIRTY_BLOBS.update(keys)
             state["db"] = False
-            print("flush:", type(e).__name__, e)
+            print("flush:", type(e).__name__, e)  # noqa: T201
             return
         state["db"] = True
         for i in ids:
@@ -160,7 +163,7 @@ async def flush():
                 BLOBS.pop(k, None)
 
 
-async def recover():
+async def recover() -> None:
     for t in await db.unfinished():
         if t["id"] in TASKS:
             continue
@@ -172,10 +175,10 @@ async def recover():
             QUEUE.append(t["id"])
     if QUEUE:
         new_task.set()
-    print(f"recovered: {len(QUEUE)} pending")
+    print(f"recovered: {len(QUEUE)} pending")  # noqa: T201
 
 
-async def keeper():
+async def keeper() -> None:
     started = False
     while True:
         if not started:
@@ -184,7 +187,7 @@ async def keeper():
                 await recover()
                 started = state["db"] = True
             except Exception as e:
-                print("db:", type(e).__name__, e)
+                print("db:", type(e).__name__, e)  # noqa: T201
         now = time.time()
         for t in list(TASKS.values()):
             if (
@@ -206,7 +209,7 @@ async def keeper():
 
 
 @asynccontextmanager
-async def lifespan(app):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     t = asyncio.create_task(keeper())
     yield
     t.cancel()
@@ -217,7 +220,9 @@ app = FastAPI(lifespan=lifespan)
 
 
 @app.post("/v1/lease")
-async def lease(request: Request, authorization: str = Header(None)):
+async def lease(
+    request: Request, authorization: Annotated[str | None, Header()] = None
+) -> Any:
     auth_worker(authorization)
     body = await request.json()
     worker_id = body.get("worker_id")
@@ -241,8 +246,10 @@ async def lease(request: Request, authorization: str = Header(None)):
 
 @app.post("/v1/tasks/{tid}/heartbeat")
 async def heartbeat(
-    tid: str, x_lease_token: str = Header(None), authorization: str = Header(None)
-):
+    tid: str,
+    x_lease_token: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, bool]:
     auth_worker(authorization)
     t = owned(tid, x_lease_token)
     now = time.time()
@@ -256,10 +263,10 @@ async def heartbeat(
 async def append_events(
     tid: str,
     request: Request,
-    offset: int = Query(...),
-    x_lease_token: str = Header(None),
-    authorization: str = Header(None),
-):
+    offset: Annotated[int, Query()],
+    x_lease_token: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Header()] = None,
+) -> Any:
     auth_worker(authorization)
     owned(tid, x_lease_token)
     lock = event_locks.setdefault(tid, asyncio.Lock())
@@ -273,8 +280,8 @@ async def append_events(
         if data:
             p = events_path(tid)
 
-            def w():
-                with open(p, "ab") as f:
+            def w() -> int:
+                with p.open("ab") as f:
                     f.write(data)
                     return f.tell()
 
@@ -286,9 +293,9 @@ async def append_events(
 async def complete(
     tid: str,
     request: Request,
-    x_lease_token: str = Header(None),
-    authorization: str = Header(None),
-):
+    x_lease_token: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
     auth_worker(authorization)
     t = owned(tid, x_lease_token)
     body = await request.json()
@@ -311,7 +318,9 @@ async def complete(
 
 
 @app.post("/v1/tasks")
-async def create_task(request: Request, authorization: str = Header(None)):
+async def create_task(
+    request: Request, authorization: Annotated[str | None, Header()] = None
+) -> dict[str, str]:
     auth_client(authorization)
     body = await request.json()
     ttype = body.get("type")
@@ -338,10 +347,10 @@ async def create_task(request: Request, authorization: str = Header(None)):
 
 @app.get("/v1/tasks")
 async def list_tasks(
-    status: str = Query(None),
-    limit: int = Query(100),
-    authorization: str = Header(None),
-):
+    status: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query()] = 100,
+    authorization: Annotated[str | None, Header()] = None,
+) -> list[dict[str, Any]]:
     auth_client(authorization)
     live = [t for t in TASKS.values() if not status or t["status"] == status]
     seen = {t["id"] for t in live}
@@ -351,15 +360,19 @@ async def list_tasks(
 
 
 @app.get("/v1/tasks/{tid}")
-async def task_status(tid: str, authorization: str = Header(None)):
+async def task_status(
+    tid: str, authorization: Annotated[str | None, Header()] = None
+) -> dict[str, Any]:
     auth_client(authorization)
     return public(await find(tid))
 
 
 @app.get("/v1/tasks/{tid}/events")
 async def read_events(
-    tid: str, offset: int = Query(0), authorization: str = Header(None)
-):
+    tid: str,
+    offset: Annotated[int, Query()] = 0,
+    authorization: Annotated[str | None, Header()] = None,
+) -> Response:
     auth_client(authorization)
     t = await find(tid)
     p = events_path(tid)
@@ -367,8 +380,8 @@ async def read_events(
     data = b""
     if offset < size:
 
-        def r():
-            with open(p, "rb") as f:
+        def r() -> bytes:
+            with p.open("rb") as f:
                 f.seek(offset)
                 return f.read()
 
@@ -385,7 +398,9 @@ async def read_events(
 
 
 @app.post("/v1/tasks/{tid}/cancel")
-async def cancel(tid: str, authorization: str = Header(None)):
+async def cancel(
+    tid: str, authorization: Annotated[str | None, Header()] = None
+) -> dict[str, Any]:
     auth_client(authorization)
     t = await find(tid)
     if t["status"] == "pending":
@@ -401,7 +416,9 @@ async def cancel(tid: str, authorization: str = Header(None)):
 
 
 @app.post("/v1/tasks/{tid}/retry")
-async def retry(tid: str, authorization: str = Header(None)):
+async def retry(
+    tid: str, authorization: Annotated[str | None, Header()] = None
+) -> dict[str, str]:
     auth_client(authorization)
     t = await find(tid)
     nid = uuid.uuid4().hex
@@ -422,7 +439,7 @@ async def retry(tid: str, authorization: str = Header(None)):
     return {"task_id": nid, "parent_id": tid}
 
 
-def _write(f, digest, chunk):
+def _write(f: BufferedWriter, digest: "hashlib._Hash", chunk: bytes) -> None:
     digest.update(chunk)
     f.write(chunk)
 
@@ -431,18 +448,18 @@ def _write(f, digest, chunk):
 async def put_artifact(
     key: str,
     request: Request,
-    task_id: str = Query(None),
-    authorization: str = Header(None),
-):
+    task_id: Annotated[str | None, Query()] = None,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
     auth_any(authorization)
     final = blob_path(key)
     part = final.with_suffix(".part")
     digest = hashlib.sha256()
     size = 0
 
-    def start():
+    def start() -> BufferedWriter:
         final.parent.mkdir(parents=True, exist_ok=True)
-        return open(part, "wb")
+        return part.open("wb")
 
     f = await anyio.to_thread.run_sync(start)
     try:
@@ -469,8 +486,10 @@ async def put_artifact(
 
 @app.get("/v1/artifacts")
 async def list_artifacts(
-    prefix: str = Query(""), limit: int = Query(100), authorization: str = Header(None)
-):
+    prefix: Annotated[str, Query()] = "",
+    limit: Annotated[int, Query()] = 100,
+    authorization: Annotated[str | None, Header()] = None,
+) -> list[dict[str, Any]]:
     auth_any(authorization)
     live = [b for b in BLOBS.values() if b["key"].startswith(prefix)]
     seen = {b["key"] for b in live}
@@ -479,16 +498,20 @@ async def list_artifacts(
 
 
 @app.get("/v1/artifacts/{key:path}")
-async def get_artifact(key: str, authorization: str = Header(None)):
+async def get_artifact(
+    key: str, authorization: Annotated[str | None, Header()] = None
+) -> FileResponse:
     auth_any(authorization)
     p = blob_path(key)
     if not await anyio.to_thread.run_sync(p.exists):
         raise HTTPException(404, "no such key")
-    return FileResponse(p, filename=os.path.basename(key) or "artifact")
+    return FileResponse(p, filename=Path(key).name or "artifact")
 
 
 @app.delete("/v1/artifacts/{key:path}")
-async def del_artifact(key: str, authorization: str = Header(None)):
+async def del_artifact(
+    key: str, authorization: Annotated[str | None, Header()] = None
+) -> dict[str, bool]:
     auth_any(authorization)
     async with flush_lock:
         DIRTY_BLOBS.discard(key)
@@ -499,7 +522,9 @@ async def del_artifact(key: str, authorization: str = Header(None)):
 
 
 @app.get("/v1/workers")
-async def workers(authorization: str = Header(None)):
+async def workers(
+    authorization: Annotated[str | None, Header()] = None,
+) -> list[dict[str, Any]]:
     auth_client(authorization)
     now = time.time()
     return [
@@ -509,7 +534,7 @@ async def workers(authorization: str = Header(None)):
 
 
 @app.get("/healthz")
-async def healthz():
+async def healthz() -> dict[str, Any]:
     counts = {}
     for t in TASKS.values():
         counts[t["status"]] = counts.get(t["status"], 0) + 1
@@ -525,12 +550,12 @@ async def healthz():
     }
 
 
-def main():
+def main() -> None:
     import uvicorn
 
     uvicorn.run(
         app,
-        host=os.getenv("HOST", "0.0.0.0"),
+        host=os.getenv("HOST", "0.0.0.0"),  # noqa: S104
         port=int(os.getenv("PORT", "8000")),
         access_log=False,
         timeout_graceful_shutdown=5,

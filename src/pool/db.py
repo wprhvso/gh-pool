@@ -1,6 +1,7 @@
 import os
+from typing import Any
 
-from sqlalchemy import BigInteger, Float, String, Text, delete, select
+from sqlalchemy import BigInteger, Float, Select, String, Text, delete, select
 from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -45,20 +46,20 @@ TASK_COLUMNS = tuple(Task.__table__.columns.keys())
 ARTIFACT_COLUMNS = tuple(Artifact.__table__.columns.keys())
 
 
-def key_of(model):
+def key_of(model: type[Base]) -> str:
     return next(iter(model.__table__.primary_key.columns)).name
 
 
-def as_dict(row, model):
-    return {c: getattr(row, c) for c in model.__table__.columns.keys()}
+def as_dict(row: Base, model: type[Base]) -> dict[str, Any]:
+    return {c: getattr(row, c) for c in model.__table__.columns.keys()}  # noqa: SIM118
 
 
-async def setup():
+async def setup() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
 
-async def save(model, rows):
+async def save(model: type[Base], rows: list[dict[str, Any]]) -> None:
     if not rows:
         return
     key = key_of(model)
@@ -70,35 +71,35 @@ async def save(model, rows):
         await session.execute(stmt)
 
 
-async def fetch(model, value):
+async def fetch(model: type[Base], value: Any) -> dict[str, Any] | None:
     async with Session() as session:
         row = await session.get(model, value)
         return None if row is None else as_dict(row, model)
 
 
-async def drop(model, value):
+async def drop(model: type[Base], value: Any) -> None:
     async with Session.begin() as session:
         await session.execute(
             delete(model).where(getattr(model, key_of(model)) == value)
         )
 
 
-async def rows(model, query):
+async def rows(model: type[Base], query: Select[Any]) -> list[dict[str, Any]]:
     async with Session() as session:
         return [as_dict(r, model) for r in await session.scalars(query)]
 
 
-async def tasks(status=None, limit=100):
+async def tasks(status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
     q = select(Task).order_by(Task.created_at.desc()).limit(limit)
     return await rows(Task, q.where(Task.status == status) if status else q)
 
 
-async def artifacts(prefix="", limit=100):
+async def artifacts(prefix: str = "", limit: int = 100) -> list[dict[str, Any]]:
     q = select(Artifact).order_by(Artifact.created_at.desc()).limit(limit)
     return await rows(
         Artifact, q.where(Artifact.key.startswith(prefix)) if prefix else q
     )
 
 
-async def unfinished():
+async def unfinished() -> list[dict[str, Any]]:
     return await rows(Task, select(Task).where(Task.status.in_(("pending", "running"))))

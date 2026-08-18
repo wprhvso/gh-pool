@@ -6,7 +6,13 @@ self:
   ...
 }:
 let
-  inherit (lib) mkEnableOption mkIf mkMerge mkOption types;
+  inherit (lib)
+    mkEnableOption
+    mkIf
+    mkMerge
+    mkOption
+    types
+    ;
   cli = config.programs.pool;
   worker = config.services.pool.worker;
   keeper = config.services.pool.keeper;

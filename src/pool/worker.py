@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import os
 import random
@@ -7,7 +8,9 @@ import sys
 import time
 import traceback
 import uuid
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, NoReturn
 
 import httpx
 
@@ -35,7 +38,7 @@ class Cancelled(Exception):
     pass
 
 
-def note(msg):
+def note(msg: str) -> None:
     line = f"[worker] {msg}\n".encode()
     sys.stderr.write(line.decode())
     sys.stderr.flush()
@@ -44,16 +47,16 @@ def note(msg):
 
 
 class Spool:
-    def __init__(self, path):
+    def __init__(self, path: Path) -> None:
         self.path = path
-        self.fh = open(path, "wb")
+        self.fh = path.open("wb")
         self.size = 0
         self.sent = 0
         self.dropped = 0
         self.stopped = False
         self.event = asyncio.Event()
 
-    def write(self, data):
+    def write(self, data: bytes) -> None:
         if self.stopped:
             return
         if self.size - self.sent > SPOOL_CAP:
@@ -69,19 +72,23 @@ class Spool:
         self.size += len(data)
         self.event.set()
 
-    def read_at(self, offset, n):
-        with open(self.path, "rb") as f:
+    def read_at(self, offset: int, n: int) -> bytes:
+        with self.path.open("rb") as f:
             f.seek(offset)
             return f.read(n)
 
-    def close(self):
-        try:
+    def close(self) -> None:
+        with contextlib.suppress(Exception):
             self.fh.close()
-        except Exception:
-            pass
 
 
-async def req(client, method, path, content_factory=None, **kw):
+async def req(
+    client: httpx.AsyncClient,
+    method: str,
+    path: str,
+    content_factory: Callable[[], Any] | None = None,
+    **kw: Any,
+) -> httpx.Response:
     delay = 0.5
     while True:
         if content_factory is not None:
@@ -102,19 +109,23 @@ async def req(client, method, path, content_factory=None, **kw):
         delay = min(delay * 2, 30)
 
 
-def hdr(token):
+def hdr(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {TOKEN}", "X-Lease-Token": token}
 
 
-async def sender(client, spool, tid, token, finished):
+async def sender(
+    client: httpx.AsyncClient,
+    spool: Spool,
+    tid: str,
+    token: str,
+    finished: asyncio.Event,
+) -> None:
     while True:
         if spool.stopped or spool.sent >= spool.size:
             if finished.is_set() and spool.sent >= spool.size:
                 return
-            try:
+            with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(spool.event.wait(), timeout=1.0)
-            except TimeoutError:
-                pass
             spool.event.clear()
             continue
         data = spool.read_at(spool.sent, CHUNK)
@@ -135,7 +146,13 @@ async def sender(client, spool, tid, token, finished):
             return
 
 
-async def heartbeat(client, tid, token, cancel, stale):
+async def heartbeat(
+    client: httpx.AsyncClient,
+    tid: str,
+    token: str,
+    cancel: asyncio.Event,
+    stale: asyncio.Event,
+) -> None:
     while True:
         try:
             r = await req(
@@ -155,7 +172,7 @@ async def heartbeat(client, tid, token, cancel, stale):
         await asyncio.sleep(HEARTBEAT)
 
 
-async def pump(proc, spool):
+async def pump(proc: asyncio.subprocess.Process, spool: Spool) -> None:
     while True:
         data = await proc.stdout.read(1 << 16)
         if not data:
@@ -163,8 +180,8 @@ async def pump(proc, spool):
         spool.write(data)
 
 
-async def execute(client, lease):
-    global CURRENT
+async def execute(client: httpx.AsyncClient, lease: dict[str, Any]) -> None:
+    global CURRENT  # noqa: PLW0603
     tid = lease["task_id"]
     token = lease["lease_token"]
     ttype = lease["type"]
@@ -257,32 +274,28 @@ async def execute(client, lease):
     CURRENT = None
 
 
-def _signal_group(proc, sig):
+def _signal_group(proc: asyncio.subprocess.Process, sig: int) -> None:
     try:
         os.killpg(os.getpgid(proc.pid), sig)
     except (ProcessLookupError, PermissionError):
-        try:
+        with contextlib.suppress(ProcessLookupError):
             proc.send_signal(sig)
-        except ProcessLookupError:
-            pass
 
 
-async def _first(*events):
+async def _first(*events: asyncio.Event) -> None:
     await asyncio.wait(
         [asyncio.create_task(e.wait()) for e in events],
         return_when=asyncio.FIRST_COMPLETED,
     )
 
 
-def _cleanup(*paths):
+def _cleanup(*paths: Path) -> None:
     for p in paths:
-        try:
+        with contextlib.suppress(FileNotFoundError):
             p.unlink()
-        except FileNotFoundError:
-            pass
 
 
-async def loop():
+async def loop() -> None:
     timeout = httpx.Timeout(60.0, read=90.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
         note(f"worker {WORKER_ID} up, server {SERVER}")
@@ -309,16 +322,16 @@ async def loop():
                 await asyncio.sleep(5)
 
 
-def run_exec(ttype, payload_file):
+def run_exec(ttype: str, payload_file: str) -> NoReturn:
     import importlib
 
     tasks = importlib.import_module(os.getenv("POOL_TASKS", "pool.tasks"))
     fn = tasks.REGISTRY.get(ttype)
     if fn is None:
-        print(f"unknown task type: {ttype}")
+        print(f"unknown task type: {ttype}")  # noqa: T201
         sys.exit(2)
 
-    def on_term(*_):
+    def on_term(*_: Any) -> NoReturn:
         raise Cancelled
 
     signal.signal(signal.SIGTERM, on_term)
@@ -326,7 +339,7 @@ def run_exec(ttype, payload_file):
     try:
         fn(payload)
     except Cancelled:
-        print("[task] cancelled")
+        print("[task] cancelled")  # noqa: T201
         sys.exit(75)
     except Exception:
         traceback.print_exc()
@@ -334,14 +347,12 @@ def run_exec(ttype, payload_file):
     sys.exit(0)
 
 
-def main():
+def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "exec":
         run_exec(sys.argv[2], sys.argv[3])
         return
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(loop())
-    except KeyboardInterrupt:
-        pass
 
 
 if __name__ == "__main__":

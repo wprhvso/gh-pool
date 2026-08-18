@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        check: [format, pytest]
+        check: [ruff, format, pytest]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -22,6 +22,15 @@ jobs:
       - uses: wprhvso/qa-python@v1
         with:
           checks: ${{ matrix.check }}
+
+  nix:
+    runs-on: pool
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: wprhvso/qa-nix@v1
 
   shell:
     runs-on: pool

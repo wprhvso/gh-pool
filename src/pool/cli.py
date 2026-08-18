@@ -3,6 +3,8 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
+from typing import Any, NoReturn
 
 import httpx
 
@@ -19,12 +21,12 @@ http = httpx.Client(
 )
 
 
-def die(msg, code=1):
+def die(msg: str, code: int = 1) -> NoReturn:
     print(msg, file=sys.stderr)
     sys.exit(code)
 
 
-def call(method, path, **kw):
+def call(method: str, path: str, **kw: Any) -> httpx.Response:
     try:
         r = http.request(method, path, **kw)
     except Exception as e:
@@ -34,11 +36,11 @@ def call(method, path, **kw):
     return r
 
 
-def parse_payload(args):
+def parse_payload(args: argparse.Namespace) -> dict[str, Any]:
     if args.payload:
         return json.loads(args.payload)
     if args.payload_file:
-        return json.loads(open(args.payload_file).read())
+        return json.loads(Path(args.payload_file).read_text())
     out = {}
     for item in args.set or []:
         if "=" not in item:
@@ -51,7 +53,7 @@ def parse_payload(args):
     return out
 
 
-def ago(ts):
+def ago(ts: float | None) -> str:
     if not ts:
         return "-"
     d = time.time() - ts
@@ -61,7 +63,7 @@ def ago(ts):
     return f"{int(d)}s"
 
 
-def follow(tid, offset=0):
+def follow(tid: str, offset: int = 0) -> str | None:
     status = None
     while True:
         r = call("GET", f"/v1/tasks/{tid}/events", params={"offset": offset})
@@ -83,14 +85,14 @@ def follow(tid, offset=0):
     return status
 
 
-def finish(tid, status):
+def finish(tid: str, status: str | None) -> NoReturn:
     t = call("GET", f"/v1/tasks/{tid}").json()
     err = t.get("error")
     print(f"\n--- {status}" + (f": {err}" if err else ""), file=sys.stderr)
     sys.exit(CODES.get(status, 1))
 
 
-def cmd_submit(args):
+def cmd_submit(args: argparse.Namespace) -> None:
     body = {"type": args.type, "payload": parse_payload(args)}
     tid = call("POST", "/v1/tasks", json=body).json()["task_id"]
     if not args.follow:
@@ -100,14 +102,14 @@ def cmd_submit(args):
     finish(tid, follow(tid))
 
 
-def cmd_events(args):
+def cmd_events(args: argparse.Namespace) -> None:
     if args.follow:
         finish(args.id, follow(args.id, args.offset))
     r = call("GET", f"/v1/tasks/{args.id}/events", params={"offset": args.offset})
     sys.stdout.buffer.write(r.content)
 
 
-def cmd_status(args):
+def cmd_status(args: argparse.Namespace) -> None:
     print(
         json.dumps(
             call("GET", f"/v1/tasks/{args.id}").json(), indent=2, ensure_ascii=False
@@ -115,7 +117,7 @@ def cmd_status(args):
     )
 
 
-def cmd_list(args):
+def cmd_list(args: argparse.Namespace) -> None:
     params = {"limit": args.limit}
     if args.status:
         params["status"] = args.status
@@ -131,11 +133,11 @@ def cmd_list(args):
         )
 
 
-def cmd_cancel(args):
+def cmd_cancel(args: argparse.Namespace) -> None:
     print(json.dumps(call("POST", f"/v1/tasks/{args.id}/cancel").json()))
 
 
-def cmd_retry(args):
+def cmd_retry(args: argparse.Namespace) -> None:
     tid = call("POST", f"/v1/tasks/{args.id}/retry").json()["task_id"]
     if not args.follow:
         print(tid)
@@ -144,8 +146,8 @@ def cmd_retry(args):
     finish(tid, follow(tid))
 
 
-def cmd_put(args):
-    with open(args.file, "rb") as f:
+def cmd_put(args: argparse.Namespace) -> None:
+    with Path(args.file).open("rb") as f:
         meta = call(
             "PUT",
             f"/v1/artifacts/{args.key}",
@@ -155,12 +157,12 @@ def cmd_put(args):
     print(json.dumps(meta.json()))
 
 
-def cmd_get(args):
+def cmd_get(args: argparse.Namespace) -> None:
     with http.stream("GET", f"/v1/artifacts/{args.key}") as r:
         if r.status_code >= 400:
             r.read()
             die(f"{r.status_code}: {r.text[:300]}")
-        out = open(args.output, "wb") if args.output else sys.stdout.buffer
+        out = Path(args.output).open("wb") if args.output else sys.stdout.buffer  # noqa: SIM115
         try:
             for chunk in r.iter_bytes():
                 out.write(chunk)
@@ -170,11 +172,11 @@ def cmd_get(args):
                 print(f"saved to {args.output}", file=sys.stderr)
 
 
-def cmd_rm(args):
+def cmd_rm(args: argparse.Namespace) -> None:
     print(json.dumps(call("DELETE", f"/v1/artifacts/{args.key}").json()))
 
 
-def cmd_artifacts(args):
+def cmd_artifacts(args: argparse.Namespace) -> None:
     rows = call(
         "GET", "/v1/artifacts", params={"prefix": args.prefix, "limit": args.limit}
     ).json()
@@ -188,7 +190,7 @@ def cmd_artifacts(args):
         )
 
 
-def cmd_workers(args):
+def cmd_workers(args: argparse.Namespace) -> None:
     rows = call("GET", "/v1/workers").json()
     if not rows:
         print("no workers")
@@ -198,11 +200,11 @@ def cmd_workers(args):
         print(f"{w['id']:30} {w['idle_for']:>5.0f}s  {w.get('task_id') or '-'}")
 
 
-def cmd_health(args):
+def cmd_health(args: argparse.Namespace) -> None:
     print(json.dumps(call("GET", "/healthz").json(), indent=2))
 
 
-def main():
+def main() -> None:
     p = argparse.ArgumentParser(prog="pool")
     sub = p.add_subparsers(dest="cmd", required=True)
 

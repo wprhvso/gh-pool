@@ -7,16 +7,17 @@ import signal
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any, NoReturn
 
 from pool import rpc
 
 DEPS = Path(os.getenv("POOL_DEPS", "/tmp/pool-deps"))
 
 
-def install(deps):
+def install(deps: list[str]) -> None:
     target = DEPS / hashlib.sha256("\n".join(sorted(deps)).encode()).hexdigest()[:16]
     if not (target / ".ok").exists():
-        print(f"[deps] {' '.join(deps)}")
+        print(f"[deps] {' '.join(deps)}")  # noqa: T201
         uv = shutil.which("uv")
         base = (
             [uv, "pip", "install", "--python", sys.executable]
@@ -33,11 +34,11 @@ def install(deps):
     sys.path.insert(0, str(target))
 
 
-def expired(*_):
+def expired(*_: Any) -> NoReturn:
     raise TimeoutError("task timed out")
 
 
-def run(payload):
+def run(payload: dict[str, Any]) -> None:
     code = payload["code"]
     entry = payload.get("entry")
     args = payload.get("args") or []
@@ -52,7 +53,7 @@ def run(payload):
     name = f"<{entry or 'code'}>"
     linecache.cache[name] = (len(code), None, code.splitlines(True), name)
     scope = {"__name__": "__pool__", "args": args, "kwargs": kwargs, "emit": rpc.emit}
-    exec(compile(code, name, "exec"), scope)
+    exec(compile(code, name, "exec"), scope)  # noqa: S102
     if entry and not callable(scope.get(entry)):
         raise NameError(f"{entry} is not defined by the submitted code")
     value = scope[entry](*args, **kwargs) if entry else scope.get("result")
@@ -67,7 +68,7 @@ def run(payload):
     rpc.emit("result", value)
 
 
-def python(payload):
+def python(payload: dict[str, Any]) -> None:
     try:
         run(payload)
     except Exception as e:
