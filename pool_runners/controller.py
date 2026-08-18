@@ -220,6 +220,15 @@ def _shrink(ctx: Ctx, surplus: int) -> int:
 
 
 def _scale(ctx: Ctx, stats: Stats, note: str, *, shrink: bool = False) -> None:
+    # При промахе часового кеша это сетевой HEAD на github.com. Под ctx.scaling он
+    # держал весь батч и обе ветки разом — сообщения и сверку, — поэтому резолвим
+    # до блокировки. Попадание в кеш стоит чтения словаря.
+    try:
+        version = ctx.target.version or release_version()
+    except RunnerError as exc:
+        log.warning("%s: не выяснил версию раннера: %s", ctx.slug, exc)
+        version = ""
+
     with ctx.scaling:
         if ctx.closing.is_set():
             return
@@ -232,13 +241,7 @@ def _scale(ctx: Ctx, stats: Stats, note: str, *, shrink: bool = False) -> None:
             if shrink:
                 _shrink(ctx, -need)
             return
-        if not need:
-            return
-
-        try:
-            version = ctx.target.version or release_version()
-        except RunnerError as exc:
-            log.warning("%s: не выяснил версию раннера: %s", ctx.slug, exc)
+        if not need or not version:
             return
 
         started = time.monotonic()
