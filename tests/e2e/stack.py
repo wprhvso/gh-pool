@@ -534,6 +534,7 @@ class LiveRunner:
         *,
         server_url: str,
         workdir: Path,
+        token: str = TOKEN,
         vnc: bool = False,
         env: dict[str, str] | None = None,
     ) -> None:
@@ -542,6 +543,7 @@ class LiveRunner:
         self._id = session_id
         self._log = workdir / "runner.log"
         self._server_url = server_url
+        self._token = token
         self._vnc = vnc
         self._extra = env or {}
         self._process: subprocess.Popen[bytes] | None = None
@@ -622,7 +624,7 @@ class LiveRunner:
         }
         env |= {
             "GH_CHROME_URL": self._server_url,
-            "GH_CHROME_TOKEN": TOKEN,
+            "GH_CHROME_TOKEN": self._token,
             "GH_CHROME_WORKDIR": str(self.workdir),
             "GH_CHROME_DISPLAY": str(self.display),
             "GH_CHROME_DEBUG_PORT": str(free_port()),
@@ -762,6 +764,7 @@ class Stack:
             session_id,
             server_url=self.server.url,
             workdir=self._workdir / f"runner-{len(self.runners)}",
+            token=self.server.runner_tokens.get(session_id, TOKEN),
             vnc=vnc,
             env=env,
         )
