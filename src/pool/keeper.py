@@ -37,6 +37,11 @@ MAX_LAUNCH = 5
 # WORKERS на сервере в памяти: сразу после его рестарта он пуст. Столько ждём,
 # прежде чем верить нулям (2 × WORKER_STALE сервера).
 POOL_WARMUP = 240
+# Незавершённые статусы, которые спрашиваем поимённо. Списком «всех прогонов»
+# пользоваться нельзя: он отдаёт одну страницу новыми вперёд, и на истории в
+# тысячу прогонов долгоживущие in_progress с неё просто уезжают — флот
+# становится невидимым, а место занимают свежие queued.
+STATUSES = ("in_progress", "queued", "waiting")
 
 
 class ApiError(RuntimeError):
@@ -170,52 +175,72 @@ def reconcile(r: Repo, serving: int | None = None) -> None:
         _reconcile(r, serving)
 
 
+def unfinished(r: Repo) -> list[dict[str, Any]]:
+    found: dict[int, dict[str, Any]] = {}
+    for status in STATUSES:
+        answer = r.api(
+            f"/actions/workflows/{r.workflow}/runs?status={status}&per_page=100"
+        )
+        for x in answer["workflow_runs"]:
+            found[x["id"]] = x
+    return sorted(found.values(), key=lambda x: x["created_at"], reverse=True)
+
+
 def _reconcile(r: Repo, serving: int | None = None) -> None:
     r.ref = r.ref or r.api("")["default_branch"]
-    runs = r.api(f"/actions/workflows/{r.workflow}/runs?per_page=100")["workflow_runs"]
-    runs = sorted(
-        (x for x in runs if x["status"] != "completed"),
-        key=lambda x: x["created_at"],
-        reverse=True,
-    )
+    runs = unfinished(r)
     r.stopping &= {x["id"] for x in runs}
 
     ttl = secs(r.ttl)
-    fresh, expired = [], []
+    started, pending, expired = [], [], []
     for run in runs:
-        (fresh if age(run) <= ttl else expired).append(run)
+        if age(run) > ttl:
+            expired.append(run)
+        elif run["status"] == "in_progress":
+            started.append(run)
+        else:
+            pending.append(run)
 
-    # runs идёт новыми вперёд. Лишние надо срезать с этого конца: свежий прогон
-    # ещё разворачивает тулчейн и никого не обслуживает, а старый почти наверняка
-    # держит CI-джобу. Срезав старые, мы роняем задачу в lost (терминально) и
-    # отправляем джобу на второй круг вместе с полным бутстрапом.
-    surplus = fresh[: max(0, len(fresh) - r.jobs)]
+    # Лишние срезаем с молодого конца: старый прогон почти наверняка держит
+    # CI-джобу, и его отмена роняет задачу в lost (терминально) вместе с полным
+    # бутстрапом на второй круг. Сначала уходят те, кому машину ещё не дали —
+    # они не обслуживают ничего, и терять с ними нечего.
+    over = max(0, len(started) + len(pending) - r.jobs)
+    surplus = pending[:over] + started[: max(0, over - len(pending))]
     victims = [(run, "expired") for run in expired] + [
         (run, "surplus") for run in surplus
     ]
-    stopped = 0
+    victims.sort(key=lambda v: v[0]["status"] == "in_progress")
+    stopped = costly = 0
     for run, why in victims:
         if run["id"] in r.stopping:
             continue
-        if stopped >= RETIRE_BUDGET:
+        busy = run["status"] == "in_progress"
+        if busy and costly >= RETIRE_BUDGET:
             log(f"{r.slug} {len(victims) - stopped} more to retire, next tick")
             break
         r.stopping.add(run["id"])
         r.api(f"/actions/runs/{run['id']}/cancel", "POST")
         stopped += 1
-        log(f"{r.slug} stopping run {run['id']} reason={why} age={age(run):.0f}s")
+        costly += busy
+        log(
+            f"{r.slug} stopping run {run['id']} reason={why} "
+            f"status={run['status']} age={age(run):.0f}s"
+        )
 
     now = time.time()
     r.recent = [t for t in r.recent if now - t < GRACE]
-    young = [x for x in fresh if age(x) < BOOT_GRACE]
+    young = [x for x in started if age(x) < BOOT_GRACE]
     if serving is None:
-        alive = min(len(fresh), r.jobs)
+        alive = len(started)
     else:
         # Обслуживающие почти наверняка из прогретых, молодые ещё бутстрапятся.
         # Прогретый, но не обслуживающий — зомби: раньше он числился живым до
         # самого ttl, и ёмкость тихо проседала.
-        alive = min(serving, len(fresh) - len(young)) + len(young)
-    live = min(alive, r.jobs) + len(r.recent)
+        alive = min(serving, len(started) - len(young)) + len(young)
+    # Прогон без машины не обслуживает ничего, но досылать поверх него нечего:
+    # он уже стоит в очереди GitHub и рано или поздно станет воркером.
+    live = min(alive + len(pending), r.jobs) + len(r.recent)
     launch = min(max(0, r.jobs - live), MAX_LAUNCH)
     for _ in range(launch):
         r.api(f"/actions/workflows/{r.workflow}/dispatches", "POST", {"ref": r.ref})
@@ -231,7 +256,9 @@ def _reconcile(r: Repo, serving: int | None = None) -> None:
         repo=r.slug,
         serving=serving,
         young=len(young),
-        fresh=len(fresh),
+        started=len(started),
+        pending=len(pending),
+        expired=len(expired),
         recent=len(r.recent),
         live=live,
         jobs=r.jobs,

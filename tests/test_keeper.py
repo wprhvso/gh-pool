@@ -13,12 +13,15 @@ class FakeRepo(keeper.Repo):
         self.runs = runs
         self.cancelled = []
         self.dispatched = 0
+        self.asked = []
 
     def api(self, path, method="GET", body=None):
         if path == "":
             return {"default_branch": "main"}
-        if path.endswith("/runs?per_page=100"):
-            return {"workflow_runs": self.runs}
+        if "/runs?status=" in path:
+            status = path.split("status=")[1].split("&")[0]
+            self.asked.append(status)
+            return {"workflow_runs": [x for x in self.runs if x["status"] == status]}
         if path.endswith("/cancel"):
             self.cancelled.append(int(path.split("/")[3]))
             return {}
@@ -137,6 +140,51 @@ def test_a_freshly_dispatched_run_is_not_dispatched_again(monkeypatch):
     keeper.reconcile(repo, serving=0)
 
     assert repo.dispatched == 3
+
+
+def test_every_unfinished_status_is_asked_for_by_name():
+    repo = FakeRepo([run(1, 10)], jobs=20)
+
+    keeper.reconcile(repo)
+
+    assert repo.asked == list(keeper.STATUSES)
+
+
+def test_a_long_lived_run_is_seen_even_behind_a_wall_of_newer_ones():
+    old = run(1, 20000)
+    newer = [run(100 + i, 10 + i, "queued") for i in range(20)]
+    repo = FakeRepo([*newer, old], jobs=20)
+
+    keeper.reconcile(repo, serving=1)
+
+    assert repo.dispatched == 0
+    assert repo.cancelled == [100]
+
+
+def test_a_run_without_a_machine_is_dropped_before_a_serving_one():
+    serving_run, waiting = run(1, 3000), run(2, 10, "queued")
+    repo = FakeRepo([waiting, serving_run], jobs=1)
+
+    keeper.reconcile(repo, serving=1)
+
+    assert repo.cancelled == [2]
+
+
+def test_runs_without_a_machine_do_not_cost_the_retire_budget():
+    repo = FakeRepo([run(i, 10 + i, "queued") for i in range(6)], jobs=2)
+
+    keeper.reconcile(repo, serving=0)
+
+    assert len(repo.cancelled) == 4
+
+
+def test_a_queued_run_holds_a_place_but_does_not_count_as_serving():
+    repo = FakeRepo([run(i, 10, "queued") for i in range(20)], jobs=20)
+
+    keeper.reconcile(repo, serving=0)
+
+    assert repo.dispatched == 0
+    assert repo.cancelled == []
 
 
 class FakeAnswer:
