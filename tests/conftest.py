@@ -20,28 +20,34 @@ class FakeDb:
         self.broken = False
 
     async def setup(self):
-        if self.broken:
-            raise RuntimeError("no database")
+        self._check()
 
     async def save(self, _model, rows):
-        if self.broken:
-            raise RuntimeError("no database")
+        self._check()
         self.saved.extend(rows)
 
+    def _check(self):
+        if self.broken:
+            raise RuntimeError("no database")
+
     async def fetch(self, _model, value):
+        self._check()
         return self.rows.get(value)
 
     async def unfinished(self):
+        self._check()
         return self.pending
 
-    async def tasks(self, _status=None, _limit=100):
-        return []
+    async def tasks(self, status=None, _limit=100):
+        self._check()
+        return [r for r in self.rows.values() if not status or r["status"] == status]
 
     async def artifacts(self, _prefix="", _limit=100):
+        self._check()
         return []
 
     async def drop(self, _model, _value):
-        return None
+        self._check()
 
 
 @pytest.fixture

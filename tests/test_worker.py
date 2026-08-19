@@ -10,6 +10,15 @@ from pool import server, worker
 
 
 @pytest.fixture
+def nap(monkeypatch):
+    async def instantly(_seconds):
+        await real_sleep(0)
+
+    real_sleep = asyncio.sleep
+    monkeypatch.setattr(worker.asyncio, "sleep", instantly)
+
+
+@pytest.fixture
 def spool(tmp_path):
     s = worker.Spool(tmp_path / "spool.events")
     yield s
@@ -88,31 +97,29 @@ def test_a_stopped_spool_takes_nothing_more(spool):
     assert spool.size == 0
 
 
-async def test_a_network_error_is_retried_until_it_works(monkeypatch):
+async def test_a_network_error_is_retried_until_it_works(nap):
     tries = []
 
     class Flaky:
-        async def request(self, method, url, **kw):
+        async def request(self, _method, url, **_kw):
             tries.append(url)
             if len(tries) < 3:
                 raise httpx.ConnectError("no route")
             return httpx.Response(200, json={"ok": True})
 
-    monkeypatch.setattr(worker.asyncio, "sleep", lambda _: asyncio.sleep(0))
     r = await worker.req(Flaky(), "GET", "/healthz")
 
     assert r.status_code == 200
     assert len(tries) == 3
 
 
-async def test_a_server_error_is_retried(monkeypatch):
+async def test_a_server_error_is_retried(nap):
     codes = [503, 500, 200]
 
     class Sick:
-        async def request(self, method, url, **kw):
+        async def request(self, _method, _url, **_kw):
             return httpx.Response(codes.pop(0), json={})
 
-    monkeypatch.setattr(worker.asyncio, "sleep", lambda _: asyncio.sleep(0))
     r = await worker.req(Sick(), "GET", "/healthz")
 
     assert r.status_code == 200
@@ -121,7 +128,7 @@ async def test_a_server_error_is_retried(monkeypatch):
 
 async def test_a_rejection_is_permanent():
     class Rude:
-        async def request(self, method, url, **kw):
+        async def request(self, _method, _url, **_kw):
             return httpx.Response(401, text="bad worker token")
 
     with pytest.raises(worker.Permanent, match="401"):
@@ -131,7 +138,7 @@ async def test_a_rejection_is_permanent():
 @pytest.mark.parametrize("code", [204, 409])
 async def test_an_answer_the_caller_expects_comes_straight_back(code):
     class Terse:
-        async def request(self, method, url, **kw):
+        async def request(self, _method, _url, **_kw):
             return httpx.Response(code, json={})
 
     assert (await worker.req(Terse(), "GET", "/x")).status_code == code
@@ -146,7 +153,8 @@ async def test_a_task_that_runs_through_is_reported_as_done(wired):
     assert body["error"] is None
     text = await events_of(wired, tid)
     assert "hello from the task" in text
-    assert '"kind": "result"' in text and '"value": 4' in text
+    assert '"kind": "result"' in text
+    assert '"value": 4' in text
 
 
 async def test_a_task_that_raises_is_reported_as_failed(wired):

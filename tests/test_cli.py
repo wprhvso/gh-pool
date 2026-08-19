@@ -150,10 +150,10 @@ def test_following_starts_from_the_offset_it_was_given(fake):
 def test_the_exit_code_says_how_the_task_ended(fake, status, code):
     fake.answers = [httpx.Response(200, json={"error": None})]
 
-    with pytest.raises(SystemExit) as exit:
+    with pytest.raises(SystemExit) as left:
         cli.finish("t1", status)
 
-    assert exit.value.code == code
+    assert left.value.code == code
 
 
 def test_submitting_prints_the_task_id(fake, capsys):
@@ -208,7 +208,9 @@ def test_a_listing_shows_a_row_for_every_task(fake, capsys):
     cli.cmd_list(args(status="done", limit=30))
 
     out = capsys.readouterr().out
-    assert "t1" in out and "python" in out and "w1" in out
+    assert "t1" in out
+    assert "python" in out
+    assert "w1" in out
     assert fake.seen[0][2]["params"] == {"limit": 30, "status": "done"}
 
 
@@ -231,7 +233,9 @@ def test_the_artifact_listing_shows_key_size_and_task(fake, capsys):
     cli.cmd_artifacts(args(prefix="out/", limit=30))
 
     out = capsys.readouterr().out
-    assert "out/a" in out and "7" in out and "t1" in out
+    assert "out/a" in out
+    assert "7" in out
+    assert "t1" in out
 
 
 def test_no_workers_is_stated_plainly(fake, capsys):

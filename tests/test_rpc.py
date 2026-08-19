@@ -21,14 +21,14 @@ class Store(BaseHTTPRequestHandler):
             (self.command, self.path, self.headers.get("Authorization", ""))
         )
 
-    def do_PUT(self):  # noqa: N802
+    def do_PUT(self):
         self._record()
         key = unquote(self.path.split("?")[0]).removeprefix("/v1/artifacts/")
         body = self._read()
         Store.blobs[key] = body
         self._answer(json.dumps({"size": len(body), "sha256": "deadbeef"}).encode())
 
-    def do_GET(self):  # noqa: N802
+    def do_GET(self):
         self._record()
         key = self.path.removeprefix("/v1/artifacts/")
         if key not in Store.blobs:
@@ -42,9 +42,6 @@ class Store(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
-
-    def log_message(self, *_):
-        return
 
 
 @pytest.fixture
@@ -67,9 +64,11 @@ def test_an_event_is_a_marked_line_of_json(capsys):
     event = rpc.emit("note", "hello")
 
     line = capsys.readouterr().out
-    assert line.startswith(rpc.MARK) and line.endswith("\n")
+    assert line.startswith(rpc.MARK)
+    assert line.endswith("\n")
     assert json.loads(line[len(rpc.MARK) :]) == event
-    assert event["kind"] == "note" and event["value"] == "hello"
+    assert event["kind"] == "note"
+    assert event["value"] == "hello"
 
 
 def test_an_event_without_a_value_carries_none(capsys):
@@ -83,7 +82,8 @@ def test_an_event_carries_the_extra_fields_it_was_given(capsys):
     rpc.emit("artifact", key="k", size=3)
 
     event = rpc.parse(capsys.readouterr().out)[0]
-    assert event["key"] == "k" and event["size"] == 3
+    assert event["key"] == "k"
+    assert event["size"] == 3
 
 
 def test_a_value_json_cannot_hold_is_written_as_text(capsys):

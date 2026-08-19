@@ -1,7 +1,7 @@
 import asyncio
 import time
 
-from conftest import as_client, submit, take
+from conftest import as_client, as_worker, submit, take
 
 from pool import server
 
@@ -199,3 +199,44 @@ async def test_a_pending_task_the_server_forgot_is_still_cancelled(client, blank
 
     assert answer.json()["status"] == "cancelled"
     assert [r["status"] for r in blank.saved if r["id"] == "old"] == ["cancelled"]
+
+
+async def test_a_listing_still_answers_while_the_database_is_away(client, blank):
+    tid = await submit(client)
+    blank.broken = True
+
+    answer = await client.get("/v1/tasks", headers=as_client())
+
+    assert answer.status_code == 200
+    assert [t["id"] for t in answer.json()] == [tid]
+
+
+async def test_a_task_the_server_holds_is_readable_while_the_database_is_away(
+    client, blank
+):
+    tid = await submit(client)
+    blank.broken = True
+
+    answer = await client.get(f"/v1/tasks/{tid}", headers=as_client())
+
+    assert answer.status_code == 200
+    assert answer.json()["status"] == "pending"
+
+
+async def test_a_task_nobody_remembers_is_still_a_plain_absence(client, blank):
+    blank.broken = True
+
+    assert (await client.get("/v1/tasks/ghost", headers=as_client())).status_code == 404
+
+
+async def test_artifacts_can_be_listed_and_dropped_while_the_database_is_away(
+    client, blank
+):
+    await client.put("/v1/artifacts/k", content=b"x", headers=as_worker())
+    blank.broken = True
+
+    listing = await client.get("/v1/artifacts", headers=as_client())
+    removed = await client.delete("/v1/artifacts/k", headers=as_client())
+
+    assert [b["key"] for b in listing.json()] == ["k"]
+    assert removed.json() == {"ok": True}

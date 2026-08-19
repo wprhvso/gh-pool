@@ -4,7 +4,7 @@ import os
 import time
 import uuid
 from collections import deque
-from collections.abc import AsyncGenerator, Iterable
+from collections.abc import AsyncGenerator, Coroutine, Iterable
 from contextlib import asynccontextmanager
 from importlib import metadata
 from io import BufferedWriter
@@ -154,8 +154,19 @@ def public(t: dict[str, Any]) -> dict[str, Any]:
     return d
 
 
+async def from_db[T](what: str, call: Coroutine[Any, Any, T], fallback: T) -> T:
+    try:
+        return await call
+    except Exception as e:
+        state["db"] = False
+        log.warning(
+            "db_read_failed", what=what, error=type(e).__name__, detail=str(e)
+        )
+        return fallback
+
+
 async def find(tid: str) -> dict[str, Any]:
-    t = TASKS.get(tid) or await db.fetch(db.Task, tid)
+    t = TASKS.get(tid) or await from_db("task", db.fetch(db.Task, tid), None)
     if t is None:
         raise HTTPException(404, "no such task")
     return t
@@ -461,7 +472,8 @@ async def list_tasks(
     auth_client(authorization)
     live = [t for t in TASKS.values() if not status or t["status"] == status]
     seen = {t["id"] for t in live}
-    stored = [t for t in await db.tasks(status, limit) if t["id"] not in seen]
+    rows_from_db = await from_db("tasks", db.tasks(status, limit), [])
+    stored = [t for t in rows_from_db if t["id"] not in seen]
     rows = sorted(live + stored, key=lambda t: t["created_at"], reverse=True)
     return [public(t) for t in rows[:limit]]
 
@@ -606,7 +618,8 @@ async def list_artifacts(
     auth_any(authorization)
     live = [b for b in BLOBS.values() if b["key"].startswith(prefix)]
     seen = {b["key"] for b in live}
-    stored = [b for b in await db.artifacts(prefix, limit) if b["key"] not in seen]
+    rows_from_db = await from_db("artifacts", db.artifacts(prefix, limit), [])
+    stored = [b for b in rows_from_db if b["key"] not in seen]
     return sorted(live + stored, key=lambda b: b["created_at"], reverse=True)[:limit]
 
 
@@ -630,7 +643,7 @@ async def del_artifact(
         DIRTY_BLOBS.discard(key)
         BLOBS.pop(key, None)
     await to_thread.run_sync(blob_path(key).unlink, True)
-    await db.drop(db.Artifact, key)
+    await from_db("drop", db.drop(db.Artifact, key), None)
     return {"ok": True}
 
 

@@ -24,13 +24,12 @@ def free_port():
 class Process:
     def __init__(self, args, env, logfile):
         self.logfile = logfile
-        self.handle = logfile.open("w")
+        self.handle = logfile.open("wb")
         self.proc = subprocess.Popen(
             [sys.executable, *args],
             env={**os.environ, **env},
             stdout=self.handle,
             stderr=subprocess.STDOUT,
-            text=True,
         )
 
     def alive(self):
@@ -186,7 +185,7 @@ def test_a_task_that_raises_comes_back_as_a_failure(pool):
 
     assert raised.value.status == "failed"
     assert "the reason" in str(raised.value)
-    assert raised.value.event["type"] == "ValueError"
+    assert (raised.value.event or {})["type"] == "ValueError"
 
 
 def test_a_task_that_overruns_its_timeout_is_stopped(pool):
