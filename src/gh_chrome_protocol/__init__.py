@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+MAX_TIMEOUT = 86_400.0
+
 
 class Speed(StrEnum):
     INSTANT = "instant"
@@ -45,7 +47,7 @@ class SessionParams(BaseModel):
     mouse_speed: Speed = Speed.NORMAL
     type_speed: Speed = Speed.NORMAL
     scroll_speed: Speed = Speed.NORMAL
-    timeout: float = Field(default=30.0, gt=0)
+    timeout: float = Field(default=30.0, gt=0, le=MAX_TIMEOUT)
     subscribe: list[Topic] = Field(default_factory=list)
 
 
@@ -296,7 +298,7 @@ CommandArgs = Annotated[
 
 class CommandRequest(BaseModel):
     args: CommandArgs
-    timeout: float | None = Field(default=None, gt=0)
+    timeout: float | None = Field(default=None, gt=0, le=MAX_TIMEOUT)
 
 
 class CommandAccepted(BaseModel):

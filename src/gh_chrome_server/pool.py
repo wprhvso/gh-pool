@@ -72,9 +72,16 @@ async def dispatch(session_id: UUID, runner_token: str) -> None:
     }
     headers = {"Authorization": f"Bearer {settings.pool_token}"}
     url = f"{settings.pool_server.rstrip('/')}/v1/tasks"
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(url, json=body, headers=headers)
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, json=body, headers=headers)
+    except httpx.HTTPError as unreachable:
+        raise DispatchError(f"the pool is unreachable: {unreachable}") from unreachable
     if response.status_code >= int(httpx.codes.BAD_REQUEST):
         raise DispatchError(f"{response.status_code}: {response.text[:200]}")
-    if not (response.json() or {}).get("task_id"):
+    try:
+        payload = response.json()
+    except ValueError as unreadable:
+        raise DispatchError("the pool answered with what is not json") from unreadable
+    if not isinstance(payload, dict) or not payload.get("task_id"):
         raise DispatchError("pool returned no task_id")

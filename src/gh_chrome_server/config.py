@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     runner_python: str = "3.14"
     runner_timeout: float = 21600.0
     runner_workdir: Path = Path("/tmp/gh-chrome")
+    runner_grace: float = 300.0
     heartbeat_timeout: float = 30.0
     ready_timeout: float = 600.0
     watchdog_interval: float = 5.0

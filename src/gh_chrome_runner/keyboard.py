@@ -34,6 +34,7 @@ class Keyboard:
             else:
                 self._xtest.char(character)
             if median <= 0:
+                await asyncio.sleep(0)
                 continue
             delay = self._rng.lognormvariate(0.0, SIGMA) * median
             if character in PAUSE_AFTER and self._rng.random() < PAUSE_CHANCE:

@@ -78,6 +78,10 @@ class Http:
         )
         return SessionState.model_validate(_check(response).json())
 
+    async def get_session(self, session_id: UUID) -> SessionState:
+        response = await self._client.get(f"/sessions/{session_id}")
+        return SessionState.model_validate(_check(response).json())
+
     async def enqueue(
         self, session_id: UUID, args: CommandArgs, timeout: float | None
     ) -> CommandAccepted:

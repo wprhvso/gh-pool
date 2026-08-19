@@ -82,7 +82,11 @@ async def write_atomic(
         except BaseException:
             temp_path.unlink(missing_ok=True)
             raise
-    temp_path.replace(target)
+    try:
+        temp_path.replace(target)
+    except BaseException:
+        temp_path.unlink(missing_ok=True)
+        raise
     return size
 
 

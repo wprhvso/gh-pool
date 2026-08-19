@@ -213,7 +213,10 @@ class Session:
         exactly the events it had asked for.
         """
         queue: asyncio.Queue[Event | None] = asyncio.Queue()
-        self._subscribers.add(queue)
+        if self._over:
+            queue.put_nowait(None)
+        else:
+            self._subscribers.add(queue)
         return self._drain(queue)
 
     async def _drain(self, queue: asyncio.Queue[Event | None]) -> AsyncIterator[Event]:
@@ -243,15 +246,37 @@ class Session:
                 # wants. Reconnecting forever would leave every caller waiting
                 # on a stream that will never say anything again.
                 log.warning("the event stream is closed to us: %s", refused)
-                self._finished.set()
-                self._fail_pending(SessionDead(str(refused)))
+                self._end(SessionDead(str(refused)))
                 return
             except Exception as exc:
                 log.debug("event stream dropped: %s", exc)
                 await asyncio.sleep(backoff * random.uniform(0.5, 1.5))
                 backoff = min(backoff * 2, MAX_BACKOFF)
             else:
-                return
+                if self._finished.is_set() or await self._is_over():
+                    return
+                await asyncio.sleep(backoff * random.uniform(0.5, 1.5))
+                backoff = min(backoff * 2, MAX_BACKOFF)
+
+    async def _is_over(self) -> bool:
+        try:
+            state = await self._http.get_session(self.id)
+        except Rejected:
+            self._end(SessionDead("the session is gone"))
+            return True
+        except Exception as exc:
+            log.debug("could not ask what became of the session: %s", exc)
+            return False
+        if state.status.live:
+            return False
+        self._end(SessionDead(f"session {state.status}"))
+        return True
+
+    def _end(self, error: BaseException) -> None:
+        self._finished.set()
+        self._fail_pending(error)
+        for queue in tuple(self._subscribers):
+            queue.put_nowait(None)
 
     def _take(self, message: SseMessage) -> None:
         try:

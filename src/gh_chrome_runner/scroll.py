@@ -21,6 +21,8 @@ class Scroller:
         self._rng = random.Random()
 
     async def by_pixels(self, dy: int) -> None:
+        if dy == 0:
+            return
         ticks = max(1, round(abs(dy) / TICK_PIXELS))
         await self.by_ticks(ticks, up=dy < 0)
 

@@ -38,7 +38,7 @@ async def create_session(
         if token is None:
             raise pool.DispatchError("session vanished before dispatch")
         await pool.dispatch(state.id, token)
-    except pool.DispatchError:
+    except Exception:
         await sessions.finish(state.id, CloseReason.DEAD)
         raise
     return state

@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 from uuid import UUID
 
 import httpx
@@ -115,8 +116,13 @@ async def _write(target: Path, response: httpx.Response) -> Path:
 
 
 def _sent_name(response: httpx.Response, fallback: str) -> str:
-    _, _, name = response.headers.get("content-disposition", "").partition("filename=")
-    return Path(name.strip(' ";')).name or fallback
+    disposition = response.headers.get("content-disposition", "")
+    plain, _, extended = disposition.partition("filename*=")
+    if extended:
+        _, _, encoded = extended.split(";")[0].strip().rpartition("'")
+        return Path(unquote(encoded)).name or fallback
+    _, _, name = plain.partition("filename=")
+    return Path(name.split(";")[0].strip(' "')).name or fallback
 
 
 async def _read_file(source: Path) -> AsyncIterator[bytes]:

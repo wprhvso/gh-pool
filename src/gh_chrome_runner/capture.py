@@ -54,6 +54,8 @@ class Capture:
         self._sent: set[str] = set()
         self._sizes: dict[str, tuple[int, int]] = {}
         self._init_sent = False
+        self._offset = 0
+        self._highest = 0
 
     async def start(self) -> None:
         settings.segments_dir.mkdir(parents=True, exist_ok=True)
@@ -107,11 +109,19 @@ class Capture:
                 # The session outlives its recorder either way; it should not
                 # also go unrecorded because x11grab lost the display once.
                 await asyncio.sleep(1.0)
+                self._restart_numbering()
                 await self._spawn()
                 continue
             with contextlib.suppress(Exception):
                 await self._scan(final=False)
             await asyncio.sleep(SCAN_INTERVAL)
+
+    def _restart_numbering(self) -> None:
+        for path in settings.segments_dir.glob("chunk-stream0-*.m4s"):
+            path.unlink(missing_ok=True)
+        self._offset = self._highest
+        self._sent.clear()
+        self._sizes.clear()
 
     async def _scan(self, final: bool) -> None:
         if not self._init_sent:
@@ -124,8 +134,10 @@ class Capture:
                 continue
             if not final and not self._stable(path):
                 continue
-            if await self._send(f"segments/{int(match.group(1))}", path):
+            number = self._offset + int(match.group(1))
+            if await self._send(f"segments/{number}", path):
                 self._sent.add(path.name)
+                self._highest = max(self._highest, number)
                 # The server has it now, and a six hour session would otherwise
                 # keep every frame of itself on the runner's disk.
                 path.unlink(missing_ok=True)

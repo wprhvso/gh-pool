@@ -7,6 +7,7 @@ from gh_chrome_protocol import Speed
 
 SQRT3 = math.sqrt(3)
 SQRT5 = math.sqrt(5)
+STEP_LIMIT = 10_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +55,9 @@ def wind_mouse(
     velocity_x = velocity_y = 0.0
     last: tuple[int, int] | None = None
     distance = math.hypot(target_x - x, target_y - y)
-    while distance >= 1.0:
+    steps = 0
+    while distance >= 1.0 and steps < STEP_LIMIT:
+        steps += 1
         wind = min(tuning.wind, distance)
         if distance >= tuning.target_area:
             wind_x = wind_x / SQRT3 + (source.random() * (2 * wind + 1) - wind) / SQRT5
@@ -67,7 +70,9 @@ def wind_mouse(
         speed = math.hypot(velocity_x, velocity_y)
         step = tuning.max_step
         if distance < tuning.target_area:
-            step = max(3.0, tuning.max_step * distance / tuning.target_area)
+            step = min(
+                distance, max(3.0, tuning.max_step * distance / tuning.target_area)
+            )
         if speed > step:
             clip = step / 2 + source.random() * step / 2
             velocity_x = velocity_x / speed * clip

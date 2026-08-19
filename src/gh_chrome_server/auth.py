@@ -32,18 +32,24 @@ _bearer = HTTPBearer(auto_error=True)
 _basic = HTTPBasic(auto_error=True, realm=REALM)
 
 
+def same_secret(offered: str, expected: str) -> bool:
+    if not expected:
+        return False
+    return secrets.compare_digest(offered.encode(), expected.encode())
+
+
 async def require_token(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
 ) -> None:
-    if not secrets.compare_digest(credentials.credentials, settings.token):
+    if not same_secret(credentials.credentials, settings.token):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "invalid token")
 
 
 async def require_basic(
     credentials: Annotated[HTTPBasicCredentials, Depends(_basic)],
 ) -> None:
-    user_ok = secrets.compare_digest(credentials.username, BASIC_USER)
-    token_ok = secrets.compare_digest(credentials.password, settings.token)
+    user_ok = secrets.compare_digest(credentials.username.encode(), BASIC_USER.encode())
+    token_ok = same_secret(credentials.password, settings.token)
     if not (user_ok and token_ok):
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
@@ -72,7 +78,7 @@ def hand_out_ticket(response: Response, request: Request, session_id: UUID) -> N
 
 async def require_socket_token(websocket: WebSocket) -> None:
     scheme, _, value = websocket.headers.get("authorization", "").partition(" ")
-    if scheme.lower() != "bearer" or not secrets.compare_digest(value, settings.token):
+    if scheme.lower() != "bearer" or not same_secret(value, settings.token):
         raise WebSocketException(status.WS_1008_POLICY_VIOLATION, "invalid token")
 
 
@@ -83,7 +89,7 @@ async def require_socket_ticket(websocket: WebSocket, session_id: UUID) -> None:
         or websocket.query_params.get("ticket")
         or ""
     )
-    if not secrets.compare_digest(offered, expected):
+    if not same_secret(offered, expected):
         raise WebSocketException(status.WS_1008_POLICY_VIOLATION, "invalid ticket")
 
 
@@ -98,16 +104,14 @@ async def require_runner(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
 ) -> None:
     expected = await _expected_runner_token(request, session_id)
-    if not expected or not secrets.compare_digest(credentials.credentials, expected):
+    if not same_secret(credentials.credentials, expected):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "invalid runner token")
 
 
 async def require_socket_runner(websocket: WebSocket, session_id: UUID) -> None:
     scheme, _, value = websocket.headers.get("authorization", "").partition(" ")
     expected = await _expected_runner_token(websocket, session_id)
-    if scheme.lower() != "bearer" or not expected:
-        raise WebSocketException(status.WS_1008_POLICY_VIOLATION, "invalid token")
-    if not secrets.compare_digest(value, expected):
+    if scheme.lower() != "bearer" or not same_secret(value, expected):
         raise WebSocketException(status.WS_1008_POLICY_VIOLATION, "invalid token")
 
 

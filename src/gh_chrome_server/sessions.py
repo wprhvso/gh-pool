@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import secrets
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -22,6 +24,7 @@ from gh_chrome_protocol import (
     SessionStatus,
 )
 from gh_chrome_protocol.trace import TraceContext
+from gh_chrome_server.config import settings
 from gh_chrome_server.db import Database, Tx
 from gh_chrome_server.events import Events
 
@@ -46,7 +49,18 @@ class Sessions:
         self._db = db
         self._events = events
         self._cancels: dict[UUID, list[UUID]] = {}
+        self._work: dict[UUID, asyncio.Event] = {}
         self.closing: set[UUID] = set()
+
+    def announce_work(self, session_id: UUID) -> None:
+        self._work.setdefault(session_id, asyncio.Event()).set()
+
+    async def wait_for_work(self, session_id: UUID, timeout: float) -> None:
+        event = self._work.setdefault(session_id, asyncio.Event())
+        with contextlib.suppress(TimeoutError):
+            async with asyncio.timeout(timeout):
+                await event.wait()
+        event.clear()
 
     async def get(self, session_id: UUID) -> SessionState:
         row = await self._db.one("select * from sessions where id = %s", (session_id,))
@@ -56,9 +70,10 @@ class Sessions:
 
     async def runner_token(self, session_id: UUID) -> str | None:
         row = await self._db.one(
-            "select runner_token from sessions "
-            "where id = %s and status in ('pending', 'active')",
-            (session_id,),
+            "select runner_token from sessions where id = %s and ("
+            "status in ('pending', 'active') "
+            "or closed_at > now() - make_interval(secs => %s))",
+            (session_id, settings.runner_grace),
         )
         return None if row is None else row["runner_token"]
 
@@ -167,12 +182,14 @@ class Sessions:
                 await self._finish(tx, session_id, CloseReason.CLOSED)
                 return
         self.closing.add(session_id)
+        self.announce_work(session_id)
 
     async def finish(self, session_id: UUID, reason: CloseReason) -> None:
         async with self._db.tx() as tx:
             await self._finish(tx, session_id, reason)
         self.closing.discard(session_id)
         self._cancels.pop(session_id, None)
+        self.announce_work(session_id)
 
     async def _finish(self, tx: Tx, session_id: UUID, reason: CloseReason) -> None:
         status = (
@@ -206,7 +223,9 @@ class Sessions:
             and row["persist"]
         ):
             await tx.run(
-                "update profiles set stale = true where name = %s", (row["profile"],)
+                "update profiles set stale = true where name = %s "
+                "and (updated_at is null or updated_at < %s)",
+                (row["profile"], row["ready_at"]),
             )
         await self._events.publish(tx, session_id, SessionClosed(reason=reason))
 
@@ -237,12 +256,13 @@ class Sessions:
                     session_id,
                     seq,
                     str(request.args.method),
-                    Jsonb(request.args.model_dump(mode="json")),
+                    Jsonb(_printable(request.args.model_dump(mode="json"))),
                     int(timeout * 1000),
                     trace.traceparent if trace is not None else None,
                     trace.tracestate if trace is not None else None,
                 ),
             )
+        self.announce_work(session_id)
         return command_id, seq
 
     async def _claim(self, tx: Tx, session_id: UUID) -> None:
@@ -263,6 +283,12 @@ class Sessions:
     async def take_next(self, session_id: UUID) -> DictRow | None:
         async with self._db.tx() as tx:
             await self._claim(tx, session_id)
+            outstanding = await tx.one(
+                "select id from commands where session_id = %s and status = 'started' limit 1",
+                (session_id,),
+            )
+            if outstanding is not None:
+                return None
             row = await tx.one(
                 "update commands set status = 'started', started_at = now() where id = ("
                 "select id from commands where session_id = %s and status = 'queued' "
@@ -293,7 +319,9 @@ class Sessions:
                 (
                     "failed" if failed else "finished",
                     None if failed else Jsonb(result),
-                    Jsonb(error.model_dump(mode="json")) if error is not None else None,
+                    Jsonb(_printable(error.model_dump(mode="json")))
+                    if error is not None
+                    else None,
                     command_id,
                     session_id,
                 ),
@@ -306,6 +334,7 @@ class Sessions:
                 else CommandFinished(command_id=command_id, result=result)
             )
             await self._events.publish(tx, session_id, event)
+        self.announce_work(session_id)
 
     async def publish_runner_event(self, session_id: UUID, data: EventData) -> None:
         async with self._db.tx() as tx:
@@ -313,6 +342,7 @@ class Sessions:
 
     def request_cancel(self, session_id: UUID, command_id: UUID) -> None:
         self._cancels.setdefault(session_id, []).append(command_id)
+        self.announce_work(session_id)
 
     def take_cancels(self, session_id: UUID) -> list[UUID]:
         return self._cancels.pop(session_id, [])

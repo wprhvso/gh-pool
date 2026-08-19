@@ -1,3 +1,4 @@
+import codecs
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
@@ -12,12 +13,13 @@ class SseMessage:
 
 
 async def parse_sse(chunks: AsyncIterator[bytes]) -> AsyncIterator[SseMessage]:
+    decoder = codecs.getincrementaldecoder("utf-8")("replace")
     buffer = ""
     event = "message"
     data: list[str] = []
     identifier: str | None = None
     async for chunk in chunks:
-        buffer += chunk.decode("utf-8", "replace")
+        buffer += decoder.decode(chunk)
         while "\n" in buffer:
             line, buffer = buffer.split("\n", 1)
             line = line.rstrip("\r")

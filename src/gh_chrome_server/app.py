@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse, Response
 from starlette.datastructures import Headers
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from gh_chrome_protocol import trace
 from gh_chrome_server import (
@@ -74,8 +74,9 @@ class LimitBody:
     The multipart parser spools a whole upload to a temporary file before the
     handler it belongs to is ever called, on a volume the operator sized for
     something else, so a limit checked inside the handler is checked far too
-    late. A body with no length declared is left to the handler, which counts
-    as it writes.
+    late. A declared length is refused outright; a body that declares none is
+    counted as it is read, because a chunked upload would otherwise be spooled
+    in full before anyone could object to its size.
     """
 
     def __init__(self, app: ASGIApp, limit: int) -> None:
@@ -83,16 +84,32 @@ class LimitBody:
         self._limit = limit
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "http":
-            declared = Headers(scope=scope).get("content-length", "")
-            if declared.isdigit() and int(declared) > self._limit:
-                response = JSONResponse(
-                    {"detail": f"more than {self._limit} bytes"},
-                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                )
-                await response(scope, receive, send)
-                return
-        await self._app(scope, receive, send)
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+        declared = Headers(scope=scope).get("content-length", "")
+        if declared.isdigit() and int(declared) > self._limit:
+            response = JSONResponse(
+                {"detail": f"more than {self._limit} bytes"},
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            )
+            await response(scope, receive, send)
+            return
+        await self._app(scope, self._counted(receive), send)
+
+    def _counted(self, receive: Receive) -> Receive:
+        seen = 0
+
+        async def counting() -> Message:
+            nonlocal seen
+            message = await receive()
+            if message["type"] == "http.request":
+                seen += len(message.get("body", b""))
+                if seen > self._limit:
+                    raise storage.TooLarge(f"more than {self._limit} bytes")
+            return message
+
+        return counting
 
 
 class BindTrace:

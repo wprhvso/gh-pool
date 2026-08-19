@@ -61,38 +61,42 @@ class Runner:
     async def _serve(self, config: RunnerConfig) -> int:
         code = 1
         told = False
-        async with AsyncExitStack() as stack:
-            enter = stack.enter_async_context
-            display = await enter(
-                running(Display(config.params.width, config.params.height))
-            )
-            browser = await enter(running(Browser(display, config.params)))
-            await enter(running(Capture(display, self._server, config)))
-            if display.vnc_port is not None:
-                await enter(running(Tunnel(self._id, display.vnc_port)))
-            xtest = await asyncio.to_thread(Xtest, display.name)
-            actions = await enter(
-                running(Actions(browser.cdp, xtest, self._server, config.params))
-            )
+        beat: asyncio.Task[None] | None = None
+        try:
+            async with AsyncExitStack() as stack:
+                enter = stack.enter_async_context
+                display = await enter(
+                    running(Display(config.params.width, config.params.height))
+                )
+                browser = await enter(running(Browser(display, config.params)))
+                await enter(running(Capture(display, self._server, config)))
+                if display.vnc_port is not None:
+                    await enter(running(Tunnel(self._id, display.vnc_port)))
+                xtest = await asyncio.to_thread(Xtest, display.name)
+                actions = await enter(
+                    running(Actions(browser.cdp, xtest, self._server, config.params))
+                )
 
-            log.info("runner is ready for session %s", self._id)
-            consume = asyncio.create_task(
-                self._consume(actions, lambda: display.alive() and browser.alive())
-            )
-            beat = asyncio.create_task(self._beat(consume))
-            try:
-                with contextlib.suppress(asyncio.CancelledError):
-                    told = await consume
-                code = 0
-            except Exception:
-                log.exception("runner loop failed")
-            finally:
+                log.info("runner is ready for session %s", self._id)
+                consume = asyncio.create_task(
+                    self._consume(actions, lambda: display.alive() and browser.alive())
+                )
+                beat = asyncio.create_task(self._beat(consume))
+                try:
+                    with contextlib.suppress(asyncio.CancelledError):
+                        told = await consume
+                    code = 0
+                except Exception:
+                    log.exception("runner loop failed")
+                finally:
+                    await self._await_current()
+            if code == 0:
+                await self._save(config, told)
+        finally:
+            if beat is not None:
                 beat.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await beat
-                await self._await_current()
-        if code == 0:
-            await self._save(config, told)
         return code
 
     async def _consume(self, actions: Actions, healthy: Callable[[], bool]) -> bool:
@@ -167,8 +171,10 @@ class Runner:
     async def _await_current(self) -> None:
         if self._current is None:
             return
-        with contextlib.suppress(asyncio.CancelledError):
-            await self._current
+        done, _ = await asyncio.wait([self._current])
+        for task in done:
+            if not task.cancelled() and task.exception() is not None:
+                log.warning("the command task failed", exc_info=task.exception())
         self._current = None
         self._current_id = None
 

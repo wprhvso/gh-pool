@@ -1,5 +1,5 @@
-import asyncio
 from collections.abc import AsyncGenerator
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, WebSocket, status
@@ -76,7 +76,7 @@ async def stream_commands(
                 if not await sessions.live(session_id):
                     yield Frame(name="close", data=Close())
                     return
-                await asyncio.sleep(POLL_INTERVAL)
+                await sessions.wait_for_work(session_id, POLL_INTERVAL)
                 continue
             yield Frame(
                 name="command",
@@ -171,9 +171,13 @@ async def put_profile(
     state = await sessions.get(session_id)
     if state.profile is None or not state.persist:
         raise SessionUnavailable("session does not persist a profile")
-    size = await storage.write_atomic(
-        storage.profile_path(state.profile), request.stream(), settings.max_upload
-    )
+    path = storage.profile_path(state.profile)
+    incoming = path.with_name(f"{path.name}.incoming")
+    size = await storage.write_atomic(incoming, request.stream(), settings.max_upload)
+    if size == 0:
+        incoming.unlink(missing_ok=True)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "an empty profile archive")
+    incoming.replace(path)
     async with db.tx() as tx:
         await tx.run(
             "update profiles set size = %s, stale = false, updated_at = now() where name = %s",
@@ -211,7 +215,9 @@ async def put_download(
             "on conflict (session_id, name) do update set size = excluded.size",
             (session_id, safe, size),
         )
-    url = f"{settings.public_url}/sessions/{session_id}/downloads/{safe}"
+    url = (
+        f"{settings.public_url}/sessions/{session_id}/downloads/{quote(safe, safe='')}"
+    )
     await sessions.publish_runner_event(
         session_id, Download(name=safe, size=size, url=url)
     )

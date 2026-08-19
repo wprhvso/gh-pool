@@ -76,7 +76,10 @@ async def _replaced(tabs: Tabs) -> AsyncGenerator[None]:
 
 async def _document(tabs: Tabs) -> str:
     frame = await tabs.send("Page.getFrameTree")
-    return str(frame["frameTree"]["frame"].get("loaderId", ""))
+    top = frame["frameTree"]["frame"]
+    loader = str(top.get("loaderId", ""))
+    address = f"{top.get('url', '')}{top.get('urlFragment', '')}"
+    return f"{loader} {address}"
 
 
 async def settle(tabs: Tabs, wait_until: WaitUntil) -> None:
