@@ -15,7 +15,9 @@ from typing import Any, Final
 
 import structlog
 from opentelemetry.metrics import get_meter
-from yaol import from_env, setup, shutdown, span
+from yaol import setup, shutdown, span
+
+from pool.obs import observability
 
 API = "https://api.github.com"
 KEYS = ("token", "workflow", "jobs", "ttl", "ref")
@@ -395,7 +397,7 @@ def main() -> None:
     b.add_argument("--source", type=Path, default=WORKFLOWS)
     args = p.parse_args()
 
-    setup(from_env("pool-keeper", service_version=version()))
+    setup(observability("pool-keeper", version()))
     try:
         repos, poll, pool, client = load(args.config)
         try:

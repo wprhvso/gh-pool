@@ -21,13 +21,14 @@ from yaol import (
     SpanKind,
     extract_context,
     fail,
-    from_env,
     instrument_httpx,
     instrument_runtime,
     setup,
     shutdown,
     span,
 )
+
+from pool.obs import observability
 
 SERVER = os.getenv("POOL_SERVER", "http://localhost:8000").rstrip("/")
 TOKEN = os.getenv("POOL_TOKEN", "dev-worker")
@@ -425,13 +426,7 @@ def main() -> None:
         run_exec(sys.argv[2], sys.argv[3])
         return
     with contextlib.redirect_stdout(sys.stderr):
-        setup(
-            from_env(
-                "pool-worker",
-                service_version=version(),
-                environment=os.getenv("ENV", "prod"),
-            )
-        )
+        setup(observability("pool-worker", version()))
     logs_off_stdout()
     instrument_httpx()
     instrument_runtime()

@@ -678,7 +678,6 @@ def version() -> str:
 def main() -> None:
     import uvicorn
     from yaol import (
-        from_env,
         instrument_asyncpg,
         instrument_fastapi,
         instrument_runtime,
@@ -687,13 +686,9 @@ def main() -> None:
         shutdown,
     )
 
-    setup(
-        from_env(
-            "pool-server",
-            service_version=version(),
-            environment=os.getenv("ENV", "prod"),
-        )
-    )
+    from pool.obs import observability
+
+    setup(observability("pool-server", version()))
     instrument_fastapi(app)
     instrument_asyncpg()
     instrument_sqlalchemy(db.engine)
