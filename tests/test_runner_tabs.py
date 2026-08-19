@@ -379,3 +379,34 @@ async def test_a_request_belonging_to_another_tab_is_not_this_ones(
     cdp.emit("Network.requestWillBeSent", {"requestId": "r1"}, "s2")
 
     assert tabs.inflight() == 0
+
+
+async def test_closing_a_tab_waits_until_the_browser_has_let_go_of_it(
+    started: tuple[Tabs, Announcements], cdp: FakeCdp
+):
+    tabs, announced = started
+    await _open(cdp, announced, "second", "s2")
+
+    def detaching(_params: dict[str, Any] | None) -> dict[str, Any]:
+        cdp.closed("s2")
+        return {}
+
+    cdp.answers["Target.closeTarget"] = detaching
+
+    await tabs.close(1)
+
+    assert [tab.target_id for tab in tabs.order] == ["first"]
+    assert tabs.active.target_id == "first"
+
+
+async def test_a_tab_the_browser_never_lets_go_of_does_not_hold_the_session(
+    started: tuple[Tabs, Announcements], cdp: FakeCdp, monkeypatch: pytest.MonkeyPatch
+):
+    tabs, announced = started
+    await _open(cdp, announced, "second", "s2")
+    monkeypatch.setattr(tabs_module, "ATTACH_TIMEOUT", 0.05)
+
+    async with asyncio.timeout(5):
+        await tabs.close(1)
+
+    assert [tab.target_id for tab in tabs.order] == ["first", "second"]

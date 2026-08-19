@@ -1,4 +1,5 @@
 import os
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -224,3 +225,19 @@ async def test_a_file_the_runner_asks_for_by_the_wrong_name_is_a_404(stack: Stac
 
     with pytest.raises(httpx.HTTPStatusError, match="404"):
         await runner.client.get_upload(str(uuid4()), Path("/tmp/nowhere"))
+
+
+async def test_a_body_the_sender_never_measured_is_still_turned_away(
+    stack: Stack, api: httpx.AsyncClient
+):
+    session, _ = await stack.scripted()
+
+    async def streamed() -> AsyncIterator[bytes]:
+        for _ in range((stack.server.max_upload // len(PAYLOAD)) + 2):
+            yield PAYLOAD
+
+    put = await api.put(f"/runner/{session.id}/downloads/big.bin", content=streamed())
+
+    assert put.status_code == 413
+    downloads = stack.server.storage / "sessions" / str(session.id) / "downloads"
+    assert not downloads.exists() or list(downloads.iterdir()) == []

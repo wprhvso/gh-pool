@@ -228,3 +228,46 @@ async def test_an_unknown_session_is_a_404(api: httpx.AsyncClient):
     response = await api.get("/sessions/2f1c9f38-6d0f-4a63-9e33-2f8a3f3f6b21")
 
     assert response.status_code == 404
+
+
+async def test_a_command_waits_its_turn_rather_than_its_own_timeout(stack: Stack):
+    session, runner = await stack.scripted()
+    release = asyncio.Event()
+
+    async def held(_envelope: object) -> str:
+        await release.wait()
+        return "the slow one"
+
+    runner.on(Method.TITLE, held)
+    runner.returns(Method.URL, "the quick one")
+
+    slow = session.title(timeout=60)
+    quick = session.url(timeout=3)
+    await asyncio.sleep(6)
+    release.set()
+
+    assert await slow.wait(timeout=30) == "the slow one"
+    assert await quick.wait(timeout=30) == "the quick one"
+
+
+async def test_the_runner_is_given_one_command_at_a_time(stack: Stack):
+    session, runner = await stack.scripted()
+    release = asyncio.Event()
+
+    async def held(_envelope: object) -> str:
+        await release.wait()
+        return "the slow one"
+
+    runner.on(Method.TITLE, held)
+    runner.returns(Method.URL, "the quick one")
+
+    slow = session.title(timeout=60)
+    queued = [session.url(timeout=60) for _ in range(3)]
+    await asyncio.sleep(2)
+    assert len(runner.received) == 1
+
+    release.set()
+    assert await slow.wait(timeout=30) == "the slow one"
+    assert [await command.wait(timeout=30) for command in queued] == [
+        "the quick one"
+    ] * 3
