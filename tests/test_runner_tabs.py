@@ -182,11 +182,13 @@ async def test_the_same_target_is_not_added_twice(
     started: tuple[Tabs, Announcements], cdp: FakeCdp
 ):
     tabs, announced = started
+    await _open(cdp, announced, "second", "s2")
 
-    await _open(cdp, announced, "second", "s2")
-    await _open(cdp, announced, "second", "s2")
+    cdp.opened("second", "s2")
+    await tabs.settled()
 
     assert [tab.target_id for tab in tabs.order] == ["first", "second"]
+    assert len(announced.of(TabOpened)) == 1
 
 
 async def test_tabs_keep_the_order_they_were_opened_in(
@@ -410,3 +412,31 @@ async def test_a_tab_the_browser_never_lets_go_of_does_not_hold_the_session(
         await tabs.close(1)
 
     assert [tab.target_id for tab in tabs.order] == ["first", "second"]
+
+
+async def test_a_tab_the_session_opened_stays_in_front_of_the_one_it_replaced(
+    started: tuple[Tabs, Announcements], cdp: FakeCdp
+):
+    tabs, announced = started
+    cdp.answers["Target.createTarget"] = {"targetId": "second"}
+
+    creating = asyncio.ensure_future(tabs.create("https://example.com/second"))
+    await asyncio.sleep(0)
+    cdp.opened("second", "s2")
+    index = await creating
+
+    assert index == 1
+    assert tabs.active.target_id == "second"
+    assert len(announced.of(TabOpened)) == 1
+
+
+async def test_activating_a_tab_outlasts_the_one_that_was_still_opening(
+    started: tuple[Tabs, Announcements], cdp: FakeCdp
+):
+    tabs, announced = started
+    cdp.opened("second", "s2")
+
+    await tabs.activate(0)
+
+    assert tabs.active.target_id == "first"
+    assert len(announced.of(TabOpened)) == 1

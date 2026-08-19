@@ -106,12 +106,14 @@ class Tabs:
         deadline = asyncio.get_running_loop().time() + ATTACH_TIMEOUT
         while asyncio.get_running_loop().time() < deadline:
             if target_id in self._tabs:
+                await self.settled()
                 await self.bring_to_front(self._tabs[target_id])
                 return self.index_of(target_id)
             await asyncio.sleep(0.05)
         raise NoActiveTab("new tab did not attach")
 
     async def activate(self, index: int) -> None:
+        await self.settled()
         await self.bring_to_front(self._at(index))
         await self._emit(TabActivated(index=index))
 
@@ -124,6 +126,12 @@ class Tabs:
                 log.warning("the browser never let go of %s", target_id)
                 return
             await asyncio.sleep(0.02)
+        await self.settled()
+
+    async def settled(self) -> None:
+        with contextlib.suppress(TimeoutError):
+            async with asyncio.timeout(ATTACH_TIMEOUT):
+                await self._queue.join()
 
     async def bring_to_front(self, tab: Tab | None = None) -> None:
         target = tab or self.active
@@ -282,6 +290,8 @@ class Tabs:
                     await self._emit(TabClosed(index=int(payload)))
             except Exception:
                 log.exception("failed to handle a tab event")
+            finally:
+                self._queue.task_done()
 
     async def _show(self, target_id: str) -> None:
         tab = self._tabs.get(target_id)

@@ -182,6 +182,7 @@ class Sessions:
         self.closing.discard(session_id)
         self._cancels.pop(session_id, None)
         self.announce_work(session_id)
+        self._work.pop(session_id, None)
 
     async def _finish(self, tx: Tx, session_id: UUID, reason: CloseReason) -> None:
         status = (
