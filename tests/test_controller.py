@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import threading
+import time
+from dataclasses import replace
 
 import pytest
 from pool_runners import controller as ctrl
@@ -9,7 +11,7 @@ from pool_runners.config import Server, Target
 from pool_runners.errors import RunnerError
 from pool_runners.fleet import Fleet
 from pool_runners.models import Stats
-from tests.fake import FakePool, FakeScaleSet, job, message
+from tests.fake import FakePool, FakeScaleSet, job, message, refused
 
 
 def _ctx(
@@ -382,3 +384,190 @@ def test_a_cancelled_runner_loses_its_registration() -> None:
 
     assert ctx.fleet.size() == 0
     assert api.forgotten == [slot.runner_id]
+
+
+def test_a_job_id_that_is_not_a_number_is_skipped() -> None:
+    offered, retired = ctrl._read_jobs(
+        json.dumps([job("не число"), job(0), job(4)])  # pyright: ignore[reportArgumentType]
+    )
+    assert offered == [4]
+    assert retired == []
+
+
+def test_junk_statistics_do_not_break_a_message() -> None:
+    api = FakeScaleSet(Target(slug="owner/app", token="ghp"))
+    ctx = _ctx(api=api)
+    session = api.open(42, "тест")
+
+    ctrl._handle(
+        ctx,
+        session,
+        {
+            "messageId": "пятое",
+            "messageType": "RunnerScaleSetJobMessages",
+            "body": json.dumps([job(7)]),
+            "statistics": {"totalAssignedJobs": "много"},
+        },
+    )
+
+    assert api.acquired == [7]
+    assert ctx.latest.get().assigned == 1
+
+
+def test_a_message_without_an_id_is_not_acknowledged() -> None:
+    api = FakeScaleSet(Target(slug="owner/app", token="ghp"))
+    ctx = _ctx(api=api)
+    session = api.open(42, "тест")
+
+    ctrl._ack(ctx, session, {"messageType": "RunnerScaleSetJobMessages"})
+
+    assert api.acked == []
+
+
+def test_a_message_of_another_type_is_ignored() -> None:
+    api = FakeScaleSet(Target(slug="owner/app", token="ghp"))
+    ctx = _ctx(api=api)
+    session = api.open(42, "тест")
+
+    ctrl._handle(ctx, session, {"messageType": "RunnerScaleSetJobMessagesOther"})
+
+    assert api.acquired == []
+    assert ctx.fleet.size() == 0
+
+
+def test_a_strange_acquirable_list_does_not_stop_the_pick_up() -> None:
+    api = FakeScaleSet(Target(slug="owner/app", token="ghp"))
+    ctx = _ctx(api=api)
+    session = api.open(42, "тест")
+    api.acquirable = lambda _scale_set_id: [  # pyright: ignore[reportAttributeAccessIssue]
+        "мусор",
+        {"нет": "ключа"},
+        {"runnerRequestId": "9"},
+    ]
+
+    ctrl._pick_up(ctx, session, Stats(available=1), "тишина")
+
+    assert api.acquired == [9]
+
+
+def test_a_session_that_never_opens_reports_the_real_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = Target(slug="owner/app", token="ghp")
+    api = FakeScaleSet(target)
+    ctx = _ctx(target=target, api=api, pool=FakePool(run=False))
+    monkeypatch.setattr(ctrl, "_start", lambda *_args: ctx)
+
+    def refuse(*_args: object) -> None:
+        raise RunnerError("сессия не открылась")
+
+    monkeypatch.setattr(api, "reopen", refuse)
+
+    with pytest.raises(RunnerError, match="сессия не открылась"):
+        ctrl.run(target, Server(url="https://pool", token="t"), threading.Event())
+
+
+def test_an_expired_queue_token_is_only_refreshed() -> None:
+    api = FakeScaleSet(Target(slug="owner/app", token="ghp"))
+    ctx = _ctx(api=api)
+    session = api.open(42, "тест")
+
+    fresh, reset = ctrl._recover(ctx, session, "хозяин", 401)
+
+    assert reset == -1
+    assert fresh.session_id != session.session_id
+
+
+def test_a_dead_session_is_opened_from_scratch() -> None:
+    api = FakeScaleSet(Target(slug="owner/app", token="ghp"))
+    ctx = _ctx(api=api)
+    session = api.open(42, "тест")
+
+    fresh, reset = ctrl._recover(ctx, session, "хозяин", 404)
+
+    assert reset == 0
+    assert fresh.session_id != session.session_id
+
+
+def test_a_session_that_cannot_be_restored_is_kept_as_is(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    api = FakeScaleSet(Target(slug="owner/app", token="ghp"))
+    ctx = _ctx(api=api)
+    session = api.open(42, "тест")
+
+    def refuse(*_args: object) -> None:
+        raise RunnerError("гитхаб молчит")
+
+    monkeypatch.setattr(api, "refresh", refuse)
+    monkeypatch.setattr(api, "reopen", refuse)
+
+    fresh, reset = ctrl._recover(ctx, session, "хозяин", 401)
+
+    assert fresh is session
+    assert reset == -1
+
+
+def test_a_fresh_token_is_left_alone() -> None:
+    api = FakeScaleSet(Target(slug="owner/app", token="ghp"))
+    ctx = _ctx(api=api)
+    session = api.open(42, "тест")
+
+    assert ctrl._fresh(ctx, session) is session
+
+
+def test_a_stale_token_is_renewed_before_polling() -> None:
+    api = FakeScaleSet(Target(slug="owner/app", token="ghp"), Stats(assigned=1))
+    ctx = _ctx(api=api)
+    session = api.open(42, "тест")
+    stale = replace(session, queue_token_exp=time.time() - 1)
+
+    fresh = ctrl._fresh(ctx, stale)
+
+    assert fresh.session_id != stale.session_id
+    assert ctx.latest.get().assigned == 1
+
+
+def test_draining_waits_for_nothing_when_told_not_to() -> None:
+    api = FakeScaleSet(Target(slug="owner/app", token="ghp"), Stats(running=3))
+    ctx = _ctx(target=Target(slug="owner/app", token="ghp", drain=0), api=api)
+
+    assert ctrl._drain(ctx).running == 0
+
+
+def test_draining_stops_as_soon_as_the_jobs_are_done() -> None:
+    api = FakeScaleSet(Target(slug="owner/app", token="ghp"), Stats(running=0))
+    ctx = _ctx(target=Target(slug="owner/app", token="ghp", drain=30), api=api)
+
+    assert ctrl._drain(ctx).running == 0
+
+
+def test_a_pool_that_says_nothing_leaves_the_fleet_untouched(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pool = FakePool(run=False)
+    ctx = _ctx(pool=pool)
+    ctrl._scale(ctx, Stats(assigned=2), "рост")
+
+    def refuse(_task_id: str) -> dict[str, object]:
+        raise RunnerError("пул молчит")
+
+    monkeypatch.setattr(pool, "state", refuse)
+    ctrl._reconcile(ctx)
+
+    assert ctx.fleet.size() == 2
+    assert pool.cancelled == []
+
+
+def test_a_task_the_pool_forgot_frees_the_slot(monkeypatch: pytest.MonkeyPatch) -> None:
+    pool = FakePool(run=False)
+    ctx = _ctx(pool=pool)
+    ctrl._scale(ctx, Stats(assigned=1), "рост")
+
+    def gone(_task_id: str) -> dict[str, object]:
+        raise refused(404)
+
+    monkeypatch.setattr(pool, "state", gone)
+    ctrl._reconcile(ctx)
+
+    assert ctx.fleet.size() == 0

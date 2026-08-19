@@ -4,6 +4,17 @@ from dataclasses import dataclass
 from typing import override
 
 
+def to_int(value: object, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)):
+        return int(value)
+    try:
+        return int(str(value).strip())
+    except ValueError:
+        return default
+
+
 @dataclass(frozen=True)
 class Stats:
     available: int = 0
@@ -18,13 +29,13 @@ class Stats:
     def parse(cls, raw: object) -> Stats:
         raw = raw if isinstance(raw, dict) else {}
         return cls(
-            available=int(raw.get("totalAvailableJobs", 0)),
-            acquired=int(raw.get("totalAcquiredJobs", 0)),
-            assigned=int(raw.get("totalAssignedJobs", 0)),
-            running=int(raw.get("totalRunningJobs", 0)),
-            registered=int(raw.get("totalRegisteredRunners", 0)),
-            busy=int(raw.get("totalBusyRunners", 0)),
-            idle=int(raw.get("totalIdleRunners", 0)),
+            available=to_int(raw.get("totalAvailableJobs")),
+            acquired=to_int(raw.get("totalAcquiredJobs")),
+            assigned=to_int(raw.get("totalAssignedJobs")),
+            running=to_int(raw.get("totalRunningJobs")),
+            registered=to_int(raw.get("totalRegisteredRunners")),
+            busy=to_int(raw.get("totalBusyRunners")),
+            idle=to_int(raw.get("totalIdleRunners")),
         )
 
     @override

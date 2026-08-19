@@ -192,7 +192,8 @@ class ScaleSet:
 
     @staticmethod
     def _session(raw: object) -> Session:
-        if not isinstance(raw, dict) or "sessionId" not in raw:
+        needed = ("sessionId", "messageQueueUrl", "messageQueueAccessToken")
+        if not isinstance(raw, dict) or any(key not in raw for key in needed):
             raise RunnerError("в ответе нет message session")
         token = str(raw["messageQueueAccessToken"])
         return Session(
@@ -280,7 +281,7 @@ class ScaleSet:
         base, _, query = session.queue_url.partition("?")
         request(
             "DELETE",
-            f"{base}/{message_id}?{query}",
+            f"{base}/{message_id}?{query}" if query else f"{base}/{message_id}",
             auth=f"Bearer {session.queue_token}",
             attempts=2,
         )

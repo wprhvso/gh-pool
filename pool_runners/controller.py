@@ -37,7 +37,7 @@ from pool_runners.errors import HttpError, RateLimited, RunnerError
 from pool_runners.fleet import Fleet
 from pool_runners.gh import delete_runner, preflight, release_version, runners
 from pool_runners.http import STOP, backoff
-from pool_runners.models import Stats
+from pool_runners.models import Stats, to_int
 from pool_runners.pool import Pool
 
 if TYPE_CHECKING:
@@ -159,8 +159,9 @@ def _read_jobs(raw_body: str) -> tuple[list[int], list[str]]:
             item.get("workflowRunId"),
             request_id,
         )
-        if request_id and JOB_AVAILABLE in kind:
-            offered.append(int(request_id))
+        offer = to_int(request_id)
+        if offer and JOB_AVAILABLE in kind:
+            offered.append(offer)
         if JOB_COMPLETED in kind and item.get("runnerName"):
             retired.append(str(item["runnerName"]))
     return offered, retired
@@ -318,7 +319,7 @@ def _handle(ctx: Ctx, session: Session, message: dict[str, Any]) -> None:
         return
     with span(
         "queue.message",
-        {"repo": ctx.slug, "queue.message_id": int(message.get("messageId") or 0)},
+        {"repo": ctx.slug, "queue.message_id": to_int(message.get("messageId"))},
     ) as active:
         raw = message.get("statistics")
         stats = ctx.latest.get() if raw is None else ctx.latest.set(Stats.parse(raw))
@@ -339,9 +340,10 @@ def _handle(ctx: Ctx, session: Session, message: dict[str, Any]) -> None:
 def _pick_up(ctx: Ctx, session: Session, stats: Stats, note: str) -> None:
     if stats.available or stats.assigned:
         ids = [
-            int(job["runnerRequestId"])
+            found
             for job in ctx.api.acquirable(ctx.scale_set_id)
-            if job.get("runnerRequestId")
+            if isinstance(job, dict)
+            and (found := to_int(job.get("runnerRequestId")))
         ]
         taken = _acquire(ctx, session, ids)
         if taken:
@@ -350,11 +352,11 @@ def _pick_up(ctx: Ctx, session: Session, stats: Stats, note: str) -> None:
 
 
 def _ack(ctx: Ctx, session: Session, message: dict[str, Any]) -> None:
-    message_id = message.get("messageId")
-    if message_id is None:
+    message_id = to_int(message.get("messageId"))
+    if not message_id:
         return
     try:
-        ctx.api.ack(session, int(message_id))
+        ctx.api.ack(session, message_id)
     except RunnerError as exc:
         log.warning("%s: не подтвердил сообщение %s: %s", ctx.slug, message_id, exc)
 
@@ -513,7 +515,7 @@ def _tick(ctx: Ctx, session: Session, last_id: int, stop: threading.Event) -> in
         _pick_up(ctx, session, ctx.latest.get(), "тишина")
         return last_id
 
-    fresh_id = int(message.get("messageId") or 0)
+    fresh_id = to_int(message.get("messageId"))
     if fresh_id and fresh_id <= last_id:
         log.debug("сообщение %s уже обработано, подтверждаю снова", fresh_id)
         _ack(ctx, session, message)
@@ -692,7 +694,8 @@ def run(target: Target, server: Server, stop: threading.Event) -> int:
     finally:
         done.set()
         ctx.closing.set()
-        watcher.join(JOIN_WAIT)
+        if watcher.ident is not None:
+            watcher.join(JOIN_WAIT)
         if stop.is_set():
             _cleanup(ctx, session)
         else:

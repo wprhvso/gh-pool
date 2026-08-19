@@ -145,16 +145,24 @@ def load(path: Path) -> tuple[list[Target], Server]:
     pool = raw.pop("pool", {})
     if not isinstance(repos, dict) or not repos:
         raise RunnerError(f"{path}: не перечислены репозитории в [repos]")
+    if not isinstance(pool, dict):
+        raise RunnerError(f"{path}: [pool] должен быть таблицей")
 
+    fallback = env_server()
     server = Server(
-        url=str(pool.get("server") or env_server().url).rstrip("/"),
-        token=str(pool.get("token") or env_server().token),
+        url=str(pool.get("server") or fallback.url).rstrip("/"),
+        token=str(pool.get("token") or fallback.token),
     )
 
     targets = []
     for slug, value in repos.items():
         merged = dict(raw)
-        merged.update({"token": value} if isinstance(value, str) else dict(value))
+        if isinstance(value, str):
+            merged["token"] = value
+        elif isinstance(value, dict):
+            merged.update(value)
+        else:
+            raise RunnerError(f"{slug}: ожидается токен или таблица настроек")
         targets.append(_target(str(slug), merged))
     return targets, server
 

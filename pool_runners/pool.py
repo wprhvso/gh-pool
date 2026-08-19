@@ -22,7 +22,7 @@ _FAR = 1 << 40
 
 class Pool:
     def __init__(self, server: Server) -> None:
-        self.url: str = server.url
+        self.url: str = server.url.rstrip("/")
         self._auth: str = f"Bearer {server.token}"
 
     def call(
@@ -119,7 +119,10 @@ class Pool:
                     continue
                 if kwargs.get("slug") != slug or kwargs.get("label", label) != label:
                     continue
-                found.append((str(row["id"]), str(kwargs.get("name") or "?"), status))
+                task_id = str(row.get("id") or "")
+                if not task_id:
+                    continue
+                found.append((task_id, str(kwargs.get("name") or "?"), status))
         return found
 
     def workers(self) -> list[dict[str, Any]]:

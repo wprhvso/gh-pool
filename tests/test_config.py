@@ -105,3 +105,46 @@ def test_an_empty_work_folder_is_refused() -> None:
 def test_jobs_must_be_positive(tmp_path: Path) -> None:
     with pytest.raises(RunnerError):
         load(_write(tmp_path, '[repos]\n"a/b" = { token = "t", jobs = 0 }\n'))
+
+
+def test_a_repo_that_is_neither_token_nor_table_is_refused(tmp_path: Path) -> None:
+    path = _write(tmp_path, '[repos]\n"alice/app" = 5\n')
+    with pytest.raises(RunnerError, match="alice/app"):
+        load(path)
+
+
+def test_a_pool_section_that_is_not_a_table_is_refused(tmp_path: Path) -> None:
+    path = _write(tmp_path, 'pool = 5\n[repos]\n"alice/app" = "ghp"\n')
+    with pytest.raises(RunnerError, match="pool"):
+        load(path)
+
+
+def test_a_missing_config_says_so(tmp_path: Path) -> None:
+    with pytest.raises(RunnerError, match="не прочитал"):
+        load(tmp_path / "нет.toml")
+
+
+def test_the_pool_falls_back_to_the_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("POOL_SERVER", "https://pool.env/")
+    monkeypatch.setenv("POOL_CLIENT_TOKEN", "из окружения")
+    path = _write(tmp_path, '[repos]\n"alice/app" = "ghp"\n')
+
+    _targets, server = load(path)
+
+    assert server.url == "https://pool.env"
+    assert server.token == "из окружения"
+
+
+def test_a_negative_duration_is_read_as_given() -> None:
+    assert secs("-1m") == -60.0
+
+
+def test_a_duration_without_a_number_is_refused() -> None:
+    with pytest.raises(RunnerError):
+        secs("m")
+    with pytest.raises(RunnerError):
+        secs("")
+    with pytest.raises(RunnerError):
+        secs("5x")
