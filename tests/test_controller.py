@@ -446,8 +446,8 @@ def test_a_strange_acquirable_list_does_not_stop_the_pick_up() -> None:
     ctx = _ctx(api=api)
     session = api.open(42, "тест")
     api.acquirable = lambda _scale_set_id: [  # pyright: ignore[reportAttributeAccessIssue]
-        "мусор",
         {"нет": "ключа"},
+        {"runnerRequestId": "не число"},
         {"runnerRequestId": "9"},
     ]
 

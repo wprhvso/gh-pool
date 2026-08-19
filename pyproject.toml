@@ -13,11 +13,6 @@ dependencies = ["yaol>=0.2"]
 [dependency-groups]
 dev = ["pytest>=8"]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "--strict-markers --strict-config"
-xfail_strict = true
-
 [project.urls]
 Homepage = "https://github.com/wprhvso/pool-runners"
 

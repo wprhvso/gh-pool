@@ -290,7 +290,8 @@ class ScaleSet:
         raw = self.call("GET", f"runnerscalesets/{scale_set_id}/acquirablejobs")
         if not raw:
             return []
-        return raw.get("value", []) if isinstance(raw, dict) else raw
+        values = raw.get("value", []) if isinstance(raw, dict) else raw
+        return [item for item in values if isinstance(item, dict)]
 
     def acquire(
         self, scale_set_id: int, session: Session, request_ids: list[int]

@@ -324,6 +324,11 @@ def test_acquirable_jobs_come_as_a_list(wire, target: Target) -> None:
     assert ScaleSet(target).acquirable(42) == [{"runnerRequestId": 1}]
 
 
+def test_junk_among_acquirable_jobs_is_dropped(wire, target: Target) -> None:
+    wire({"value": ["мусор", {"runnerRequestId": 1}]})
+    assert ScaleSet(target).acquirable(42) == [{"runnerRequestId": 1}]
+
+
 def test_no_acquirable_jobs_is_an_empty_list(wire, target: Target) -> None:
     wire(None)
     assert ScaleSet(target).acquirable(42) == []
