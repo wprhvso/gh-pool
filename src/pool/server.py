@@ -173,6 +173,16 @@ def owned(tid: str, lease_token: str | None) -> dict[str, Any]:
     return t
 
 
+def touch(worker_id: str, task_id: str | None, now: float) -> None:
+    """first_seen переживает переучёт: по нему keeper мерит ttl воркера."""
+    w = WORKERS.get(worker_id)
+    if w is None:
+        WORKERS[worker_id] = {"first_seen": now, "seen_at": now, "task_id": task_id}
+    else:
+        w["seen_at"] = now
+        w["task_id"] = task_id
+
+
 def grab(worker_id: str) -> dict[str, Any] | None:
     now = time.time()
     while QUEUE:
@@ -188,7 +198,7 @@ def grab(worker_id: str) -> dict[str, Any] | None:
             heartbeat_at=now,
         )
         DIRTY.add(t["id"])
-        WORKERS[worker_id] = {"seen_at": now, "task_id": t["id"]}
+        touch(worker_id, t["id"], now)
         lease_wait.record(max(now - t["created_at"], 0.0), {"type": t["type"]})
         return {
             "task_id": t["id"],
@@ -318,7 +328,7 @@ async def lease(
     worker_id = body.get("worker_id")
     if not worker_id:
         raise HTTPException(400, "worker_id required")
-    WORKERS[worker_id] = {"seen_at": time.time(), "task_id": None}
+    touch(worker_id, None, time.time())
     deadline = time.monotonic() + LEASE_WAIT
     while True:
         t = grab(worker_id)
@@ -631,7 +641,12 @@ async def workers(
     auth_client(authorization)
     now = time.time()
     return [
-        {"id": wid, "task_id": w["task_id"], "idle_for": round(now - w["seen_at"], 1)}
+        {
+            "id": wid,
+            "task_id": w["task_id"],
+            "idle_for": round(now - w["seen_at"], 1),
+            "serving_for": round(now - w["first_seen"], 1),
+        }
         for wid, w in sorted(WORKERS.items(), key=lambda kv: -kv[1]["seen_at"])
     ]
 

@@ -135,3 +135,22 @@ async def test_tasks_can_be_listed_newest_first(client):
     answer = await client.get("/v1/tasks", headers=as_client())
 
     assert [row["id"] for row in answer.json()][:2] == [second, first]
+
+
+async def test_a_worker_reports_how_long_it_has_been_serving(client, blank):
+    await submit(client)
+    await take(client)
+
+    listing = (await client.get("/v1/workers", headers=as_client())).json()
+
+    assert [w["serving_for"] >= 0 for w in listing] == [True]
+
+
+async def test_taking_another_task_does_not_reset_the_serving_clock(client, blank):
+    await submit(client)
+    await take(client)
+    born = server.WORKERS["w1"]["first_seen"]
+    await submit(client)
+    await take(client)
+
+    assert server.WORKERS["w1"]["first_seen"] == born

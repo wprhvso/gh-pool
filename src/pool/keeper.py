@@ -152,27 +152,46 @@ def load(path: Path) -> tuple[list[Repo], float, dict[str, str]]:
     return out, secs(raw.get("poll", 60)), pool
 
 
-def pool_serving(pool: dict[str, str]) -> int | None:
-    """Сколько воркеров реально лизят задачи. None — судить нельзя, считаем по прогонам."""
+def ask(pool: dict[str, str], path: str) -> Any:
     base = (pool.get("POOL_SERVER") or "").rstrip("/")
-    if not base:
+    req = urllib.request.Request(  # noqa: S310
+        f"{base}{path}",
+        headers={"Authorization": f"Bearer {pool.get('POOL_TOKEN') or ''}"},
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
+        return json.loads(resp.read())
+
+
+def pool_workers(pool: dict[str, str]) -> dict[int, float] | None:
+    """Прогон -> сколько секунд он обслуживает. None — судить нельзя.
+
+    Единственный честный источник: у GitHub в объекте прогона нет момента
+    получения машины (run_started_at — это тоже постановка в очередь), а
+    WORKER_ID содержит id прогона, и в WORKERS воркер попадает только дойдя
+    до pool-worker.
+    """
+    if not (pool.get("POOL_SERVER") or "").strip():
         return None
     try:
-        with urllib.request.urlopen(f"{base}/healthz", timeout=10) as resp:  # noqa: S310
-            data = json.loads(resp.read())
+        up = time.time() - float(ask(pool, "/healthz").get("started_at") or 0)
+        if up < POOL_WARMUP:
+            log(f"pool поднялся {up:.0f}с назад, список воркеров ещё не наполнился")
+            return None
+        listing = ask(pool, "/v1/workers")
     except (OSError, ValueError) as e:
-        log(f"pool healthz недоступен: {e}")
+        log(f"pool не отвечает: {e}")
         return None
-    up = time.time() - float(data.get("started_at") or 0)
-    if up < POOL_WARMUP:
-        log(f"pool поднялся {up:.0f}с назад, счётчик воркеров ещё не наполнился")
-        return None
-    return int(data.get("workers") or 0)
+    out: dict[int, float] = {}
+    for w in listing:
+        tail = str(w.get("id", "")).rpartition("-")[2]
+        if tail.isdigit():
+            out[int(tail)] = float(w.get("serving_for") or 0)
+    return out
 
 
-def reconcile(r: Repo, serving: int | None = None) -> None:
+def reconcile(r: Repo, workers: dict[int, float] | None = None) -> None:
     with span("pool.keeper.reconcile", {"repo": r.slug}):
-        _reconcile(r, serving)
+        _reconcile(r, workers)
 
 
 def unfinished(r: Repo) -> list[dict[str, Any]]:
@@ -186,7 +205,7 @@ def unfinished(r: Repo) -> list[dict[str, Any]]:
     return sorted(found.values(), key=lambda x: x["created_at"], reverse=True)
 
 
-def _reconcile(r: Repo, serving: int | None = None) -> None:
+def _reconcile(r: Repo, workers: dict[int, float] | None = None) -> None:
     r.ref = r.ref or r.api("")["default_branch"]
     runs = unfinished(r)
     r.stopping &= {x["id"] for x in runs}
@@ -194,12 +213,23 @@ def _reconcile(r: Repo, serving: int | None = None) -> None:
     ttl = secs(r.ttl)
     started, pending, expired = [], [], []
     for run in runs:
-        if age(run) > ttl:
+        if run["status"] != "in_progress":
+            # Машину не дали: тут created_at и есть время ожидания.
+            (expired if age(run) > ttl else pending).append(run)
+        elif workers is None:
+            # Судить по created_at нельзя: прогон мог сутки простоять в
+            # очереди, и его возраст ничего не говорит о возрасте воркера.
+            # Остаётся только жёсткий backstop.
+            (expired if age(run) > 2 * ttl else started).append(run)
+        elif run["id"] in workers:
+            (expired if workers[run["id"]] > ttl else started).append(run)
+        elif age(run) > BOOT_GRACE:
+            # Прогретый, но так и не начавший обслуживать — зомби, место
+            # под него надо освободить, а не ждать до самого ttl.
             expired.append(run)
-        elif run["status"] == "in_progress":
-            started.append(run)
         else:
-            pending.append(run)
+            started.append(run)
+    serving = None if workers is None else len(set(workers) & {x["id"] for x in runs})
 
     # Лишние срезаем с молодого конца: старый прогон почти наверняка держит
     # CI-джобу, и его отмена роняет задачу в lost (терминально) вместе с полным
@@ -230,17 +260,11 @@ def _reconcile(r: Repo, serving: int | None = None) -> None:
 
     now = time.time()
     r.recent = [t for t in r.recent if now - t < GRACE]
-    young = [x for x in started if age(x) < BOOT_GRACE]
-    if serving is None:
-        alive = len(started)
-    else:
-        # Обслуживающие почти наверняка из прогретых, молодые ещё бутстрапятся.
-        # Прогретый, но не обслуживающий — зомби: раньше он числился живым до
-        # самого ttl, и ёмкость тихо проседала.
-        alive = min(serving, len(started) - len(young)) + len(young)
+    # started уже без зомби и без просроченных, так что это и есть ёмкость.
     # Прогон без машины не обслуживает ничего, но досылать поверх него нечего:
     # он уже стоит в очереди GitHub и рано или поздно станет воркером.
-    live = min(alive + len(pending), r.jobs) + len(r.recent)
+    young = [x for x in started if age(x) < BOOT_GRACE]
+    live = min(len(started) + len(pending), r.jobs) + len(r.recent)
     launch = min(max(0, r.jobs - live), MAX_LAUNCH)
     for _ in range(launch):
         r.api(f"/actions/workflows/{r.workflow}/dispatches", "POST", {"ref": r.ref})
@@ -354,10 +378,8 @@ def main() -> None:
                 return
             log(f"{len(repos)} repos, {sum(r.jobs for r in repos)} runners")
             while True:
-                # /healthz отдаёт общее число воркеров без разбивки по репозиториям,
-                # так что доверять ему можно только когда репозиторий один.
-                serving = pool_serving(pool) if len(repos) == 1 else None
-                each(repos, lambda r: reconcile(r, serving))  # noqa: B023
+                workers = pool_workers(pool)
+                each(repos, lambda r: reconcile(r, workers))  # noqa: B023
                 if args.once:
                     return
                 time.sleep(poll)

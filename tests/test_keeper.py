@@ -79,10 +79,15 @@ def test_a_run_past_its_ttl_is_retired():
     assert repo.cancelled == [1]
 
 
-def test_a_full_fleet_launches_nothing():
-    repo = FakeRepo([run(i, 500) for i in range(20)], jobs=20)
+def serving(runs, seconds=60.0) -> dict[int, float]:
+    return {int(x["id"]): seconds for x in runs}
 
-    keeper.reconcile(repo, serving=20)
+
+def test_a_full_fleet_launches_nothing():
+    warmed = [run(i, 500) for i in range(20)]
+    repo = FakeRepo(warmed, jobs=20)
+
+    keeper.reconcile(repo, serving(warmed))
 
     assert repo.dispatched == 0
 
@@ -91,7 +96,7 @@ def test_a_warmed_run_that_never_serves_frees_its_place():
     warmed = [run(i, 1000) for i in range(20)]
     repo = FakeRepo(warmed, jobs=20)
 
-    keeper.reconcile(repo, serving=15)
+    keeper.reconcile(repo, serving(warmed[:15]))
 
     assert repo.dispatched == 5
 
@@ -100,7 +105,7 @@ def test_runs_that_are_still_warming_up_are_counted_as_alive():
     young = [run(i, 10) for i in range(20)]
     repo = FakeRepo(young, jobs=20)
 
-    keeper.reconcile(repo, serving=0)
+    keeper.reconcile(repo, {})
 
     assert repo.dispatched == 0
 
@@ -109,18 +114,37 @@ def test_no_more_than_the_launch_budget_goes_out_at_once(monkeypatch):
     monkeypatch.setattr(keeper, "MAX_LAUNCH", 5)
     repo = FakeRepo([], jobs=20)
 
-    keeper.reconcile(repo, serving=0)
+    keeper.reconcile(repo, {})
 
     assert repo.dispatched == 5
 
 
-def test_without_a_serving_count_the_runs_are_trusted_as_before():
-    warmed = [run(i, 1000) for i in range(20)]
-    repo = FakeRepo(warmed, jobs=20)
+def test_the_ttl_is_measured_from_when_the_worker_began_serving():
+    # Прогон мог сутки простоять в очереди: его created_at ничего не говорит
+    # о возрасте воркера, и раньше такой воркер гасился сразу, как живой.
+    long_queued = run(1, 100000)
+    repo = FakeRepo([long_queued], jobs=20)
 
-    keeper.reconcile(repo, serving=None)
+    keeper.reconcile(repo, {1: 60.0})
 
-    assert repo.dispatched == 0
+    assert repo.cancelled == []
+
+
+def test_a_worker_that_has_served_past_its_ttl_is_retired():
+    old = run(1, 100000)
+    repo = FakeRepo([old], jobs=20, ttl="6h")
+
+    keeper.reconcile(repo, {1: 25000.0})
+
+    assert repo.cancelled == [1]
+
+
+def test_without_a_worker_list_only_a_hard_backstop_retires_a_run():
+    repo = FakeRepo([run(1, 30000), run(2, 50000)], jobs=20, ttl="6h")
+
+    keeper.reconcile(repo, None)
+
+    assert repo.cancelled == [2]
 
 
 def test_a_run_is_never_cancelled_twice():
@@ -136,8 +160,8 @@ def test_a_freshly_dispatched_run_is_not_dispatched_again(monkeypatch):
     monkeypatch.setattr(keeper, "MAX_LAUNCH", 20)
     repo = FakeRepo([], jobs=3)
 
-    keeper.reconcile(repo, serving=0)
-    keeper.reconcile(repo, serving=0)
+    keeper.reconcile(repo, {})
+    keeper.reconcile(repo, {})
 
     assert repo.dispatched == 3
 
@@ -155,17 +179,17 @@ def test_a_long_lived_run_is_seen_even_behind_a_wall_of_newer_ones():
     newer = [run(100 + i, 10 + i, "queued") for i in range(20)]
     repo = FakeRepo([*newer, old], jobs=20)
 
-    keeper.reconcile(repo, serving=1)
+    keeper.reconcile(repo, {1: 60.0})
 
     assert repo.dispatched == 0
     assert repo.cancelled == [100]
 
 
 def test_a_run_without_a_machine_is_dropped_before_a_serving_one():
-    serving_run, waiting = run(1, 3000), run(2, 10, "queued")
-    repo = FakeRepo([waiting, serving_run], jobs=1)
+    working, waiting = run(1, 3000), run(2, 10, "queued")
+    repo = FakeRepo([waiting, working], jobs=1)
 
-    keeper.reconcile(repo, serving=1)
+    keeper.reconcile(repo, {1: 3000.0})
 
     assert repo.cancelled == [2]
 
@@ -173,7 +197,7 @@ def test_a_run_without_a_machine_is_dropped_before_a_serving_one():
 def test_runs_without_a_machine_do_not_cost_the_retire_budget():
     repo = FakeRepo([run(i, 10 + i, "queued") for i in range(6)], jobs=2)
 
-    keeper.reconcile(repo, serving=0)
+    keeper.reconcile(repo, {})
 
     assert len(repo.cancelled) == 4
 
@@ -181,7 +205,7 @@ def test_runs_without_a_machine_do_not_cost_the_retire_budget():
 def test_a_queued_run_holds_a_place_but_does_not_count_as_serving():
     repo = FakeRepo([run(i, 10, "queued") for i in range(20)], jobs=20)
 
-    keeper.reconcile(repo, serving=0)
+    keeper.reconcile(repo, {})
 
     assert repo.dispatched == 0
     assert repo.cancelled == []
@@ -201,24 +225,41 @@ class FakeAnswer:
         return False
 
 
-def test_the_serving_count_comes_from_the_pool(monkeypatch):
-    monkeypatch.setattr(
-        keeper.urllib.request,
-        "urlopen",
-        lambda *a, **k: FakeAnswer({"workers": 17, "started_at": time.time() - 9999}),
+def fake_pool(monkeypatch, listing, up=9999):
+    def urlopen(req, **_):
+        url = req if isinstance(req, str) else req.full_url
+        if url.endswith("/healthz"):
+            return FakeAnswer({"started_at": time.time() - up})
+        return FakeAnswer(listing)
+
+    monkeypatch.setattr(keeper.urllib.request, "urlopen", urlopen)
+
+
+POOL = {"POOL_SERVER": "http://pool", "POOL_TOKEN": "t"}
+
+
+def test_the_workers_are_matched_to_their_runs_by_id(monkeypatch):
+    fake_pool(
+        monkeypatch,
+        [
+            {"id": "gh-4242", "serving_for": 61.5},
+            {"id": "gh-777", "serving_for": 10.0},
+        ],
     )
 
-    assert keeper.pool_serving({"POOL_SERVER": "http://pool"}) == 17
+    assert keeper.pool_workers(POOL) == {4242: 61.5, 777: 10.0}
+
+
+def test_a_worker_whose_name_holds_no_run_id_is_skipped(monkeypatch):
+    fake_pool(monkeypatch, [{"id": "laptop", "serving_for": 5.0}])
+
+    assert keeper.pool_workers(POOL) == {}
 
 
 def test_a_pool_that_has_just_started_is_not_believed(monkeypatch):
-    monkeypatch.setattr(
-        keeper.urllib.request,
-        "urlopen",
-        lambda *a, **k: FakeAnswer({"workers": 0, "started_at": time.time()}),
-    )
+    fake_pool(monkeypatch, [], up=0)
 
-    assert keeper.pool_serving({"POOL_SERVER": "http://pool"}) is None
+    assert keeper.pool_workers(POOL) is None
 
 
 def test_a_pool_that_does_not_answer_is_not_believed(monkeypatch):
@@ -227,8 +268,8 @@ def test_a_pool_that_does_not_answer_is_not_believed(monkeypatch):
 
     monkeypatch.setattr(keeper.urllib.request, "urlopen", refuse)
 
-    assert keeper.pool_serving({"POOL_SERVER": "http://pool"}) is None
+    assert keeper.pool_workers(POOL) is None
 
 
 def test_without_a_pool_address_there_is_nothing_to_ask():
-    assert keeper.pool_serving({}) is None
+    assert keeper.pool_workers({}) is None
