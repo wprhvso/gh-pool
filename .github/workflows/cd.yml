@@ -33,16 +33,10 @@ jobs:
           set -euo pipefail
           declared=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
           echo "version=$declared" >> "$GITHUB_OUTPUT"
-          # Only digits and dots is a release; an rc, an alpha, a dev or a
-          # local segment is something else and must not become what anyone
-          # gets by asking for no version at all.
           case "$declared" in
             *[!0-9.]*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
             *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
           esac
-          # A 404 means the project has never been published, so anything is
-          # newer. Ordering is PEP 440's, not the shell's: 0.2.10 is above
-          # 0.2.9 and 1.0.0rc1 is below 1.0.0.
           curl -fsS https://pypi.org/pypi/gh-chrome/json -o pypi.json || echo '{}' > pypi.json
           release=$(uv run --no-project --with packaging python - "$declared" <<'PY'
           import json, sys
