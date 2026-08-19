@@ -278,9 +278,22 @@ async def keeper() -> None:
                 )
                 DIRTY.add(t["id"])
                 tasks_lost.add(1, {"reason": "worker_gone"})
+                log.warning(
+                    "task_lost",
+                    task=t["id"],
+                    type=t["type"],
+                    worker=t["worker_id"],
+                    quiet_for=round(now - t["heartbeat_at"], 1),
+                )
         for wid, w in list(WORKERS.items()):
             if w["seen_at"] < now - WORKER_STALE:
                 WORKERS.pop(wid, None)
+                log.info(
+                    "worker_gone",
+                    worker=wid,
+                    task=w.get("task_id"),
+                    quiet_for=round(now - w["seen_at"], 1),
+                )
         await flush()
         await asyncio.sleep(FLUSH_EVERY)
 
@@ -392,6 +405,15 @@ async def complete(
         WORKERS[t["worker_id"]]["task_id"] = None
     event_locks.pop(tid, None)
     tasks_completed.add(1, {"status": status, "type": t["type"]})
+    log.info(
+        "task_finished",
+        task=tid,
+        type=t["type"],
+        status=status,
+        worker=t["worker_id"],
+        error=t["error"],
+        seconds=round(t["finished_at"] - (t["started_at"] or t["finished_at"]), 3),
+    )
     return {"ok": True, "status": status}
 
 
