@@ -94,7 +94,7 @@ def test_a_full_fleet_launches_nothing():
 
 
 def test_a_warmed_run_that_never_serves_frees_its_place():
-    warmed = [run(i, 1000) for i in range(20)]
+    warmed = [run(i, 2000) for i in range(20)]
     repo = FakeRepo(warmed, jobs=20)
 
     keeper.reconcile(repo, serving(warmed[:15]))
@@ -320,3 +320,15 @@ def test_the_client_token_is_not_propagated_to_repositories(tmp_path):
     assert client == "client"
     assert "POOL_CLIENT_TOKEN" not in pool
     assert pool == {"POOL_SERVER": "http://pool", "POOL_TOKEN": "worker"}
+
+
+def test_a_run_still_inside_the_bootstrap_window_is_not_called_a_zombie():
+    # p90 бутстрапа на живом флоте — около 900 с; при BOOT_GRACE=240 здоровые
+    # прогоны гасились на прогреве и флот не набирался.
+    warming = [run(i, 500) for i in range(20)]
+    repo = FakeRepo(warming, jobs=20)
+
+    keeper.reconcile(repo, {})
+
+    assert repo.cancelled == []
+    assert repo.dispatched == 0
