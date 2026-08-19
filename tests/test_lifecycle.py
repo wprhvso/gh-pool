@@ -154,3 +154,48 @@ async def test_taking_another_task_does_not_reset_the_serving_clock(client, blan
     await take(client)
 
     assert server.WORKERS["w1"]["first_seen"] == born
+
+
+async def test_listing_tasks_writes_nothing_to_disk(client, blank):
+    blank.rows = {}
+    blank.pending = []
+    tid = await submit(client)
+    server.TASKS.clear()
+    blank.rows[tid] = {
+        "id": tid,
+        "type": "python",
+        "payload": {},
+        "status": "done",
+        "worker_id": None,
+        "error": None,
+        "parent_id": None,
+        "created_at": time.time(),
+        "started_at": None,
+        "finished_at": None,
+    }
+
+    await client.get(f"/v1/tasks/{tid}", headers=as_client())
+
+    assert list(server.DATA_DIR.iterdir()) == []
+
+
+async def test_a_pending_task_the_server_forgot_is_still_cancelled(client, blank):
+    row = {
+        "id": "old",
+        "type": "python",
+        "payload": {},
+        "status": "pending",
+        "worker_id": None,
+        "error": None,
+        "parent_id": None,
+        "created_at": time.time(),
+        "started_at": None,
+        "finished_at": None,
+    }
+    blank.rows["old"] = row
+
+    answer = await client.post("/v1/tasks/old/cancel", headers=as_client())
+    await server.flush()
+
+    assert answer.json()["status"] == "cancelled"
+    assert [r["status"] for r in blank.saved if r["id"] == "old"] == ["cancelled"]

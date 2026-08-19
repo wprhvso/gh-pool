@@ -58,11 +58,13 @@ def run(payload: dict[str, Any]) -> None:
         "kwargs": kwargs,
         "emit": rpc.emit,
     }
-    exec(compile(code, name, "exec"), scope)  # noqa: S102
-    if entry and not callable(scope.get(entry)):
-        raise NameError(f"{entry} is not defined by the submitted code")
-    value = scope[entry](*args, **kwargs) if entry else scope.get("result")
-    signal.setitimer(signal.ITIMER_REAL, 0)
+    try:
+        exec(compile(code, name, "exec"), scope)  # noqa: S102
+        if entry and not callable(scope.get(entry)):
+            raise NameError(f"{entry} is not defined by the submitted code")
+        value = scope[entry](*args, **kwargs) if entry else scope.get("result")
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
 
     if value is None:
         return

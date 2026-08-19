@@ -115,9 +115,7 @@ tasks_lost = meter.create_counter(
 
 
 def task_dir(tid: str) -> Path:
-    d = DATA_DIR / tid
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    return DATA_DIR / tid
 
 
 def events_path(tid: str) -> Path:
@@ -283,6 +281,7 @@ async def keeper() -> None:
                     lease_token=None,
                 )
                 DIRTY.add(t["id"])
+                event_locks.pop(t["id"], None)
                 tasks_lost.add(1, {"reason": "worker_gone"})
                 log.warning(
                     "task_lost",
@@ -377,6 +376,7 @@ async def append_events(
             p = events_path(tid)
 
             def w() -> int:
+                p.parent.mkdir(parents=True, exist_ok=True)
                 with p.open("ab") as f:
                     f.write(data)
                     return f.tell()
@@ -514,6 +514,7 @@ async def cancel(
         t.update(
             status="cancelled", finished_at=time.time(), error="cancelled before start"
         )
+        TASKS.setdefault(tid, t)
         DIRTY.add(tid)
         tasks_completed.add(1, {"status": "cancelled", "type": t["type"]})
         return {"status": "cancelled"}
@@ -562,7 +563,7 @@ async def put_artifact(
 ) -> dict[str, Any]:
     auth_any(authorization)
     final = blob_path(key)
-    part = final.with_suffix(".part")
+    part = final.with_suffix(f".{uuid.uuid4().hex}.part")
     digest = hashlib.sha256()
     size = 0
 
@@ -576,9 +577,12 @@ async def put_artifact(
             if chunk:
                 size += len(chunk)
                 await to_thread.run_sync(_write, f, digest, chunk)
-    finally:
         await to_thread.run_sync(f.close)
-    await to_thread.run_sync(os.replace, part, final)
+        await to_thread.run_sync(os.replace, part, final)
+    except BaseException:
+        await to_thread.run_sync(f.close)
+        await to_thread.run_sync(part.unlink, True)
+        raise
 
     row = {
         "key": key,

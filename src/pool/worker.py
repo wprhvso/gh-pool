@@ -72,11 +72,12 @@ def note(msg: str) -> None:
 
 
 class Spool:
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, base: int = 0) -> None:
         self.path = path
         self.fh = path.open("wb")
-        self.size = 0
-        self.sent = 0
+        self.base = base
+        self.size = base
+        self.sent = base
         self.dropped = 0
         self.stopped = False
         self.event = asyncio.Event()
@@ -99,7 +100,7 @@ class Spool:
 
     def read_at(self, offset: int, n: int) -> bytes:
         with self.path.open("rb") as f:
-            f.seek(offset)
+            f.seek(max(offset - self.base, 0))
             return f.read(n)
 
     def close(self) -> None:
@@ -155,6 +156,7 @@ async def sender(
             continue
         data = spool.read_at(spool.sent, CHUNK)
         if not data:
+            spool.sent = spool.size
             continue
         r = await req(
             client,
@@ -237,18 +239,33 @@ async def execute(client: httpx.AsyncClient, lease: dict[str, Any]) -> None:
 
 async def _run(client: httpx.AsyncClient, lease: dict[str, Any]) -> str:
     global _current  # noqa: PLW0603
+    base = SPOOL_DIR / f"pool-{lease['task_id']}"
+    spool_path = base.with_suffix(".events")
+    payload_path = base.with_suffix(".payload")
+    spool = Spool(spool_path, lease.get("event_offset", 0))
+    _current = spool
+    crew: list[asyncio.Task[Any]] = []
+    try:
+        return await _serve(client, lease, spool, payload_path, crew)
+    finally:
+        for t in crew:
+            t.cancel()
+        _current = None
+        spool.close()
+        _cleanup(spool_path, payload_path)
+
+
+async def _serve(
+    client: httpx.AsyncClient,
+    lease: dict[str, Any],
+    spool: Spool,
+    payload_path: Path,
+    crew: list[asyncio.Task[Any]],
+) -> str:
     tid = lease["task_id"]
     token = lease["lease_token"]
     ttype = lease["type"]
-    base = SPOOL_DIR / f"pool-{tid}"
-    spool_path = base.with_suffix(".events")
-    payload_path = base.with_suffix(".payload")
     payload_path.write_text(json.dumps(lease["payload"]))
-
-    spool = Spool(spool_path)
-    _current = spool
-    spool.sent = lease.get("event_offset", 0)
-    spool.size = spool.sent
 
     finished = asyncio.Event()
     cancel = asyncio.Event()
@@ -273,6 +290,7 @@ async def _run(client: httpx.AsyncClient, lease: dict[str, Any]) -> str:
     pump_task = asyncio.create_task(pump(proc, spool))
     wait_task = asyncio.create_task(proc.wait())
     stop_task = asyncio.create_task(_first(cancel, stale))
+    crew.extend((send_task, beat_task, pump_task, wait_task, stop_task))
 
     await asyncio.wait({wait_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
 
@@ -300,9 +318,6 @@ async def _run(client: httpx.AsyncClient, lease: dict[str, Any]) -> str:
         spool.event.set()
         send_task.cancel()
         beat_task.cancel()
-        spool.close()
-        _cleanup(spool_path, payload_path)
-        _current = None
         return "lost"
 
     if killed and cancel.is_set():
@@ -326,9 +341,6 @@ async def _run(client: httpx.AsyncClient, lease: dict[str, Any]) -> str:
         headers=hdr(token),
     )
     beat_task.cancel()
-    spool.close()
-    _cleanup(spool_path, payload_path)
-    _current = None
     return status
 
 

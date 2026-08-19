@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 import hashlib
 
@@ -65,3 +66,30 @@ async def test_an_unfinished_upload_does_not_become_the_artifact(client, monkeyp
         await client.put("/v1/artifacts/k", content=b"bad", headers=as_worker())
 
     assert (await client.get("/v1/artifacts/k", headers=as_client())).content == b"good"
+
+
+async def test_two_uploads_of_the_same_key_do_not_mix(client):
+    async def upload(body):
+        return await client.put(
+            "/v1/artifacts/shared", content=body, headers=as_worker()
+        )
+
+    answers = await asyncio.gather(upload(b"a" * 50000), upload(b"b" * 50000))
+    got = (await client.get("/v1/artifacts/shared", headers=as_client())).content
+
+    assert got in (b"a" * 50000, b"b" * 50000)
+    assert {a.json()["sha256"] for a in answers} == {
+        hashlib.sha256(b"a" * 50000).hexdigest(),
+        hashlib.sha256(b"b" * 50000).hexdigest(),
+    }
+
+
+async def test_a_failed_upload_leaves_no_scraps_behind(client, monkeypatch):
+    def explode(*_, **__):
+        raise OSError("disk went away")
+
+    monkeypatch.setattr(server.os, "replace", explode)
+    with contextlib.suppress(OSError):
+        await client.put("/v1/artifacts/k", content=b"bad", headers=as_worker())
+
+    assert list(server.BLOB_DIR.rglob("*.part")) == []
