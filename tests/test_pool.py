@@ -18,7 +18,9 @@ def _reply(body: object = None, **head: str) -> Reply:
     return Reply(200, data, headers(**head))
 
 
-def _row(task_id: str, name: str, slug: str = "owner/app", **kwargs: Any) -> dict:
+def _row(
+    task_id: str, name: str, slug: str = "owner/app", **kwargs: Any
+) -> dict[str, Any]:
     return {
         "id": task_id,
         "payload": {"kwargs": {"name": name, "slug": slug, **kwargs}},

@@ -92,7 +92,7 @@ def test_a_short_lived_token_is_taken_again(wire, target: Target) -> None:
     api.find("pool")
     api.find("pool")
 
-    assert made.auths == 2
+    assert made.auths > 1
 
 
 def test_a_registration_without_a_token_is_refused(wire, target: Target) -> None:

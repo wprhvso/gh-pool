@@ -152,6 +152,6 @@ def jwt_expiry(token: str) -> float:
         payload += "=" * (-len(payload) % 4)
         claims = json.loads(base64.urlsafe_b64decode(payload))
         return float(claims["exp"])
-    except IndexError, KeyError, TypeError, ValueError, binascii.Error:
+    except (IndexError, KeyError, TypeError, ValueError, binascii.Error):
         log.debug("не разобрал exp из токена, считаю его коротким")
         return time.time() + _FALLBACK_TTL

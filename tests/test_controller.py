@@ -388,7 +388,13 @@ def test_a_cancelled_runner_loses_its_registration() -> None:
 
 def test_a_job_id_that_is_not_a_number_is_skipped() -> None:
     offered, retired = ctrl._read_jobs(
-        json.dumps([job("не число"), job(0), job(4)])  # pyright: ignore[reportArgumentType]
+        json.dumps(
+            [
+                {"messageType": "JobAvailable", "runnerRequestId": "не число"},
+                {"messageType": "JobAvailable", "runnerRequestId": 0},
+                job(4),
+            ]
+        )
     )
     assert offered == [4]
     assert retired == []

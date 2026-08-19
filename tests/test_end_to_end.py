@@ -117,3 +117,44 @@ def test_the_fleet_empties_itself_after_the_job(
         loop.join(30)
 
     assert len(pool.tasks) == 1
+
+
+def test_a_batch_of_jobs_fills_and_empties_the_fleet(
+    stage: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = Target(
+        slug="owner/app", token="ghp", jobs=3, idle=10, lifetime=60, drain=0
+    )
+    api = FakeScaleSet(target)
+    pool = FakePool()
+    monkeypatch.setattr(ctrl, "ScaleSet", lambda _target: api)
+    monkeypatch.setattr(ctrl, "Pool", lambda _server: pool)
+
+    deleted: list[int] = []
+
+    def remember(_target: Target, runner_id: int) -> bool:
+        deleted.append(runner_id)
+        return True
+
+    monkeypatch.setattr(ctrl, "runners", lambda _target: [{"id": 7}, {"id": 8}])
+    monkeypatch.setattr(ctrl, "delete_runner", remember)
+
+    api.offer(job(1), job(2), job(3), stats=Stats(available=3))
+
+    stop = threading.Event()
+    loop = threading.Thread(
+        target=ctrl.run, args=(target, Server("https://pool", "t"), stop)
+    )
+    loop.start()
+    try:
+        assert _wait(lambda: len(pool.done()) == 3), "не все раннеры отработали"
+    finally:
+        stop.set()
+        loop.join(30)
+
+    assert not loop.is_alive()
+    assert sorted(api.acquired) == [1, 2, 3]
+    assert len(api.jits) >= 3
+    assert api.dropped == [42]
+    assert deleted == [7, 8]
+    assert all(task.outcome["jobs"] == 1 for task in pool.done())
