@@ -77,9 +77,7 @@ class Display:
             await _terminate(process)
 
     def alive(self) -> bool:
-        return bool(self._processes) and all(
-            p.returncode is None for p in self._processes
-        )
+        return bool(self._processes) and self._processes[0].returncode is None
 
     def _kasmvnc_ready(self) -> bool:
         if not settings.vnc:

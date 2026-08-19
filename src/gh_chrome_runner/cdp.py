@@ -95,7 +95,11 @@ class Cdp:
             asyncio.get_running_loop().create_future()
         )
         self._pending[message_id] = future
-        await self._socket.send(json.dumps(message))
+        try:
+            await self._socket.send(json.dumps(message))
+        except Exception as unsent:
+            self._pending.pop(message_id, None)
+            raise CdpError(method, f"could not be sent: {unsent}") from unsent
         return await future
 
     def _abandon(self, reason: str) -> None:

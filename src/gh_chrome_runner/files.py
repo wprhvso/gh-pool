@@ -74,8 +74,8 @@ class Files:
             )
         if args.url is None:
             raise ValueError("upload needs either file_id or url")
-        target = settings.uploads_dir / (
-            Path(httpx.URL(args.url).path).name or "upload.bin"
+        target = settings.uploads_dir / _one_segment(
+            Path(httpx.URL(args.url).path).name, "upload.bin"
         )
         url = httpx.URL(args.url)
         async with httpx.AsyncClient(timeout=600.0, follow_redirects=False) as client:
