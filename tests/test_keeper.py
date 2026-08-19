@@ -1,3 +1,4 @@
+import email.message
 import json
 import time
 import urllib.error
@@ -236,7 +237,7 @@ def fake_pool(monkeypatch, listing, up=9999):
     monkeypatch.setattr(keeper.urllib.request, "urlopen", urlopen)
 
 
-POOL = {"POOL_SERVER": "http://pool", "POOL_TOKEN": "t"}
+POOL = {"POOL_SERVER": "http://pool"}
 
 
 def test_the_workers_are_matched_to_their_runs_by_id(monkeypatch):
@@ -248,19 +249,19 @@ def test_the_workers_are_matched_to_their_runs_by_id(monkeypatch):
         ],
     )
 
-    assert keeper.pool_workers(POOL) == {4242: 61.5, 777: 10.0}
+    assert keeper.pool_workers(POOL, "client") == {4242: 61.5, 777: 10.0}
 
 
 def test_a_worker_whose_name_holds_no_run_id_is_skipped(monkeypatch):
     fake_pool(monkeypatch, [{"id": "laptop", "serving_for": 5.0}])
 
-    assert keeper.pool_workers(POOL) == {}
+    assert keeper.pool_workers(POOL, "client") == {}
 
 
 def test_a_pool_that_has_just_started_is_not_believed(monkeypatch):
     fake_pool(monkeypatch, [], up=0)
 
-    assert keeper.pool_workers(POOL) is None
+    assert keeper.pool_workers(POOL, "client") is None
 
 
 def test_a_pool_that_does_not_answer_is_not_believed(monkeypatch):
@@ -269,11 +270,11 @@ def test_a_pool_that_does_not_answer_is_not_believed(monkeypatch):
 
     monkeypatch.setattr(keeper.urllib.request, "urlopen", refuse)
 
-    assert keeper.pool_workers(POOL) is None
+    assert keeper.pool_workers(POOL, "client") is None
 
 
 def test_without_a_pool_address_there_is_nothing_to_ask():
-    assert keeper.pool_workers({}) is None
+    assert keeper.pool_workers({}, "client") is None
 
 
 def test_the_idle_backlog_is_drained_in_bites(monkeypatch):
@@ -283,3 +284,39 @@ def test_the_idle_backlog_is_drained_in_bites(monkeypatch):
     keeper.reconcile(repo, {})
 
     assert len(repo.cancelled) == 3
+
+
+def test_a_refused_request_is_not_mistaken_for_a_dead_pool(monkeypatch):
+    def refuse(req, **_):
+        raise urllib.error.HTTPError(
+            req.full_url, 401, "no", email.message.Message(), None
+        )
+
+    monkeypatch.setattr(keeper.urllib.request, "urlopen", refuse)
+    said = []
+    monkeypatch.setattr(keeper, "log", said.append)
+
+    assert keeper.pool_workers(POOL, "wrong") is None
+    assert "client_token" in said[0]
+
+
+def test_without_a_client_token_the_workers_are_not_asked_for(monkeypatch):
+    monkeypatch.setattr(
+        keeper.urllib.request, "urlopen", lambda *a, **k: pytest.fail("не спрашивать")
+    )
+
+    assert keeper.pool_workers(POOL, "") is None
+
+
+def test_the_client_token_is_not_propagated_to_repositories(tmp_path):
+    cfg = tmp_path / "keeper.toml"
+    cfg.write_text(
+        '[pool]\nserver = "http://pool"\ntoken = "worker"\nclient_token = "client"\n'
+        '\n[repos]\n"a/b" = { token = "gh" }\n'
+    )
+
+    _, _, pool, client = keeper.load(cfg)
+
+    assert client == "client"
+    assert "POOL_CLIENT_TOKEN" not in pool
+    assert pool == {"POOL_SERVER": "http://pool", "POOL_TOKEN": "worker"}

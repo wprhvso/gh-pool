@@ -137,10 +137,15 @@ class Repo:
             raise
 
 
-def load(path: Path) -> tuple[list[Repo], float, dict[str, str]]:
+def load(path: Path) -> tuple[list[Repo], float, dict[str, str], str]:
     raw = tomllib.loads(path.read_text())
     repos = raw.pop("repos", {})
-    pool = {f"POOL_{k.upper()}": str(v) for k, v in raw.pop("pool", {}).items()}
+    # token уезжает в секреты репозиториев, им авторизуются воркеры. Спрашивать
+    # им /v1/workers нельзя, это клиентская ручка, поэтому client_token отдельно
+    # и из propagation исключён.
+    table = raw.pop("pool", {})
+    client = str(table.pop("client_token", ""))
+    pool = {f"POOL_{k.upper()}": str(v) for k, v in table.items()}
     out = []
     for slug, value in repos.items():
         cfg: dict[str, Any] = {
@@ -152,20 +157,24 @@ def load(path: Path) -> tuple[list[Repo], float, dict[str, str]]:
         out.append(Repo(slug, **{k: cfg[k] for k in KEYS if k in cfg}))
     if not out:
         sys.exit(f"{path}: no repos")
-    return out, secs(raw.get("poll", 60)), pool
+    return out, secs(raw.get("poll", 60)), pool, client
 
 
-def ask(pool: dict[str, str], path: str) -> Any:
-    base = (pool.get("POOL_SERVER") or "").rstrip("/")
+def ask(base: str, path: str, token: str) -> Any:
     req = urllib.request.Request(  # noqa: S310
-        f"{base}{path}",
-        headers={"Authorization": f"Bearer {pool.get('POOL_TOKEN') or ''}"},
+        f"{base.rstrip('/')}{path}",
+        headers={"Authorization": f"Bearer {token}"},
     )
-    with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
-        return json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        # HTTPError — подкласс OSError, и без этой ветки 401 от неверного токена
+        # выглядел бы как «пул не отвечает», то есть как временная сетевая беда.
+        raise ApiError(e.code, f"GET {path} -> {e.code}") from None
 
 
-def pool_workers(pool: dict[str, str]) -> dict[int, float] | None:
+def pool_workers(pool: dict[str, str], token: str) -> dict[int, float] | None:
     """Прогон -> сколько секунд он обслуживает. None — судить нельзя.
 
     Единственный честный источник: у GitHub в объекте прогона нет момента
@@ -173,14 +182,21 @@ def pool_workers(pool: dict[str, str]) -> dict[int, float] | None:
     WORKER_ID содержит id прогона, и в WORKERS воркер попадает только дойдя
     до pool-worker.
     """
-    if not (pool.get("POOL_SERVER") or "").strip():
+    base = (pool.get("POOL_SERVER") or "").strip()
+    if not base:
+        return None
+    if not token:
+        log("в конфиге нет pool.client_token, воркеров не видно — ttl не работает")
         return None
     try:
-        up = time.time() - float(ask(pool, "/healthz").get("started_at") or 0)
+        up = time.time() - float(ask(base, "/healthz", token).get("started_at") or 0)
         if up < POOL_WARMUP:
             log(f"pool поднялся {up:.0f}с назад, список воркеров ещё не наполнился")
             return None
-        listing = ask(pool, "/v1/workers")
+        listing = ask(base, "/v1/workers", token)
+    except ApiError as e:
+        log(f"pool отказал: {e} — проверь pool.client_token")
+        return None
     except (OSError, ValueError) as e:
         log(f"pool не отвечает: {e}")
         return None
@@ -378,14 +394,14 @@ def main() -> None:
 
     setup(from_env("pool-keeper", service_version=version()))
     try:
-        repos, poll, pool = load(args.config)
+        repos, poll, pool, client = load(args.config)
         try:
             if args.cmd == "build":
                 each(repos, lambda r: build(r, args.source / r.workflow, pool))
                 return
             log(f"{len(repos)} repos, {sum(r.jobs for r in repos)} runners")
             while True:
-                workers = pool_workers(pool)
+                workers = pool_workers(pool, client)
                 each(repos, lambda r: reconcile(r, workers))  # noqa: B023
                 if args.once:
                     return
