@@ -126,7 +126,7 @@ async def test_a_request_nobody_will_ever_answer_ends_when_the_browser_does(cdp:
 
     await cdp.close()
 
-    with pytest.raises(CdpError, match="closed"):
+    with pytest.raises(CdpError, match="browser"):
         await pending
 
 
