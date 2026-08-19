@@ -47,9 +47,6 @@ class Keyboard:
 
     async def hotkey(self, keys: list[str]) -> None:
         names = [keysym_name(key) for key in keys]
-        # Resolved before anything is pressed: a name the layout does not know
-        # would otherwise raise with the modifiers already down, and every
-        # keystroke after that in the session would carry them.
         for name in names:
             self._xtest.resolve(name)
         held: list[str] = []

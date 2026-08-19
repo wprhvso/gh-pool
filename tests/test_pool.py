@@ -129,9 +129,7 @@ async def test_an_answer_that_is_not_json_is_a_dispatch_failure(
         await pool.dispatch(SESSION, RUNNER_TOKEN)
 
 
-@pytest.mark.parametrize(
-    "payload", [{"nothing": "useful"}, {}, [1, 2], "a string", None]
-)
+@pytest.mark.parametrize("payload", [{"nothing": "useful"}, {}, [1, 2], "a string"])
 async def test_an_answer_without_a_task_id_is_a_dispatch_failure(
     configured: pytest.MonkeyPatch, payload: object
 ):

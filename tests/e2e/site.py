@@ -246,8 +246,6 @@ document.getElementById('cookie').textContent = document.cookie;
 
 
 class Site:
-    """A website of our own: everything the browser talks to stays on loopback."""
-
     def __init__(self) -> None:
         self.hits: Counter[str] = Counter()
         self.posted: list[dict[str, str]] = []
@@ -320,8 +318,6 @@ class Site:
 
     async def _asset(self, request: Request) -> Response:
         self.hits[request.url.path] += 1
-        # A site names its own downloads, and "as" is how this one asks for a
-        # name the runner has to carry rather than the tidy one in the path.
         name = request.query_params.get("as") or str(request.path_params["name"])
         return Response(
             ASSET,
@@ -346,8 +342,6 @@ class Site:
             for index in range(count):
                 yield f"chunk-{index};".encode()
                 await asyncio.sleep(delay)
-            # Only a reader that stayed to the end gets here, which is how a
-            # test tells a replay that was stopped from one that was forgotten.
             self.finished += 1
 
         return StreamingResponse(chunks(), media_type="text/plain")

@@ -50,10 +50,6 @@ log = logging.getLogger(__name__)
 
 TOKEN = "an-end-to-end-secret"
 POLL = 0.02
-# How often a live runner tells the server it is still there. A module that
-# shortens the server's fuse has to leave room for several of these: the runner
-# sleeps the whole interval between attempts, and it is doing all of Xvfb,
-# Chrome and ffmpeg on the same machine as the database and the website.
 HEARTBEAT_INTERVAL = 2
 
 CHROME_NAMES = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser")
@@ -71,12 +67,6 @@ _HANDED_OUT: set[int] = set()
 
 
 def free_display() -> int:
-    """A display number no run of this suite has used yet.
-
-    The lock file alone is not enough to go on: an X server that has just been
-    torn down frees its number at once, and handing the same one to the next
-    runner races the old server's socket on the way out.
-    """
     for number in range(80, 250):
         lock = Path(f"/tmp/.X{number}-lock")
         socket_path = Path(f"/tmp/.X11-unix/X{number}")
@@ -116,12 +106,6 @@ async def until(
 
 
 class Background:
-    """An ASGI app on a real socket in a thread of its own.
-
-    The tests keep their event loop and the server keeps its, so a fixture can
-    outlive a test without dragging a loop along with it.
-    """
-
     def __init__(self, app: ASGIApp, port: int = 0) -> None:
         self._server = uvicorn.Server(
             uvicorn.Config(
@@ -130,8 +114,6 @@ class Background:
                 port=port,
                 log_level="warning",
                 access_log=False,
-                # Event streams never end on their own, and a graceful shutdown
-                # that waits for them would wait for the length of the test.
                 timeout_graceful_shutdown=2,
             )
         )
@@ -202,12 +184,6 @@ class Cluster:
 
 
 def start_cluster(base: Path) -> Cluster | None:
-    """A cluster to run the suite against, or nothing if there is none to have.
-
-    `GH_CHROME_TEST_DATABASE_URL` wins; otherwise a throwaway cluster is put up
-    from whatever postgres is installed. initdb refuses to run as root, so a
-    root test run has to bring its own.
-    """
     given = os.environ.get("GH_CHROME_TEST_DATABASE_URL")
     if given:
         return Cluster(given)
@@ -241,8 +217,6 @@ def start_cluster(base: Path) -> Cluster | None:
 
 
 class Server:
-    """The real server on a real port, with the workflow dispatch in our hands."""
-
     def __init__(self, database_url: str, storage: Path) -> None:
         self.dispatched: list[UUID] = []
         self.runner_tokens: dict[UUID, str] = {}
@@ -269,8 +243,6 @@ class Server:
         self._patch.setattr(server_settings, "ready_timeout", ready_timeout)
         self._patch.setattr(server_settings, "watchdog_interval", watchdog_interval)
         self._patch.setattr(server_settings, "segment_seconds", segment_seconds)
-        # Read once, when the app is built: the limit is a middleware, so that
-        # a body is turned away before the parser spools it anywhere.
         self._patch.setattr(server_settings, "max_upload", max_upload)
         self._patch.setattr(pool, "dispatch", self._dispatch)
         self._background = Background(create_app())
@@ -278,7 +250,6 @@ class Server:
         self._patch.setattr(server_settings, "public_url", self.url)
 
     def restart(self) -> None:
-        """The same server on the same port, with everything in memory lost."""
         if self._background is None:
             raise RuntimeError("the server is not running")
         port = self._background.port
@@ -317,7 +288,6 @@ class Server:
 
 
 def expression_of(envelope: CommandEnvelope) -> str:
-    """What an eval was asked to run, for a runner that answers with it."""
     args = envelope.args
     assert isinstance(args, Expression)
     return args.expression
@@ -340,13 +310,6 @@ type Handler = Callable[[CommandEnvelope], Awaitable[Any] | Any]
 
 
 class ScriptedRunner:
-    """The runner half of the protocol with no browser under it.
-
-    It speaks the wire the real runner speaks — the same client, the same event
-    stream, the same one-command-at-a-time discipline — and answers from a table
-    the test writes, which is what the server and the client contract is about.
-    """
-
     def __init__(
         self,
         session_id: UUID,
@@ -375,7 +338,6 @@ class ScriptedRunner:
         return self.config
 
     async def stop(self) -> None:
-        # A command the test left stalled would otherwise hold the settle open.
         if self._current is not None:
             self._current.cancel()
         for task in self._tasks:
@@ -416,8 +378,6 @@ class ScriptedRunner:
             async for message in parse_sse(chunks):
                 if message.event == "close":
                     self.closed = True
-                    # The real runner drops whatever it is doing here: the
-                    # stream that could cancel it has just ended.
                     if self._current is not None:
                         self._current.cancel()
                     await self._settle()
@@ -457,9 +417,6 @@ class ScriptedRunner:
         except Rejected as rejected:
             error = rejected.error
         except Exception as exc:
-            # A handler that raises by accident used to leave the command with
-            # nobody to answer it, and the test failed thirty seconds later as a
-            # timeout with the real cause nowhere in the report.
             self.handler_errors.append(exc)
             log.exception("a scripted handler for %s failed", envelope.args.method)
             error = CommandError(
@@ -478,14 +435,11 @@ class ScriptedRunner:
 
 
 async def _nothing() -> AsyncIterator[Event]:
-    """A stand-in stream, so the real one is opened by __aenter__ and not before."""
     return
     yield
 
 
 class Watch:
-    """Everything the session announces from the moment the watch is opened."""
-
     def __init__(self, session: Session) -> None:
         self.events: list[Event] = []
         self._session = session
@@ -493,8 +447,6 @@ class Watch:
         self._task: asyncio.Task[None] | None = None
 
     async def __aenter__(self) -> Self:
-        # events() subscribes as it is called rather than at the first event,
-        # so the watch is live before anything in the body of the with runs.
         self._stream = self._session.events()
         self._task = asyncio.create_task(self._collect())
         return self
@@ -526,8 +478,6 @@ class Watch:
 
 
 class LiveRunner:
-    """The runner as the workflow runs it: its own process, X server and Chrome."""
-
     def __init__(
         self,
         session_id: UUID,
@@ -581,9 +531,6 @@ class LiveRunner:
             self._handle = None
 
     def _signal(self, number: int) -> None:
-        # The X server, the browser and the recorder are the runner's children,
-        # and a runner cut short never gets to stop them: the group goes at once
-        # or the machine collects an Xvfb and a Chrome per killed session.
         if self._process is None:
             return
         with contextlib.suppress(ProcessLookupError, PermissionError):
@@ -606,17 +553,12 @@ class LiveRunner:
             kept = [
                 line
                 for line in path.read_text("utf-8", "replace").splitlines()
-                # Every request the runner makes is in here twice over; what a
-                # failure needs is the runner's own account of it.
                 if not any(name in line for name in CHATTER)
             ]
             pieces.append(f"--- {path.name}\n" + "\n".join(kept[-lines:]))
         return "\n".join(pieces) or "the runner left no logs"
 
     def _environment(self) -> dict[str, str]:
-        # Anything GH_CHROME_* in the ambient environment belongs to the machine
-        # this runs on, not to the test: a stray proxy or token would quietly
-        # change what the runner does.
         env = {
             key: value
             for key, value in os.environ.items()
@@ -631,31 +573,22 @@ class LiveRunner:
             "GH_CHROME_VNC_PORT": str(free_port()),
             "GH_CHROME_VNC": "1" if self._vnc else "0",
             "GH_CHROME_HEARTBEAT_INTERVAL": str(HEARTBEAT_INTERVAL),
-            # The website these tests drive is on loopback, which a runner in a
-            # real job would refuse to fetch an upload from.
             "GH_CHROME_UPLOAD_ALLOW_PRIVATE": "1",
             "NO_PROXY": "*",
         }
         chrome = chrome_binary()
         if chrome is not None:
             env["GH_CHROME_CHROME_BINARY"] = chrome
-        # Last, so a test that is about one of these settings can say so.
         return env | self._extra
 
 
 class Stack:
-    """Everything a test drives: the server, the sessions and their runners."""
-
     def __init__(self, server: Server, workdir: Path) -> None:
         self.server = server
         self.runners: list[LiveRunner] = []
         self._workdir = workdir
         self._sessions: list[Session] = []
         self._scripted: list[ScriptedRunner] = []
-        # The runner's settings are a module-level singleton. Written outright
-        # they would outlive the fixture, the module and the process, and the
-        # tests that run after the end-to-end directory would be talking to a
-        # closed port with this suite's token.
         self._patch = pytest.MonkeyPatch()
         self._patch.setattr(runner_settings, "url", server.url)
         self._patch.setattr(runner_settings, "token", TOKEN)
@@ -721,27 +654,14 @@ class Stack:
             self.launch(session_id, vnc=vnc, env=runner_env)
 
         self.server.launcher = launcher
-        # A default command timeout of thirty seconds is right for a browser
-        # with a machine to itself. These share one with a database, a website,
-        # a recorder and whatever else the suite is running, and a click that
-        # took forty seconds under that load is slow, not broken: what these
-        # tests are about is what the browser did, so the timeout is moved out
-        # of the way and the tests that are about timing set their own.
         params.setdefault("timeout", 120.0)
         try:
             session = await self.session(close_timeout=20.0, **params)
         finally:
-            # Disarmed the moment this session has its runner. The server calls
-            # the launcher for every session it is asked to make, so a stack
-            # that had once made a live session would give a real browser to
-            # the next scripted one too — two runners on one session, both
-            # taking commands, and no test that mixed them could be read.
             self.server.launcher = None
         runner = self.runners[-1]
         waiter = asyncio.ensure_future(session.ready(timeout=ready_timeout))
         try:
-            # A runner that dies on the way up would otherwise be waited out in
-            # full, and its logs are the only place that says why it died.
             while True:
                 done, _ = await asyncio.wait({waiter}, timeout=0.2)
                 if done:
@@ -774,10 +694,6 @@ class Stack:
 
     async def aclose(self) -> None:
         for session in self._sessions:
-            # A runner still busy with a command never confirms the close, and
-            # a test is not the place to wait that out. Only the waiting is
-            # forgiven: close() is on the path of every test in this directory
-            # and asserted by two, so anything else it raises is news.
             with contextlib.suppress(TimeoutError):
                 async with asyncio.timeout(25):
                     await session.close()
@@ -785,9 +701,6 @@ class Stack:
             with contextlib.suppress(Exception):
                 await scripted.stop()
         for runner in self.runners:
-            # One runner that will not go must not take the rest of the list
-            # with it: what is left behind is an X server and a Chrome apiece,
-            # and a display number this process will never hand out again.
             with contextlib.suppress(Exception):
                 runner.stop()
         self._patch.undo()

@@ -112,12 +112,6 @@ async def test_a_captured_request_can_be_replayed_chunk_by_chunk(
 async def test_the_rules_are_still_there_on_the_next_document(
     live: Session, site: Site
 ):
-    """The rules used to live in one document's closure.
-
-    Every reload, redirect, form post and iframe came up with the hooks in
-    place and nothing to match, and the request the caller was watching for
-    went out for real without a word.
-    """
     await live.goto(site.url("/net"))
     tap = Tap(live)
     await tap.install(
@@ -132,11 +126,6 @@ async def test_the_rules_are_still_there_on_the_next_document(
 
 
 async def test_two_requests_under_one_rule_are_both_kept(live: Session, site: Site):
-    """A second match used to overwrite a capture nobody had collected yet.
-
-    Both requests were answered from the rule and kept off the network, and
-    only one of them was ever handed over.
-    """
     await live.goto(site.url("/net"))
     tap = Tap(live, window=2.0)
     await tap.install(
@@ -157,11 +146,6 @@ async def test_two_requests_under_one_rule_are_both_kept(live: Session, site: Si
 async def test_a_rule_header_is_matched_however_it_is_spelled(
     live: Session, site: Site
 ):
-    """The rule is written in Python, where a header may be spelled any way.
-
-    Headers appends rather than replaces, so a "Content-Type" beside the
-    default lower-case one made the answer's type both at once.
-    """
     await live.goto(site.url("/net"))
     tap = Tap(live)
     await tap.install(
@@ -185,7 +169,6 @@ async def test_a_rule_header_is_matched_however_it_is_spelled(
 async def test_an_xhr_answered_from_a_rule_sees_every_header_of_it(
     live: Session, site: Site
 ):
-    """settle used to report a content type and drop the rest of the rule."""
     await live.goto(site.url("/net"))
     tap = Tap(live)
     await tap.install(
@@ -209,11 +192,6 @@ async def test_an_xhr_answered_from_a_rule_sees_every_header_of_it(
 async def test_an_xhr_capture_carries_the_type_the_browser_would_have_sent(
     live: Session, site: Site
 ):
-    """The page set no content type, so XHR derives one from the body.
-
-    A capture without it replays as a request the server reads differently
-    from the one the page actually made.
-    """
     await live.goto(site.url("/net"))
     tap = Tap(live, window=2.0)
     await tap.install(
@@ -230,11 +208,6 @@ async def test_an_xhr_capture_carries_the_type_the_browser_would_have_sent(
 async def test_an_xhr_used_twice_is_not_left_holding_the_canned_answer(
     live: Session, site: Site
 ):
-    """The own getters settle installs used to shadow every later response.
-
-    Reusing an XMLHttpRequest is ordinary in polling code, and the second
-    request — for an address no rule matches — came back as the first one.
-    """
     await live.goto(site.url("/net"))
     tap = Tap(live)
     await tap.install(
@@ -252,11 +225,6 @@ async def test_an_xhr_used_twice_is_not_left_holding_the_canned_answer(
 async def test_a_replay_the_caller_walked_away_from_is_stopped(
     live: Session, site: Site
 ):
-    """Forgetting the id left the pump fetching and buffering to no one.
-
-    It ran for the life of the document, holding the connection open and
-    growing a string nothing could read.
-    """
     await live.goto(site.url("/net"))
     tap = Tap(live, window=2.0)
     await tap.install(
@@ -269,8 +237,6 @@ async def test_a_replay_the_caller_walked_away_from_is_stopped(
         assert chunk.startswith("chunk-0;")
         break
 
-    # Longer than the whole stream takes: a pump nobody stopped would have
-    # read it to the end by now and the site would have counted it.
     await asyncio.sleep(8.0)
     assert site.finished == 0
 

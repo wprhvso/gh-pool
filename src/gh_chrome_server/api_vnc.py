@@ -98,8 +98,6 @@ async def desktop_socket(
         head = await stream.head()
         if head.status != status.HTTP_101_SWITCHING_PROTOCOLS:
             raise TunnelDown(f"the desktop answered {head.status}")
-        # The runner asks for "binary" even when the viewer named nothing, so the
-        # echo only travels back when the viewer would actually accept it.
         chosen = head.subprotocol if head.subprotocol in offered else None
         await websocket.accept(subprotocol=chosen)
         await _relay(websocket, stream)
@@ -139,8 +137,6 @@ async def _upstream(websocket: WebSocket, stream: Stream) -> None:
 async def _forward(
     websocket: WebSocket, stream: Stream, op: tunnel.Op, payload: bytes
 ) -> None:
-    # One frame per message, so an oversized one cannot be split. It costs this
-    # viewer its socket; sending it anyway would cost every viewer the tunnel.
     if len(payload) > tunnel.MAX_PAYLOAD - tunnel.HEADER:
         await websocket.close(code=1009)
         raise WebSocketDisconnect(1009)
@@ -177,8 +173,6 @@ def _headers(
 
 
 def _reply_headers(items: Iterable[tuple[str, str]], prefix: str) -> dict[str, str]:
-    # A directory redirect from KasmVNC points at the origin root, and it sends no
-    # validators at all, so a cached asset would outlive the release it came from.
     sent = {}
     for name, value in _headers(items, DROP_DOWN):
         rooted = name.lower() == "location" and value.startswith("/")

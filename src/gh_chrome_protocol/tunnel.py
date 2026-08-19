@@ -49,11 +49,6 @@ def frame(op: Op, stream: int, payload: bytes | BaseModel = b"") -> bytes:
 
 
 def parse(data: bytes) -> tuple[Op | None, int, bytes]:
-    """The op is None for a frame this build has no meaning for.
-
-    One tunnel carries every stream, so an op from a newer other end is skipped
-    the way an unknown stream id is, rather than taking the desktop down.
-    """
     if len(data) < HEADER:
         raise ValueError("truncated tunnel frame")
     op = Op(data[0]) if data[0] in _KNOWN else None

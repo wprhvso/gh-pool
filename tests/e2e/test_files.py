@@ -48,13 +48,6 @@ async def test_a_file_from_a_url_lands_in_the_file_input(live: Session, site: Si
 async def test_an_upload_url_the_runner_should_not_reach_is_refused(
     stack: Stack, site: Site, url: str, desktop: None
 ):
-    """The fetch is the runner's, not the browser's.
-
-    None of the rules a page is held to apply to it — no CORS, no mixed
-    content, no private network check — so what is left is whatever the job can
-    reach: its own loopback, the metadata service, and on a self-hosted runner
-    the network around it.
-    """
     session = await stack.live(runner_env={"GH_CHROME_UPLOAD_ALLOW_PRIVATE": "0"})
     await session.goto(site.url("/upload"))
 
@@ -89,12 +82,6 @@ async def test_a_download_is_carried_back_to_the_server(
 async def test_a_download_named_by_the_site_survives_the_trip_whole(
     stack: Stack, site: Site, tmp_path: Path, desktop: None
 ):
-    """The site names its own downloads, and the runner turns that into a URL.
-
-    A name holding a "#" used to be pasted into the path unescaped: the PUT went
-    to a truncated address and the client asked for a file under a name the
-    download event never carried.
-    """
     session = await stack.live(subscribe=[Topic.DOWNLOADS])
     await session.goto(site.url("/download"))
 

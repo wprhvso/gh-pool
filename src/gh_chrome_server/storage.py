@@ -44,10 +44,6 @@ def files_dir(session_id: UUID) -> Path:
 
 
 def profile_path(name: str) -> Path:
-    # Every caller of this holds a name that came off the wire and one of them
-    # writes, so the guard belongs here rather than in each of them. A name is
-    # refused rather than trimmed: trimming would point one profile's archive
-    # at another's.
     if re.fullmatch(PROFILE_NAME, name) is None:
         raise BadName(name)
     return settings.profiles_dir / f"{name}.tar.zst"
@@ -69,11 +65,6 @@ async def write_atomic(
         temp_path = Path(tmp.name)
         try:
             async for chunk in chunks:
-                # The server is one process by design, so a write that blocks
-                # blocks every other session with it: no keepalive goes out, no
-                # command is handed to a runner, no heartbeat is answered. A
-                # profile archive is a compressed Chrome profile and can be
-                # hundreds of megabytes of exactly that.
                 await asyncio.to_thread(tmp.write, chunk)
                 size += len(chunk)
                 if limit is not None and size > limit:

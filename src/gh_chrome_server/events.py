@@ -64,8 +64,6 @@ class Events:
 
     async def stream(self, session_id: UUID, after_seq: int) -> AsyncGenerator[Event]:
         with self._subscribe(session_id) as sub:
-            # Asked before the history is read, so a session that ends while it
-            # is being read still comes through the subscription below.
             over = await self._over(session_id)
             delivered = after_seq
             for event in await self._history(session_id, after_seq):
@@ -74,9 +72,6 @@ class Events:
                 if event.data.type is EventType.SESSION_CLOSED:
                     return
             if over:
-                # A caller resuming past the last event of a session that is
-                # already over would otherwise hold the stream open for a
-                # session that will never say anything again.
                 return
             while True:
                 event = await sub.get()

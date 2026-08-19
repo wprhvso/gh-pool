@@ -26,13 +26,7 @@ class Settings(BaseSettings):
     debug_port: int = 9222
     proxy: str = ""
     vnc: bool = True
-    # Chrome refuses to connect to this port at all (it is on its restricted
-    # list), which is what keeps a page the session visits from opening the
-    # desktop it is being driven on: KasmVNC takes any loopback client.
     vnc_port: int = 6667
-    # upload(url=...) is fetched by this process rather than by the browser, so
-    # a private address is only ever reachable because the job it runs in can
-    # reach it. Set when the file genuinely lives beside the runner.
     upload_allow_private: bool = False
     vnc_frame_rate: int = 30
     vnc_www: Path = Path("/usr/share/kasmvnc/www")

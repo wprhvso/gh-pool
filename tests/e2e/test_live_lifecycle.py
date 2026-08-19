@@ -21,15 +21,6 @@ pytestmark = pytest.mark.browser
 
 @pytest.fixture
 def server_options(request: pytest.FixtureRequest) -> dict[str, Any]:
-    """A short heartbeat fuse: a runner that dies should be missed quickly.
-
-    Short, not tight. Four missed beats rather than one and a half: the tests
-    that kill a runner on purpose allow ninety seconds for the verdict, so
-    nothing here is paid for by hurrying it, while the ones that kill nothing
-    used to be one late beat away from having the session declared dead
-    underneath them. One test wants the opposite — a watchdog that stays out of
-    the way while the runner decides what to make of a stream that ended.
-    """
     if request.node.get_closest_marker("patient_watchdog") is not None:
         return {"heartbeat_timeout": 120.0, "watchdog_interval": 0.2}
     return {"heartbeat_timeout": HEARTBEAT_INTERVAL * 4, "watchdog_interval": 0.2}
@@ -62,8 +53,6 @@ async def test_closing_while_a_command_is_running_still_shuts_the_runner_down(
 
     await until(lambda: not runner.alive, 90.0, "the runner to finish")
     assert runner.returncode == 0
-    # Either the runner got its word in before it went, or the session ended
-    # first; what matters is that the caller is not left waiting.
     with pytest.raises((Cancelled, SessionDead)):
         await pending
 
@@ -90,7 +79,6 @@ async def test_a_runner_that_is_killed_leaves_the_session_dead(
     await session.goto(site.url("/form"))
 
     async with Watch(session) as watch:
-        # What the six hour limit does to a job, only sooner.
         stack.runners[-1].stop()
         ended = await watch.wait_for(EventType.SESSION_CLOSED, timeout=90)
 
@@ -107,12 +95,6 @@ async def test_a_runner_that_is_killed_leaves_the_session_dead(
 async def test_a_server_restart_does_not_leave_the_session_looking_closed(
     stack: Stack, api: httpx.AsyncClient, site: Site, desktop: None
 ):
-    """A server that goes away and comes back has closed nothing.
-
-    The runner loses its command stream and gives up on the session, but only
-    the watchdog gets to decide what became of it: a session reported as
-    cleanly closed here would tell the client all its work had finished.
-    """
     session = await stack.live(profile="restarted")
     await session.goto(site.url("/form"))
     runner = stack.runners[-1]
@@ -120,7 +102,6 @@ async def test_a_server_restart_does_not_leave_the_session_looking_closed(
     stack.server.restart()
 
     await until(lambda: not runner.alive, 90.0, "the runner to finish")
-    # Long enough for a confirm_close to have arrived, had one been sent.
     await asyncio.sleep(2.0)
     state = (await api.get(f"/sessions/{session.id}")).json()
     assert state["status"] == SessionStatus.ACTIVE

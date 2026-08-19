@@ -85,11 +85,6 @@ class Command[T]:
         return self._future.done()
 
     async def wait(self, timeout: float | None = None) -> T:
-        # Shielded on both paths. Awaiting a bare future makes it the awaiting
-        # task's own waiter, so a cancel anywhere up the stack — a task group
-        # giving up on a sibling, an outer wait_for — would cancel the command's
-        # future rather than the wait, and the answer that arrives afterwards
-        # would have nowhere to go.
         if timeout is None:
             return await asyncio.shield(self._future)
         async with asyncio.timeout(timeout):
@@ -140,11 +135,6 @@ class Session:
         self._finished = asyncio.Event()
         self._closed = False
         self._last_seq = 0
-        # Started from an empty context on purpose. This task outlives by hours
-        # the call that happened to open the session, and a task inherits the
-        # context it was created in: anything context-bound in the caller — a
-        # trace above all — would otherwise be held by the reader for the whole
-        # session and attributed to every reconnect it ever makes.
         self._reader = asyncio.create_task(self._read_events(), context=Context())
 
     @property
@@ -205,13 +195,6 @@ class Session:
             await self._http.aclose()
 
     def events(self) -> AsyncIterator[Event]:
-        """Everything the session announces from this moment on.
-
-        The queue is registered here rather than inside the generator body: an
-        async generator runs nothing until its first __anext__, so a caller who
-        held the iterator and then did the thing it wanted to watch used to miss
-        exactly the events it had asked for.
-        """
         queue: asyncio.Queue[Event | None] = asyncio.Queue()
         if self._over:
             queue.put_nowait(None)
@@ -233,18 +216,12 @@ class Session:
         while True:
             try:
                 async with self._http.events(self.id, self._last_seq) as chunks:
-                    # A stream that opened is a server that is there; the next
-                    # drop deserves a fresh short wait rather than the one the
-                    # last outage had worked its way up to.
                     backoff = MIN_BACKOFF
                     async for message in parse_sse(chunks):
                         self._take(message)
             except asyncio.CancelledError:
                 raise
             except Rejected as refused:
-                # The session is gone, or the token is not the one the server
-                # wants. Reconnecting forever would leave every caller waiting
-                # on a stream that will never say anything again.
                 log.warning("the event stream is closed to us: %s", refused)
                 self._end(SessionDead(str(refused)))
                 return
@@ -282,11 +259,6 @@ class Session:
         try:
             event = Event.model_validate_json(message.data)
         except ValidationError:
-            # An event this build has no model for: a server deployed ahead of
-            # the client, which is the ordinary case for the half that lives on
-            # someone's laptop. The stream resumes from the last sequence
-            # number seen, so a frame left unread here would be the first thing
-            # redelivered on every reconnect, forever.
             log.warning("skipping a %s event this client cannot read", message.event)
             self._last_seq = _seq_of(message, self._last_seq)
             return
@@ -346,17 +318,12 @@ class Session:
         if stashed is not None:
             _settle(command, stashed)
         elif self._over:
-            # close() sweeps what is pending and then awaits; a submit whose
-            # POST landed inside that window would otherwise be filed as
-            # pending afterwards, with the reader already cancelled and nothing
-            # left that could ever settle it.
             command._fail(SessionDead("session is closed"))
         else:
             self._pending[accepted.command_id] = command
 
     @property
     def _over(self) -> bool:
-        """Closed by us, or finished by the server: either way nothing more."""
         return self._closed or self._finished.is_set()
 
     def goto(

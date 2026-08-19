@@ -78,13 +78,6 @@ async def test_commands_are_numbered_and_answered_in_order(stack: Stack):
 async def test_a_batch_submitted_at_once_gives_every_caller_its_own_answer(
     stack: Stack,
 ):
-    """Five commands in flight together, and nobody gets somebody else's reply.
-
-    Sorting the answers hid exactly that. Five submissions race each other to
-    the server and the sequence numbers go out in whatever order the requests
-    arrive — but each of the five results has to find its way back to the
-    caller that asked for it, and each command has to be numbered once.
-    """
     session, runner = await stack.scripted()
     runner.on(Method.EVAL, expression_of)
 
@@ -218,11 +211,6 @@ async def test_a_finished_session_can_be_deleted_but_a_live_one_cannot(
 async def test_a_bitrate_that_is_not_one_never_reaches_the_recorder(
     stack: Stack, api: httpx.AsyncClient, bitrate: str
 ):
-    """The value goes straight into ffmpeg's argv on the runner.
-
-    It is the one session parameter that is a string rather than a number, so
-    it is held to the shape of a bitrate at the door.
-    """
     refused = await api.post("/sessions", json={"params": {"bitrate": bitrate}})
 
     assert refused.status_code == 422

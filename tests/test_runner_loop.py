@@ -21,8 +21,6 @@ def _command(method: Method = Method.TITLE, timeout_ms: int = 30_000) -> bytes:
 
 
 class FakeServer:
-    """The runner's side of the wire, with the server replaced by a script."""
-
     def __init__(self, *frames: bytes) -> None:
         self._frames = frames
         self.completed: list[tuple[object, ErrorCode | None]] = []
@@ -40,8 +38,6 @@ class FakeServer:
 
 
 class FakeActions:
-    """Enough of the actions for the loop: one that answers and one that does not."""
-
     def __init__(self, *, block: bool = False) -> None:
         self._block = block
 
@@ -78,11 +74,6 @@ async def test_a_close_frame_is_the_server_asking():
 
 
 async def test_a_stream_that_just_ends_is_not_the_server_asking():
-    """A restart, a proxy giving up: neither says anything about the session.
-
-    Confirming a close on the strength of one used to end a session the client
-    was still using, and told the client all its work had finished.
-    """
     server = FakeServer(_command())
     runner = _runner(server)
 
@@ -93,11 +84,6 @@ async def test_a_stream_that_just_ends_is_not_the_server_asking():
 
 
 async def test_a_command_is_bounded_by_the_timeout_it_carries():
-    """The waits inside the actions poll for as long as it takes.
-
-    The server's cancel used to be the only thing that bounded them, and it
-    cannot arrive while the runner is busy with the command it would cancel.
-    """
     server = FakeServer(_command(timeout_ms=200))
     runner = _runner(server)
 

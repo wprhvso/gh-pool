@@ -69,10 +69,6 @@ class Stream:
                 self._head.set_result(tunnel.Head.model_validate_json(payload))
             return
         if op is tunnel.Op.CLOSE and not self._head.done():
-            # The runner could not open the stream at all — KasmVNC is not up
-            # yet, or it refused. Waiting out HEAD_TIMEOUT for a stream the
-            # other end has already given up on serves nobody, and the reason
-            # it gave is the only useful thing here.
             self.fail(tunnel.Close.model_validate_json(payload).error or "closed")
             return
         try:
@@ -90,7 +86,7 @@ class Stream:
         self._owner.forget(self.id)
         if not self._head.done():
             self._head.set_exception(TunnelDown(reason))
-            self._head.exception()  # a stream torn down before anyone waited on it
+            self._head.exception()
         while not self._queue.empty():
             self._queue.get_nowait()
         self._queue.put_nowait(
@@ -174,9 +170,6 @@ class Tunnels:
     async def serve(self, session_id: UUID, socket: WebSocket) -> None:
         previous = self._live.get(session_id)
         current = Tunnel(socket)
-        # The new tunnel is the live one from here on: a half-open socket can
-        # take a long time to close, and the desktop should not read as
-        # disconnected while its runner is already back.
         self._live[session_id] = current
         if previous is not None:
             await previous.shutdown()

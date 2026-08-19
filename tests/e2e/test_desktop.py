@@ -34,7 +34,6 @@ async def _wait_connected(
 async def _connected(
     player: httpx.AsyncClient, session: Session
 ) -> AsyncGenerator[None]:
-    """The runner's own tunnel, with a stand-in for KasmVNC behind it."""
     async with _desktop() as port:
         tunnel = Tunnel(session.id, port)
         await tunnel.start()

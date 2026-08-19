@@ -69,16 +69,6 @@ def install_errors(app: FastAPI) -> None:
 
 
 class LimitBody:
-    """Turns away a body bigger than the server will keep, before anything reads it.
-
-    The multipart parser spools a whole upload to a temporary file before the
-    handler it belongs to is ever called, on a volume the operator sized for
-    something else, so a limit checked inside the handler is checked far too
-    late. A declared length is refused outright; a body that declares none is
-    counted as it is read, because a chunked upload would otherwise be spooled
-    in full before anyone could object to its size.
-    """
-
     def __init__(self, app: ASGIApp, limit: int) -> None:
         self._app = app
         self._limit = limit
@@ -89,36 +79,42 @@ class LimitBody:
             return
         declared = Headers(scope=scope).get("content-length", "")
         if declared.isdigit() and int(declared) > self._limit:
-            response = JSONResponse(
-                {"detail": f"more than {self._limit} bytes"},
-                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            )
-            await response(scope, receive, send)
+            await self._refuse(scope, receive, send)
             return
-        await self._app(scope, self._counted(receive), send)
-
-    def _counted(self, receive: Receive) -> Receive:
         seen = 0
+        over = False
+        answered = False
 
         async def counting() -> Message:
-            nonlocal seen
+            nonlocal seen, over
             message = await receive()
             if message["type"] == "http.request":
                 seen += len(message.get("body", b""))
                 if seen > self._limit:
+                    over = True
                     raise storage.TooLarge(f"more than {self._limit} bytes")
             return message
 
-        return counting
+        async def sending(message: Message) -> None:
+            nonlocal answered
+            if not over:
+                await send(message)
+                return
+            if not answered and message["type"] == "http.response.start":
+                answered = True
+                await self._refuse(scope, counting, send)
+
+        await self._app(scope, counting, sending)
+
+    async def _refuse(self, scope: Scope, receive: Receive, send: Send) -> None:
+        response = JSONResponse(
+            {"detail": f"more than {self._limit} bytes"},
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+        )
+        await response(scope, receive, send)
 
 
 class BindTrace:
-    """Puts the caller's trace on everything the request goes on to log.
-
-    Outermost, so a body turned away by LimitBody below is still reported
-    against the trace that sent it.
-    """
-
     def __init__(self, app: ASGIApp) -> None:
         self._app = app
 
@@ -133,7 +129,6 @@ class BindTrace:
 def create_app() -> FastAPI:
     app = FastAPI(title="gh-chrome", lifespan=lifespan)
     app.add_middleware(LimitBody, limit=settings.max_upload)
-    # Added last, so it wraps the one above rather than sitting inside it.
     app.add_middleware(BindTrace)
     install_errors(app)
     app.include_router(api_client.router)

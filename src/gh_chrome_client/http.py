@@ -25,8 +25,6 @@ from gh_chrome_protocol import (
 
 DEFAULT_URL = "http://127.0.0.1:8000"
 EVENT_READ_TIMEOUT = 45.0
-# Nothing about waiting makes these into something else: the session is gone,
-# or these credentials will not do.
 FINAL = frozenset(
     {
         HTTPStatus.UNAUTHORIZED,
@@ -104,9 +102,6 @@ class Http:
         return UUID(_check(response).json()["file_id"])
 
     async def download(self, session_id: UUID, name: str, target: Path) -> Path:
-        # The name is the site's, not ours: a "#" in it would otherwise start a
-        # fragment and ask the server for a shorter name than the one the
-        # download event handed the caller.
         url = f"/sessions/{session_id}/downloads/{quote(name, safe='')}"
         async with self._client.stream("GET", url) as response:
             await _check_stream(response)
@@ -129,11 +124,6 @@ class Http:
             f"/sessions/{session_id}/events",
             params={"last_seq": last_seq},
             headers={"Last-Event-ID": str(last_seq), "Accept": "text/event-stream"},
-            # The server pings every fifteen seconds, so silence for three of
-            # them is a connection that died without saying so — the ordinary
-            # end of a long poll that crossed a NAT or a sleeping laptop. Read
-            # forever and the reconnect below never happens and every pending
-            # command waits out the session.
             timeout=httpx.Timeout(30.0, read=EVENT_READ_TIMEOUT),
         ) as response:
             await _check_stream(response)

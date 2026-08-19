@@ -24,12 +24,6 @@ SCHEMES = frozenset({"http", "https"})
 
 
 async def _reachable(url: httpx.URL) -> None:
-    """Whether a url is one this runner is willing to fetch on a page's behalf.
-
-    Everything the host resolves to is checked, not the name: a name under the
-    caller's control can be pointed anywhere, including at whatever else is
-    listening on this job's loopback.
-    """
     if url.scheme not in SCHEMES:
         raise ValueError(f"upload will not fetch a {url.scheme or 'schemeless'} url")
     if settings.upload_allow_private:
@@ -50,11 +44,6 @@ async def _reachable(url: httpx.URL) -> None:
 
 
 def _one_segment(name: str | None, fallback: str) -> str:
-    """The page names its own downloads, and that name becomes a URL.
-
-    A download attribute of "../profile" would otherwise steer this runner's
-    own authenticated PUT at whatever else the session owns.
-    """
     cleaned = PurePosixPath(name or "").name
     return fallback if cleaned in {"", ".", ".."} else cleaned
 
@@ -89,12 +78,6 @@ class Files:
             Path(httpx.URL(args.url).path).name or "upload.bin"
         )
         url = httpx.URL(args.url)
-        # The fetch is the runner's, not the browser's, so none of the rules a
-        # page would be held to apply: no CORS, no mixed content, no private
-        # network check. What is left is whatever this job can reach — its own
-        # loopback services and, on a self-hosted runner, the network around
-        # it. Each hop is checked, because a redirect would walk out of any
-        # check made only at the start.
         async with httpx.AsyncClient(timeout=600.0, follow_redirects=False) as client:
             for _ in range(MAX_REDIRECTS):
                 await _reachable(url)
@@ -126,13 +109,6 @@ class Files:
         return node_id
 
     async def settle(self, timeout: float = 30.0) -> None:
-        """Waits for downloads already on their way to the server.
-
-        The session ends when the client says so, which is usually the moment
-        after the download it asked for finished: without this the runner tears
-        the browser down with the file still in flight and the client fetches a
-        404 from a session it watched succeed.
-        """
         if not self._shipping:
             return
         with contextlib.suppress(TimeoutError):

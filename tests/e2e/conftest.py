@@ -74,7 +74,6 @@ def database(cluster: Cluster) -> Iterator[str]:
 
 @pytest.fixture
 def server_options() -> dict[str, Any]:
-    """What the server is started with; a module overrides it to hurry a clock."""
     return {}
 
 
@@ -92,10 +91,6 @@ def server(
 
 @pytest.fixture
 async def api(server: Server) -> AsyncIterator[httpx.AsyncClient]:
-    """The server's own API, for what the client library does not reach.
-
-    A runner endpoint takes the token its session was given, not the shared one.
-    """
 
     async def as_the_runner(request: httpx.Request) -> None:
         parts = request.url.path.strip("/").split("/")
@@ -126,7 +121,6 @@ async def stack(server: Server, tmp_path: Path) -> AsyncIterator[Stack]:
 
 @pytest.fixture
 async def player(server: Server) -> AsyncIterator[httpx.AsyncClient]:
-    """The player's side of the server, which asks for a browser's credentials."""
     async with httpx.AsyncClient(
         base_url=server.url, auth=("admin", TOKEN), timeout=30.0
     ) as client:

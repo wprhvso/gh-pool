@@ -87,11 +87,6 @@ def test_the_index_is_reachable_at_the_directory_root(client):
 
 
 def test_a_redirect_from_the_desktop_is_moved_under_the_session(client):
-    """KasmVNC answers a directory with a redirect rooted at its own origin.
-
-    Relayed as it stands it sends the viewer out of the session entirely; the
-    stand-in desktop never produced one, so the rewrite ran in no test at all.
-    """
     moved = client.get(f"/s/{SESSION}/vnc/moved", auth=ADMIN, follow_redirects=False)
 
     assert moved.status_code == 302
@@ -99,7 +94,6 @@ def test_a_redirect_from_the_desktop_is_moved_under_the_session(client):
 
 
 def test_a_body_bigger_than_the_proxy_will_carry_is_refused(client):
-    """Refused on the declared length, before any of it is relayed."""
     refused = client.post(
         f"/s/{SESSION}/vnc/asset.js",
         auth=ADMIN,
@@ -131,7 +125,6 @@ def test_the_socket_relays_to_the_desktop(client):
 
 
 def test_the_binary_subprotocol_is_echoed_back(client):
-    """The KasmVNC client asks for it and refuses a 101 that drops the echo."""
     url = f"/s/{SESSION}/vnc/socket?ticket={auth.ticket(SESSION)}"
     with client.websocket_connect(url, subprotocols=["binary"]) as socket:
         assert socket.accepted_subprotocol == "binary"

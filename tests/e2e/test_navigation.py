@@ -44,10 +44,6 @@ async def test_a_page_that_cannot_load_fails_the_command(live: Session):
 async def test_waiting_only_for_the_dom_returns_before_the_page_settles(
     live: Session, site: Site
 ):
-    # Six seconds, not one and a half: what has to fit between the page's own
-    # timer and the assertion is the runner's readyState poll, the completion
-    # of the goto and a whole command round trip, on a machine that is also
-    # running postgres, a website, an X server, Chrome and a recorder.
     await live.goto(site.url("/slow?ms=6000"), wait_until=WaitUntil.DOMCONTENTLOADED)
 
     assert await live.evaluate("window.arrived ?? false") is False
@@ -57,9 +53,6 @@ async def test_waiting_only_for_the_dom_returns_before_the_page_settles(
 
 
 async def test_a_network_idle_wait_outlasts_the_last_request(live: Session, site: Site):
-    # /busy starts a request while it parses and finishes it well after load,
-    # so waiting for the load event is not the same as waiting for the network
-    # to go quiet, and the test can tell which one happened.
     await live.goto(site.url("/busy"))
     assert await live.evaluate("window.settled") is False
 

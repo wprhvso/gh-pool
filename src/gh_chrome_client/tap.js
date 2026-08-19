@@ -2,9 +2,7 @@
   if (window.__ghTap) return true;
 
   const MAX_READ = 262144;
-  // What one replay may hold for a client that has stopped reading it. Past
-  // this the page is buffering a response nobody is taking, and the tab pays
-  // for it: the stream is failed instead.
+
   const MAX_BUFFER = 8388608;
 
   const origin = {
@@ -33,9 +31,6 @@
       (rule) => url.includes(rule.url) && (!rule.method || rule.method === method),
     ) || null;
 
-  // Two requests can match one rule before the client comes to collect, and the
-  // second used to overwrite the first — both kept off the network, only one
-  // ever handed over.
   const keep = (rule, entry) => {
     const wake = waiting.get(rule.name);
     if (wake) {
@@ -67,10 +62,6 @@
     });
   };
 
-  // The rule is written in Python, where a header may be spelled any way at
-  // all; everything below reads them in lower case, and the Headers
-  // constructor appends rather than replaces, so a "Content-Type" next to a
-  // "content-type" would make the response's type both of them at once.
   const lowerKeys = (headers) => {
     const plain = {};
     for (const [key, value] of Object.entries(headers || {})) {
@@ -110,9 +101,6 @@
     return null;
   };
 
-  // What XHR puts on the wire when the page set no content type of its own.
-  // Without it a captured request replays as something the server reads
-  // differently from what the page actually sent.
   const impliedType = (body) => {
     if (body == null) return null;
     if (typeof body === "string") return "text/plain;charset=UTF-8";
@@ -134,8 +122,6 @@
     return plain;
   };
 
-  // A GET or a HEAD carries no body, and fetch throws rather than ignoring one:
-  // a captured GET keeps an empty string where a body would be.
   const sendable = (method, body) =>
     body && method !== "GET" && method !== "HEAD" ? body : undefined;
 
@@ -187,9 +173,6 @@
     "response",
   ];
 
-  // Reusing an XMLHttpRequest is ordinary in polling code, and the own getters
-  // installed by settle would otherwise shadow every real response the object
-  // ever gets afterwards.
   const unsettle = (xhr) => {
     if (!xhr.__ghTapSettled) return;
     for (const key of SHADOWED) delete xhr[key];
@@ -353,9 +336,6 @@
     });
   };
 
-  // Forgetting the id is not enough: the pump holds the stream object itself
-  // and would go on fetching and buffering, for the life of the document, a
-  // response nobody can read any more.
   const stop = (id) => {
     const stream = streams.get(id);
     if (!stream) return false;

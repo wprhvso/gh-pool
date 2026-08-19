@@ -13,7 +13,6 @@ HEARTBEAT_TIMEOUT = 2.0
 
 @pytest.fixture
 def server_options() -> dict[str, Any]:
-    """Short fuses, so the watchdog does its work while the test watches."""
     return {
         "heartbeat_timeout": HEARTBEAT_TIMEOUT,
         "ready_timeout": 3.0,

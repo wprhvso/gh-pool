@@ -12,9 +12,6 @@ from gh_chrome_runner.config import settings
 log = logging.getLogger(__name__)
 
 ATTACH_TIMEOUT = 15.0
-# A request that has been open this long is a stream, a long poll or a
-# websocket upgrade, not part of a page settling; a wait for a quiet network
-# would otherwise never end on a page that keeps one open.
 STALE_REQUEST = 10.0
 
 
@@ -72,9 +69,6 @@ class Tabs:
         ]
 
     async def _title(self, tab: Tab) -> str:
-        # What the browser puts in a target's info is the title it had when the
-        # page committed, which for anything that sets one is the address: the
-        # document knows better, and it is one round trip away.
         with contextlib.suppress(Exception):
             tab.title = str(await self.evaluate("document.title", tab))
         return tab.title
@@ -232,9 +226,6 @@ class Tabs:
         self._tabs.pop(target_id, None)
         self._inflight.pop(session_id, None)
         if self._active == target_id:
-            # The browser shows the neighbour of the tab that went, not the last
-            # one to attach; picking differently points the CDP session at one
-            # page while the cursor is over another.
             self._active = self._neighbour(index)
             if self._active is not None:
                 self._queue.put_nowait(("took-over", self._active))
@@ -249,12 +240,6 @@ class Tabs:
         return self._order[min(index, len(self._order) - 1)]
 
     def inflight(self, tab: Tab | None = None) -> int:
-        """How many requests the tab is still waiting on.
-
-        Resource timing only lists what has already finished, so a page in the
-        middle of the fetch a caller is waiting for used to look exactly like a
-        quiet one.
-        """
         target = tab or self.active
         now = asyncio.get_running_loop().time()
         started = self._inflight.get(target.session_id, {})
@@ -311,9 +296,6 @@ class Tabs:
     async def _prepare(self, tab: Tab) -> None:
         await self.cdp.send("Page.enable", session_id=tab.session_id)
         await self.cdp.send("Runtime.enable", session_id=tab.session_id)
-        # Enabled for the life of the tab rather than around a wait: the
-        # browser does not replay the requests already in flight when the
-        # domain comes on, so a count started later starts at nothing.
         await self.cdp.send("Network.enable", session_id=tab.session_id)
         await self.cdp.send(
             "Page.setLifecycleEventsEnabled", {"enabled": True}, tab.session_id

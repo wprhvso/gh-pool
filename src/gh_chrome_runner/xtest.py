@@ -46,12 +46,6 @@ SPECIAL_KEYS = {
 }
 
 
-# The keyboard map is changed to type a character the layout has no key for,
-# and the browser reads the map on its own schedule: before it has caught up
-# the borrowed key means nothing, and after the map is put back it means
-# nothing again. So the change is given a moment to land, and what it left
-# behind stays behind until the next character needs the key or the display
-# is done with.
 REMAP_SETTLE = 0.03
 
 
@@ -110,9 +104,6 @@ class Xtest:
         self.key(keysym_name, False)
 
     def char(self, character: str) -> None:
-        # By keysym rather than by its name: a comma is XK_comma, and asking
-        # the layout for "," finds nothing, which used to send every space and
-        # every mark the long way round through a borrowed key.
         found = self._lookup(keysym_of(character))
         if found is None:
             self._tap_remapped(character)
@@ -141,7 +132,6 @@ class Xtest:
         return int(keycode), int(index) % 2 == 1
 
     def resolve(self, keysym_name: str) -> tuple[int, bool]:
-        """Raises for a name this keyboard cannot produce, without pressing it."""
         return self._resolve(keysym_name)
 
     def _resolve(self, keysym_name: str) -> tuple[int, bool]:
@@ -163,8 +153,6 @@ class Xtest:
         time.sleep(REMAP_SETTLE)
         self._raw_key(self._spare, True)
         self._raw_key(self._spare, False)
-        # The browser has the event but not necessarily the meaning of it yet,
-        # and the next character would take the key back.
         time.sleep(REMAP_SETTLE)
 
     def _release_spare(self) -> None:

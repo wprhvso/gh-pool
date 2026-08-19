@@ -21,9 +21,6 @@ async def _enqueue(
 async def test_the_callers_trace_reaches_the_runner(
     stack: Stack, api: httpx.AsyncClient
 ) -> None:
-    # The whole point: the request that enqueues a command and the stream the
-    # runner is listening on are different connections, opened at different
-    # times, so the header cannot get there by itself.
     session, runner = await stack.scripted()
 
     response = await _enqueue(api, session.id, traceparent=PARENT, tracestate="v=1")
@@ -55,8 +52,6 @@ async def test_a_command_sent_without_a_trace_still_runs(
 async def test_a_malformed_traceparent_is_dropped_rather_than_forwarded(
     stack: Stack, api: httpx.AsyncClient
 ) -> None:
-    # Forwarding a header the runner cannot parse would put a broken parent on
-    # the far end of the trace instead of an honest absence.
     session, runner = await stack.scripted()
 
     response = await _enqueue(api, session.id, traceparent="not-a-traceparent")

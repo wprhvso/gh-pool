@@ -55,8 +55,6 @@ class Channel:
         try:
             self._queue.put_nowait(item)
         except asyncio.QueueFull:
-            # Not an end of message: whatever is reading this must not treat a
-            # body it never finished receiving as a body that finished.
             self.overflowed = True
             self.hang_up()
 
@@ -151,9 +149,6 @@ class Link:
                 await channel.send(tunnel.Op.DATA, piece)
 
     async def _websocket(self, channel: Channel, message: tunnel.Open) -> None:
-        # KasmVNC refuses the upgrade outright — 404, not an error — unless both
-        # Origin and Sec-WebSocket-Protocol are present. It never looks at the
-        # origin it was given, and its own client always asks for "binary".
         url = f"ws://127.0.0.1:{self._port}{message.target}"
         offered = message.subprotocols or [tunnel.BINARY]
         try:
@@ -194,9 +189,6 @@ class Link:
                 else:
                     await channel.send(tunnel.Op.DATA, raw)
         finally:
-            # websockets raises rather than stopping the iteration when the
-            # desktop goes abnormally, and a viewer nobody hangs up on just
-            # freezes on its last frame.
             channel.hang_up()
 
 

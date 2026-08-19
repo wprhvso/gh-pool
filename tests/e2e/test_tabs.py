@@ -43,11 +43,6 @@ async def test_tabs_can_be_switched_between_and_closed(live: Session, site: Site
 async def test_closing_the_active_tab_leaves_the_session_on_the_one_on_screen(
     live: Session, site: Site
 ):
-    """The browser shows the neighbour of the tab that went, not the newest one.
-
-    Picking differently pointed the CDP session at one page while the cursor was
-    over another, so every click after a close went to the wrong document.
-    """
     await live.goto(site.url("/title/first"))
     await live.new_tab(site.url("/form"))
     await live.new_tab(site.url("/title/third"))
@@ -59,8 +54,6 @@ async def test_closing_the_active_tab_leaves_the_session_on_the_one_on_screen(
     tabs = await live.tabs()
     assert [tab["title"] for tab in tabs] == ["form", "third"]
     assert [tab["active"] for tab in tabs] == [True, False]
-    # The cursor goes to the screen, not to a CDP session: a click landing on
-    # the form is what says the two agree about which tab is in front.
     await live.click("#save")
     assert (
         await live.evaluate(

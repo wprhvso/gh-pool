@@ -28,13 +28,10 @@ async def _wait_for_segments(stack: Stack, session: Session, count: int) -> None
     try:
         await until(arrived, 120.0, f"{count} recorded segments")
     except TimeoutError:
-        # ffmpeg keeps its side of the story in the runner's workdir, and
-        # without it a failure here says only that nothing showed up.
         pytest.fail(f"no recording after 120s\n{stack.runners[-1].tail()}")
 
 
 def _representation(manifest: str) -> ET.Element:
-    # The manifest comes off our own server, not off the internet.
     root = ET.fromstring(manifest)  # noqa: S314
     found = root.find(f".//{DASH}Representation")
     assert found is not None

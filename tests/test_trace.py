@@ -31,18 +31,13 @@ def test_a_well_formed_header_is_taken_apart() -> None:
         None,
         "",
         "nonsense",
-        # Too few fields.
         f"00-{TRACE_ID}-{SPAN_ID}",
-        # Version ff is reserved and never valid.
         f"ff-{TRACE_ID}-{SPAN_ID}-01",
-        # An id of nothing but zeros is the specification's way of saying absent.
         f"00-{'0' * 32}-{SPAN_ID}-01",
         f"00-{TRACE_ID}-{'0' * 16}-01",
-        # Wrong lengths, and hex that is not hex.
         f"00-{TRACE_ID[:31]}-{SPAN_ID}-01",
         f"00-{'g' * 32}-{SPAN_ID}-01",
         f"00-{TRACE_ID}-{SPAN_ID}-0",
-        # Version 00 is exactly four fields.
         f"00-{TRACE_ID}-{SPAN_ID}-01-extra",
     ],
 )
@@ -51,7 +46,6 @@ def test_a_header_that_says_nothing_usable_is_refused(traceparent: str | None) -
 
 
 def test_a_version_from_the_future_is_still_carried() -> None:
-    # Forwarding what we cannot read is the point of the version prefix.
     ahead = f"01-{TRACE_ID}-{SPAN_ID}-01-something-new"
     context = TraceContext.parse(ahead)
 
@@ -61,8 +55,6 @@ def test_a_version_from_the_future_is_still_carried() -> None:
 
 
 def test_the_headers_are_read_case_insensitively_as_http_allows() -> None:
-    # Starlette hands over a Headers mapping that lower-cases on lookup; a plain
-    # dict does not, so the header name we ask for is the one to get right.
     assert TraceContext.from_headers({"traceparent": PARENT}) is not None
     assert TraceContext.from_headers({}) is None
 
@@ -110,8 +102,6 @@ def test_a_record_made_inside_a_trace_carries_its_id() -> None:
 
 
 def test_a_record_made_outside_one_still_has_the_field() -> None:
-    # The format string names the field unconditionally, so a record without it
-    # would take the whole log line down.
     entry = _record()
 
     assert TraceIdFilter().filter(entry)

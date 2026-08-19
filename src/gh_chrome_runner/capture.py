@@ -88,7 +88,6 @@ class Capture:
                 self._process.kill()
                 await self._process.wait()
         with contextlib.suppress(Exception, TimeoutError):
-            # Whatever is left over is worth a moment, not the rest of the job.
             async with asyncio.timeout(FINAL_SCAN):
                 await self._scan(final=True)
         log.info("capture stopped after %d segments", len(self._sent))
@@ -106,8 +105,6 @@ class Capture:
                     log.error("giving up on the recording after %d tries", restarts)
                     return
                 restarts += 1
-                # The session outlives its recorder either way; it should not
-                # also go unrecorded because x11grab lost the display once.
                 await asyncio.sleep(1.0)
                 self._restart_numbering()
                 await self._spawn()
@@ -138,8 +135,6 @@ class Capture:
             if await self._send(f"segments/{number}", path):
                 self._sent.add(path.name)
                 self._highest = max(self._highest, number)
-                # The server has it now, and a six hour session would otherwise
-                # keep every frame of itself on the runner's disk.
                 path.unlink(missing_ok=True)
 
     def _stable(self, path: Path) -> bool:

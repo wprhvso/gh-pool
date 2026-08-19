@@ -7,8 +7,6 @@ from dataclasses import dataclass
 class SseMessage:
     event: str
     data: str
-    # What the sender called this frame, which is how a reader that cannot make
-    # sense of the data can still say where it got to.
     id: str | None = None
 
 

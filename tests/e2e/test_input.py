@@ -21,7 +21,6 @@ async def _trace(session: Session, kind: str) -> list[dict[str, Any]]:
 
 
 async def _forget(session: Session) -> None:
-    """Drops what the page recorded while it was loading."""
     await session.evaluate("(window.trace.length = 0, true)")
 
 
@@ -195,11 +194,6 @@ async def test_selecting_an_option_changes_the_value_and_tells_the_page(
 async def test_selecting_an_option_the_page_does_not_have_says_so(
     live: Session, site: Site
 ):
-    """A value nothing matches used to be reported as a select that worked.
-
-    The field kept whatever it had, so the next assertion in the caller's test
-    failed somewhere else entirely.
-    """
     await live.goto(site.url("/form"))
 
     with pytest.raises(ElementNotFound, match="green"):
@@ -212,12 +206,6 @@ async def test_selecting_an_option_the_page_does_not_have_says_so(
 async def test_a_hotkey_with_a_key_the_layout_lacks_leaves_nothing_held(
     live: Session, site: Site
 ):
-    """Resolving every name before pressing anything.
-
-    The modifier used to go down first and the unknown name raise after it, and
-    from there every keystroke in the session carried a control that no caller
-    had asked for.
-    """
     await live.goto(site.url("/form"))
     await live.click("#name")
 

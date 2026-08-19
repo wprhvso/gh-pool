@@ -58,13 +58,6 @@ async def _history(tabs: Tabs, offset: int) -> None:
 
 @asynccontextmanager
 async def _replaced(tabs: Tabs) -> AsyncGenerator[None]:
-    """Waits for the document to actually be a different one.
-
-    Page.reload and Page.navigateToHistoryEntry answer as soon as the browser
-    accepts the request, unlike Page.navigate. Without this, settle() polls the
-    readyState of the page being replaced, finds "complete", and everything
-    afterwards reads the document that is on its way out.
-    """
     before = await _document(tabs)
     yield
     deadline = asyncio.get_running_loop().time() + REPLACE_TIMEOUT

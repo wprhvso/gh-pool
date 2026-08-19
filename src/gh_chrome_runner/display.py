@@ -13,9 +13,6 @@ READY_TIMEOUT = 20.0
 
 
 def _kasmvnc_command(name: str, width: int, height: int) -> list[str]:
-    # -PublicIP is not optional: left unset, Xvnc queries a hardcoded list of STUN
-    # servers over UDP at startup and exits(1) when none of them answer, which is
-    # exactly what happens on a runner. Nothing here needs the public address.
     return [
         settings.kasmvnc_binary, name,
         "-geometry", f"{width}x{height}",

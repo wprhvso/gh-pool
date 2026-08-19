@@ -127,8 +127,6 @@ async def test_the_end_of_the_session_ends_every_stream(
 
     assert isinstance(ended, SessionClosed)
     assert ended.reason is CloseReason.CLOSED
-    # A stream opened after the end replays the history and stops on its own
-    # instead of hanging on a session that will never say anything again.
     replayed = await _frames(api, session.id, count=99, timeout=10.0)
     assert replayed[-1]["data"]["type"] == EventType.SESSION_CLOSED
 
@@ -154,8 +152,6 @@ async def test_the_client_picks_the_stream_back_up_after_a_restart(stack: Stack)
     assert await session.title() == "before"
 
     stack.server.restart()
-    # The runner's own stream died with the server; on Actions the workflow is
-    # gone with it, so a fresh runner is what would come back.
     await first.stop()
     second = await stack.scripted_for(session)
     second.returns(Method.TITLE, "after")
@@ -164,12 +160,6 @@ async def test_the_client_picks_the_stream_back_up_after_a_restart(stack: Stack)
 
 
 async def test_a_command_outlives_a_cancel_of_whoever_was_waiting(stack: Stack):
-    """Bounding a command must not cancel the command.
-
-    Awaiting a bare future makes it the awaiting task's own waiter, so a
-    wait_for around a command used to cancel the command itself: the answer
-    that arrived afterwards was dropped and every later await raised.
-    """
     session, runner = await stack.scripted()
     finish = asyncio.Event()
 
@@ -189,11 +179,6 @@ async def test_a_command_outlives_a_cancel_of_whoever_was_waiting(stack: Stack):
 
 
 async def test_the_stream_is_live_from_the_moment_it_is_asked_for(stack: Stack):
-    """events() used to subscribe at the first __anext__, not when it was called.
-
-    A caller who held the iterator and then did the thing it wanted to watch
-    missed exactly the events it had asked for.
-    """
     session, runner = await stack.scripted()
     stream = session.events()
 
@@ -211,12 +196,6 @@ async def test_the_stream_is_live_from_the_moment_it_is_asked_for(stack: Stack):
 async def test_an_event_this_client_cannot_read_does_not_wedge_the_stream(
     stack: Stack,
 ):
-    """A server deployed ahead of the client is the ordinary case.
-
-    The reader resumes from the last sequence number it saw, so a frame it
-    could not parse used to be the first thing redelivered on every reconnect,
-    forever, and nothing after it ever arrived.
-    """
     session, runner = await stack.scripted()
     ahead = session._last_seq + 1
     unreadable = SseMessage(

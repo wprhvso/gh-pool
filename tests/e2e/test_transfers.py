@@ -13,8 +13,6 @@ from gh_chrome_server import storage
 from gh_chrome_server.storage import BadName
 
 PAYLOAD = os.urandom(1 << 18)
-# Small enough that a body over it is cheap to send, and comfortably above
-# everything else this module uploads.
 MAX_UPLOAD = 1 << 20
 
 
@@ -82,12 +80,6 @@ async def test_a_download_that_was_never_made_is_a_404(stack: Stack, tmp_path: P
 async def test_a_body_bigger_than_the_server_will_keep_is_turned_away(
     stack: Stack, api: httpx.AsyncClient
 ):
-    """Refused on the declared length, before the parser spools it anywhere.
-
-    A multipart upload is written to a temporary file in full before the
-    handler it belongs to is called, on a volume nobody sized for browser
-    uploads, so a limit checked in the handler is checked far too late.
-    """
     session, _ = await stack.scripted()
     too_much = b"x" * (stack.server.max_upload + 1)
 
@@ -104,12 +96,6 @@ async def test_a_body_bigger_than_the_server_will_keep_is_turned_away(
 async def test_a_download_named_to_climb_out_stays_where_it_belongs(
     stack: Stack, api: httpx.AsyncClient
 ):
-    """The name comes off the wire, so the guard is the server's own.
-
-    A separator in it never reaches the handler — the router decodes the path
-    first and matches nothing — so what is asserted here is the half that does
-    arrive: a name that is only dots, and one that is a real filename.
-    """
     session, _ = await stack.scripted()
 
     climbing = await api.put(f"/runner/{session.id}/downloads/%2E%2E", content=b"nope")
@@ -135,12 +121,6 @@ async def test_a_download_named_to_climb_out_stays_where_it_belongs(
 def test_a_name_with_directories_in_it_is_reduced_to_the_last_part(
     given: str, kept: str
 ):
-    """The other half of safe_name's job, which no route can reach.
-
-    A separator never survives the router, so nothing end to end exercises the
-    reduction — and it is what stands between a name the runner passes on and
-    the rest of the session's storage.
-    """
     assert storage.safe_name(given) == kept
 
 

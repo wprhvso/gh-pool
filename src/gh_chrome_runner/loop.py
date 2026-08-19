@@ -100,20 +100,10 @@ class Runner:
         return code
 
     async def _consume(self, actions: Actions, healthy: Callable[[], bool]) -> bool:
-        """True when the server asked for the close, rather than the stream ending.
-
-        A stream that merely stops — a restart, a proxy giving up — says nothing
-        about the session, and confirming a close on the strength of it would
-        end a session the client is still using.
-        """
         async with self._server.stream() as chunks:
             async for message in parse_sse(chunks):
                 if message.event == "close":
                     log.info("close requested")
-                    # Whatever is running now has nobody left to answer to, and
-                    # the stream that could have cancelled it ends here: waiting
-                    # it out would hold the profile and the browser open until
-                    # the job runs out of hours.
                     if self._current is not None:
                         self._current.cancel()
                     return True
@@ -132,9 +122,6 @@ class Runner:
         return False
 
     async def _execute(self, actions: Actions, envelope: CommandEnvelope) -> None:
-        # The command carries the trace of whoever asked for it, because the
-        # request that enqueued it never reached this process: the stream it
-        # arrived on was opened at session start and belongs to nobody.
         trace = TraceContext.parse(envelope.traceparent, envelope.tracestate)
         with bound(trace):
             await self._run(actions, envelope)
@@ -144,10 +131,6 @@ class Runner:
         error: CommandError | None = None
         log.debug("command %s started", envelope.args.method)
         try:
-            # The waits inside the actions poll for as long as it takes; the
-            # server's cancel is the only thing that used to bound them, and it
-            # cannot arrive while the runner is busy with the command it would
-            # cancel.
             async with asyncio.timeout(envelope.timeout_ms / 1000):
                 result = await actions.dispatch(envelope.args)
         except asyncio.CancelledError:
@@ -159,9 +142,6 @@ class Runner:
         try:
             await self._server.complete(envelope.command_id, result, error)
         except Exception:
-            # Suppressed rather than raised — there is nobody left to tell — but
-            # silent it should not be: the caller waits out its own timeout with
-            # an answer that was ready all along.
             log.warning(
                 "could not hand back the result of %s",
                 envelope.args.method,
@@ -189,8 +169,6 @@ class Runner:
             except Exception:
                 alive = True
             if not alive:
-                # Nothing else is watching for this: the stream can be healthy
-                # and the session over, and then the job just sits there.
                 log.warning("the server has finished with this session")
                 consume.cancel()
                 return

@@ -19,12 +19,6 @@ from gh_chrome_runner.xtest import BUTTONS, Xtest
 DRIFT_TOLERANCE = 2.0
 MAX_ATTEMPTS = 40
 SETTLE_DELAY = 0.05
-# What a click will spend on an element that will not hold still. Each try
-# walks the cursor across the screen at human speed, so forty of them outlast
-# the command's own timeout and the caller gets a timeout where the runner had
-# an answer — "it stayed covered" — all along. Five tries always happen, so a
-# machine slow enough to make one try take seconds still gets several; after
-# that the budget decides.
 CLICK_BUDGET = 10.0
 MIN_ATTEMPTS = 5
 
@@ -104,7 +98,6 @@ class Input:
         if outcome == "missing":
             raise ElementMissing(selector)
         if outcome != "selected":
-            # Assigning the value would have quietly cleared the control.
             raise ElementMissing(f"{selector} has no option {value!r}")
 
     async def scroll_to(self, selector: str) -> None:
@@ -147,9 +140,6 @@ class Input:
 
     def _aim(self, box: Box, viewport: Viewport) -> tuple[float, float]:
         center_x, _ = box.center
-        # Vertically the aim is the middle of whatever part of the element is on
-        # the screen, which for anything taller than the window is not its own
-        # middle; the jitter stays inside that.
         center_y = self._locator.aim_point(box, viewport)
         span = min(box.height, viewport.height) / 2
         jitter_x = self._rng.uniform(-0.2, 0.2) * box.width

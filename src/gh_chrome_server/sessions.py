@@ -78,12 +78,6 @@ class Sessions:
         return None if row is None else row["runner_token"]
 
     async def live(self, session_id: UUID) -> bool:
-        """Whether the session is still worth a runner's time.
-
-        A session that was never closed by hand can still be over: the watchdog
-        gives up on it, or it was closed before it ever went active. Anything
-        holding a stream open on its behalf needs to hear about that.
-        """
         row = await self._db.one(
             "select status from sessions where id = %s", (session_id,)
         )
@@ -109,8 +103,6 @@ class Sessions:
         session_id = uuid4()
         async with self._db.tx() as tx:
             if request.max_parallel is not None:
-                # Without this two creates count each other's absence and both
-                # pass a limit of one.
                 await tx.run("select pg_advisory_xact_lock(%s)", (_PARALLEL_LOCK,))
                 live = await tx.one(
                     "select count(*) as live from sessions where status in ('pending', 'active')"
@@ -215,9 +207,6 @@ class Sessions:
             )
         if (
             status is SessionStatus.DEAD
-            # A session that never went active never opened the profile: a
-            # dispatch that failed, or a runner that never arrived, leaves the
-            # archive exactly as the last session left it.
             and row["ready_at"] is not None
             and row["profile"] is not None
             and row["persist"]
@@ -266,12 +255,6 @@ class Sessions:
         return command_id, seq
 
     async def _claim(self, tx: Tx, session_id: UUID) -> None:
-        """Takes the session row before its commands.
-
-        _finish and enqueue lock the session first and its commands second; a
-        transaction that went the other way round would deadlock against them
-        for as long as postgres takes to notice.
-        """
         await tx.run("select id from sessions where id = %s for update", (session_id,))
 
     async def _rejection(self, tx: Tx, session_id: UUID) -> Exception:
@@ -366,13 +349,6 @@ class Sessions:
 
 
 def _printable(value: object) -> object:
-    """A result the database will take.
-
-    A page can put a NUL in anything it hands back — the text of an element, a
-    key of an event, the body of a response — and postgres refuses one inside
-    jsonb. Dropping the byte costs the caller a character; refusing the write
-    loses the answer and leaves the command hanging until it times out.
-    """
     if isinstance(value, str):
         return value.replace("\x00", "�")
     if isinstance(value, list):

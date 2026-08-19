@@ -88,10 +88,6 @@ async def test_a_screenshot_is_a_png_of_the_session_size(
     width, height = _png_size(image)
 
     assert base64.b64encode(image) == (await session.screenshot()).encode()
-    # The size asked for reaches Chrome as --window-size and the X screen is
-    # made to match, so the shot is the viewport: the window minus its frame,
-    # the tab strip and the toolbar, and nothing else. A lower bound of one
-    # pixel accepted any image at all.
     viewport: list[int] = await session.evaluate("[innerWidth, innerHeight]")
     assert (width, height) == (viewport[0], viewport[1])
     assert 0 <= 1000 - width <= 40

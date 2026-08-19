@@ -91,8 +91,6 @@ class Browser:
 
     async def stop(self) -> None:
         if self._cdp is not None:
-            # A page with a beforeunload handler can hold this call open for
-            # ever, and the ladder below closes Chrome either way.
             with contextlib.suppress(Exception):
                 async with asyncio.timeout(CLOSE_TIMEOUT):
                     await self._cdp.send("Browser.close")

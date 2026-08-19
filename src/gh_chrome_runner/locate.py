@@ -142,17 +142,10 @@ class Locator:
         return bool(await self._tabs.evaluate(HIT_JS % (js_string(selector), x, y)))
 
     def in_view(self, box: Box, viewport: Viewport, margin: float = 8.0) -> bool:
-        """Whether there is somewhere on this element the cursor can be put.
-
-        Not whether the whole of it fits: a hero image or a full-page dialog is
-        taller than the window and would never satisfy that, so scroll_to would
-        push it up and down until it gave up.
-        """
         top, bottom = margin, viewport.height - margin
         return box.y < bottom and box.y + box.height > top and top < bottom
 
     def aim_point(self, box: Box, viewport: Viewport, margin: float = 8.0) -> float:
-        """The y of the visible middle of the element, in viewport coordinates."""
         top = max(box.y, margin)
         bottom = min(box.y + box.height, viewport.height - margin)
         return (top + bottom) / 2
