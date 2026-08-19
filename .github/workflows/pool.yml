@@ -98,9 +98,38 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo -E apt-get update -qq </dev/null
-          sudo -E apt-get install -y -qq --no-install-recommends \
-            -o Dpkg::Options::=--force-confold \
+          set -o pipefail
+          # Раньше стоял -qq, поэтому от зависшего шага не оставалось ни строки и
+          # причину приходилось угадывать. Теперь метка времени на каждой строке:
+          # при обрыве по таймауту последняя строка и покажет, где встало.
+          # printf вместо date — иначе форк на каждую строку.
+          stamp() {
+            while IFS= read -r line; do
+              printf '%(%H:%M:%S)T %s\n' -1 "$line"
+            done
+          }
+          apt_do() {
+            sudo -E apt-get -y --no-install-recommends \
+              -o Dpkg::Use-Pty=0 \
+              -o Dpkg::Options::=--force-confold \
+              -o Dpkg::Options::=--force-confdef \
+              -o Debug::pkgAcquire::Worker=1 \
+              "$@" </dev/null 2>&1 | stamp
+          }
+          spill() {
+            echo "--- последние строки /var/log/apt/term.log ---"
+            sudo tail -n 120 /var/log/apt/term.log 2>/dev/null | stamp
+            echo "--- последние строки /var/log/dpkg.log ---"
+            sudo tail -n 60 /var/log/dpkg.log 2>/dev/null | stamp
+            # STAT и WCHAN важнее списка имён: они и покажут, ждёт ли процесс
+            # ввода, висит в D-состоянии на диске или сидит в сетевом ожидании.
+            echo "--- что делает dpkg/apt прямо сейчас ---"
+            ps -C apt-get,apt,dpkg,debconf -o pid,stat,wchan:24,etimes,args || true
+          }
+          # На обрыв по timeout-minutes раннер шлёт сигнал: успеваем вывалить логи.
+          trap 'spill' TERM INT
+          apt_do update
+          apt_do install \
             ffmpeg imagemagick p7zip-full jq curl wget git build-essential \
             unzip zip tar gzip xz-utils zstd rsync openssh-client ca-certificates \
             age sqlite3 postgresql-client \
@@ -108,19 +137,20 @@ jobs:
             xfonts-base libgbm1 ssl-cert \
             libswitch-perl libyaml-tiny-perl libhash-merge-simple-perl \
             liblist-moreutils-perl libtry-tiny-perl libdatetime-perl \
-            libdatetime-timezone-perl </dev/null
+            libdatetime-timezone-perl
           sudo mkdir -p "$TOOLS"
           arch=$(dpkg --print-architecture)
           for codename in "$(. /etc/os-release && echo "$VERSION_CODENAME")" noble; do
             deb=kasmvncserver_${codename}_${KASMVNC_VERSION}_${arch}.deb
             url=https://github.com/kasmtech/KasmVNC/releases/download/v${KASMVNC_VERSION}/$deb
-            if curl -fsSL --retry 3 --retry-all-errors --max-time 180 \
+            echo "пробую $deb"
+            if curl -fSL --retry 3 --retry-all-errors --max-time 180 \
               -o "$RUNNER_TEMP/$deb" "$url"; then
-              sudo -E apt-get install -y -qq --no-install-recommends \
-                -o Dpkg::Options::=--force-confold "$RUNNER_TEMP/$deb" </dev/null && break
+              apt_do install "$RUNNER_TEMP/$deb" && break
             fi
           done
           command -v Xkasmvnc || echo "::warning::KasmVNC не встал — живой рабочий стол недоступен"
+          spill
           echo "$TOOLS" >>"$GITHUB_PATH"
 
       - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
