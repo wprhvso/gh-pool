@@ -94,7 +94,7 @@ def test_a_full_fleet_launches_nothing():
 
 
 def test_a_warmed_run_that_never_serves_frees_its_place():
-    warmed = [run(i, 2000) for i in range(20)]
+    warmed = [run(i, 3000) for i in range(20)]
     repo = FakeRepo(warmed, jobs=20)
 
     keeper.reconcile(repo, serving(warmed[:15]))
