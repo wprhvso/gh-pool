@@ -108,12 +108,19 @@ jobs:
               printf '%(%H:%M:%S)T %s\n' -1 "$line"
             done
           }
+          # Debug::pkgAcquire::Worker сюда не годится: на одном update он даёт
+          # 400 строк URL-кодированных редиректов зеркал и хоронит под собой то,
+          # ради чего всё и затевалось — что именно распаковывает и настраивает
+          # dpkg. Вместо отладки загрузок ставим им таймауты, чтобы залипшее
+          # зеркало отваливалось быстро, а не держало шаг.
           apt_do() {
             sudo -E apt-get -y --no-install-recommends \
               -o Dpkg::Use-Pty=0 \
               -o Dpkg::Options::=--force-confold \
               -o Dpkg::Options::=--force-confdef \
-              -o Debug::pkgAcquire::Worker=1 \
+              -o Acquire::http::Timeout=30 \
+              -o Acquire::https::Timeout=30 \
+              -o Acquire::Retries=3 \
               "$@" </dev/null 2>&1 | stamp
           }
           spill() {
