@@ -4,7 +4,7 @@ on: push
 
 jobs:
   python:
-    runs-on: ubuntu-latest
+    runs-on: pool
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -17,7 +17,7 @@ jobs:
           checks: ${{ matrix.check }}
 
   nix:
-    runs-on: ubuntu-latest
+    runs-on: pool
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
