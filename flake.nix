@@ -42,9 +42,6 @@
 
       buildArgs = { inherit pyproject-nix uv2nix pyproject-build-systems; };
 
-      # nix flake check never looks inside a NixOS module's config body, so a
-      # module that cannot produce a service anyone could start passes it. This
-      # evaluates one the way somebody deploying it would.
       machine =
         system:
         lib.nixosSystem {
