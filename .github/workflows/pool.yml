@@ -94,10 +94,10 @@ jobs:
       # KasmVNC) падало, а не ждало ввода; timeout-minutes — граница на всё
       # остальное, что может подвиснуть на сети.
       - name: system deps
-        # Три попытки по 180 с на update и столько же на install — с запасом
-        # поверх этого, но всё ещё несопоставимо с шестью часами timeout-minutes
-        # у джобы, из-за которых зависший шаг держал слот.
-        timeout-minutes: 20
+        # Две попытки по 900 с на update и столько же на install, плюс запас на
+        # распаковку и KasmVNC. Много, но несопоставимо с шестью часами
+        # timeout-minutes у джобы, из-за которых залипший шаг держал слот молча.
+        timeout-minutes: 35
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
@@ -115,21 +115,24 @@ jobs:
           # снятия -qq недостаточно — apt всё равно не печатает ни Get:, ни
           # Unpacking, ни Setting up.
           #
-          # timeout на попытку и повторы — потому что замер показал, где встаёт:
-          # apt-get update залипает сразу после передачи конфигурации методу
-          # получения, до единого сетевого запроса, и тогда Acquire::Timeout не
-          # спасает, потому что до сети дело не доходит. ForceIPv4 — известная
-          # причина такого залипания на раннерах с IPv6.
+          # Таймаут на попытку — 900 с, и это не запас на всякий случай. Замер:
+          # качать надо 94 МБ, а зеркало Azure выдаёт от 108 кБ/с до 30 МБ/с в
+          # зависимости от раннера, то есть честное время install — от секунд до
+          # двенадцати минут. Прежние 180 с были короче самой работы и убивали
+          # исправную закачку на 12%, трижды подряд.
+          #
+          # Настоящие залипания (когда байты не идут вовсе) ловит не этот
+          # таймаут, а Acquire::Timeout: он и должен отличать медленное от
+          # мёртвого, потому что срабатывает только когда данных нет совсем.
           apt_do() {
             local what="$1" attempt
-            for attempt in 1 2 3; do
+            for attempt in 1 2; do
               printf 'попытка %s: apt-get %s\n' "$attempt" "$what"
-              if sudo -E timeout -k 15 180 apt-get -y --no-install-recommends \
+              if sudo -E timeout -k 15 900 apt-get -y --no-install-recommends \
                 -o quiet=0 \
                 -o Dpkg::Use-Pty=0 \
                 -o Dpkg::Options::=--force-confold \
                 -o Dpkg::Options::=--force-confdef \
-                -o Acquire::ForceIPv4=true \
                 -o Acquire::http::Timeout=30 \
                 -o Acquire::https::Timeout=30 \
                 "$@" </dev/null 2>&1 | stamp; then
