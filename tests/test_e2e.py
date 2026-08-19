@@ -4,6 +4,7 @@ import socket
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import httpx
 import pytest
@@ -22,7 +23,7 @@ def free_port():
 
 
 class Process:
-    def __init__(self, args, env, logfile):
+    def __init__(self, args: list[str], env: dict[str, str], logfile: Path) -> None:
         self.logfile = logfile
         self.handle = logfile.open("wb")
         self.proc = subprocess.Popen(

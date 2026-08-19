@@ -159,9 +159,7 @@ async def from_db[T](what: str, call: Coroutine[Any, Any, T], fallback: T) -> T:
         return await call
     except Exception as e:
         state["db"] = False
-        log.warning(
-            "db_read_failed", what=what, error=type(e).__name__, detail=str(e)
-        )
+        log.warning("db_read_failed", what=what, error=type(e).__name__, detail=str(e))
         return fallback
 
 
