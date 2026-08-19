@@ -24,31 +24,12 @@ KEYS = ("token", "workflow", "jobs", "ttl", "ref")
 UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 SECRETS = ("POOL_SERVER", "POOL_TOKEN")
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
-# Окно между dispatch и появлением прогона в списке — только на видимость API.
 GRACE = 30
-# Пока прогон моложе этого, он считается прогревающимся; старше и всё ещё не
-# обслуживает — зомби, и место под него надо освободить, а не ждать шесть часов.
-# Замер по живому флоту: медиана 212 с, p90 888 с, максимум 922 с. Прежние 240 с
-# были взяты по одному наблюдению и резали всё выше медианы: 17 отмен из 21
-# пришлись на здоровые прогоны возрастом 247-443 с, и флот не набирался.
-# Настоящие зависания ловит не этот таймер, а границы на шагах.
 BOOT_GRACE = 1200
-# Сколько прогонов keeper вправе погасить за один тик. Массовая отмена — это
-# массовая потеря задач: пул считает их lost только через LOST_AFTER и не
-# перезапускает, а CI-джобы уходят на второй круг.
 RETIRE_BUDGET = 1
-# Прогоны без машины гасить безопасно, но не сотнями за тик: на разборе
-# накопившейся очереди это упирается в лимит запросов GitHub.
 IDLE_BUDGET = 25
-# Сколько поднимать за тик, чтобы холодный старт не шёл стадом.
 MAX_LAUNCH = 5
-# WORKERS на сервере в памяти: сразу после его рестарта он пуст. Столько ждём,
-# прежде чем верить нулям (2 × WORKER_STALE сервера).
 POOL_WARMUP = 240
-# Незавершённые статусы, которые спрашиваем поимённо. Списком «всех прогонов»
-# пользоваться нельзя: он отдаёт одну страницу новыми вперёд, и на истории в
-# тысячу прогонов долгоживущие in_progress с неё просто уезжают — флот
-# становится невидимым, а место занимают свежие queued.
 STATUSES = ("in_progress", "queued", "waiting")
 
 
@@ -145,9 +126,6 @@ class Repo:
 def load(path: Path) -> tuple[list[Repo], float, dict[str, str], str]:
     raw = tomllib.loads(path.read_text())
     repos = raw.pop("repos", {})
-    # token уезжает в секреты репозиториев, им авторизуются воркеры. Спрашивать
-    # им /v1/workers нельзя, это клиентская ручка, поэтому client_token отдельно
-    # и из propagation исключён.
     table = raw.pop("pool", {})
     client = str(table.pop("client_token", ""))
     pool = {f"POOL_{k.upper()}": str(v) for k, v in table.items()}
@@ -174,19 +152,10 @@ def ask(base: str, path: str, token: str) -> Any:
         with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
-        # HTTPError — подкласс OSError, и без этой ветки 401 от неверного токена
-        # выглядел бы как «пул не отвечает», то есть как временная сетевая беда.
         raise ApiError(e.code, f"GET {path} -> {e.code}") from None
 
 
 def pool_workers(pool: dict[str, str], token: str) -> dict[int, float] | None:
-    """Прогон -> сколько секунд он обслуживает. None — судить нельзя.
-
-    Единственный честный источник: у GitHub в объекте прогона нет момента
-    получения машины (run_started_at — это тоже постановка в очередь), а
-    WORKER_ID содержит id прогона, и в WORKERS воркер попадает только дойдя
-    до pool-worker.
-    """
     base = (pool.get("POOL_SERVER") or "").strip()
     if not base:
         return None
@@ -238,28 +207,17 @@ def _reconcile(r: Repo, workers: dict[int, float] | None = None) -> None:
     started, pending, expired = [], [], []
     for run in runs:
         if run["status"] != "in_progress":
-            # Машину не дали: тут created_at и есть время ожидания.
             (expired if age(run) > ttl else pending).append(run)
         elif workers is None:
-            # Судить по created_at нельзя: прогон мог сутки простоять в
-            # очереди, и его возраст ничего не говорит о возрасте воркера.
-            # Значит, пока пул молчит, занятых не трогаем вовсе — сверху их
-            # всё равно ограничивают timeout-minutes и WORKER_MAX_AGE.
             started.append(run)
         elif run["id"] in workers:
             (expired if workers[run["id"]] > ttl else started).append(run)
         elif age(run) > BOOT_GRACE:
-            # Прогретый, но так и не начавший обслуживать — зомби, место
-            # под него надо освободить, а не ждать до самого ttl.
             expired.append(run)
         else:
             started.append(run)
     serving = None if workers is None else len(set(workers) & {x["id"] for x in runs})
 
-    # Лишние срезаем с молодого конца: старый прогон почти наверняка держит
-    # CI-джобу, и его отмена роняет задачу в lost (терминально) вместе с полным
-    # бутстрапом на второй круг. Сначала уходят те, кому машину ещё не дали —
-    # они не обслуживают ничего, и терять с ними нечего.
     over = max(0, len(started) + len(pending) - r.jobs)
     surplus = pending[:over] + started[: max(0, over - len(pending))]
     victims = [(run, "expired") for run in expired] + [
@@ -288,9 +246,6 @@ def _reconcile(r: Repo, workers: dict[int, float] | None = None) -> None:
 
     now = time.time()
     r.recent = [t for t in r.recent if now - t < GRACE]
-    # started уже без зомби и без просроченных, так что это и есть ёмкость.
-    # Прогон без машины не обслуживает ничего, но досылать поверх него нечего:
-    # он уже стоит в очереди GitHub и рано или поздно станет воркером.
     young = [x for x in started if age(x) < BOOT_GRACE]
     live = min(len(started) + len(pending), r.jobs) + len(r.recent)
     launch = min(max(0, r.jobs - live), MAX_LAUNCH)

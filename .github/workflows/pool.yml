@@ -29,9 +29,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Воркер живёт часами и умирает молча: изнутри джобы не видно ни OOM,
-      # ни упёршегося диска, ни того, на каком шаге всё встало. job-name задан
-      # руками, поэтому actions: read не нужен и в API экшен не ходит.
       - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-start@main
         with:
           remote-write-url: ${{ secrets.PROMETHEUS_REMOTE_WRITE_URL }}
@@ -40,18 +37,12 @@ jobs:
           job-name: worker
           scrape-interval: 15s
 
-      # Первая же джоба на свежем воркере иначе платит скачивание раннера (~200 МБ)
-      # из своего времени. Кладём архив туда, откуда его возьмёт pool-runners:
-      # agent.cache() — это $HOME/.cache/pool-runners, имя файла фиксировано.
-      # Версию резолвим так же, как gh.release_version(). Расхождение безопасно —
-      # промах кеша означает сегодняшнее поведение.
       - name: preseed runner (background)
         run: |
           cache=$HOME/.cache/pool-runners
           mkdir -p "$cache"
           chmod 700 "$cache"
           echo "RUNNER_CACHE=$cache" >>"$GITHUB_ENV"
-          # Кавычки одинарные намеренно: тело раскрывается в дочернем процессе.
           # shellcheck disable=SC2016
           nohup setsid bash -c '
             set -uo pipefail
@@ -75,8 +66,6 @@ jobs:
         with:
           step: free disk
 
-      # Образ ubuntu-latest занимает почти весь диск предустановленными SDK,
-      # которыми пул не пользуется. Без этого не влезают nix, NDK и Rust nightly.
       - name: free disk
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android/sdk/ndk/2[789]* \
@@ -88,42 +77,17 @@ jobs:
         with:
           step: system deps
 
-      # Шаг вставал насмерть: пять прогонов держали по слоту три с лишним часа,
-      # а джобу отпускает только timeout-minutes, то есть почти шесть часов.
-      # DEBIAN_FRONTEND и </dev/null — чтобы приглашение debconf (postinst
-      # KasmVNC) падало, а не ждало ввода; timeout-minutes — граница на всё
-      # остальное, что может подвиснуть на сети.
       - name: system deps
-        # Две попытки по 900 с на update и столько же на install, плюс запас на
-        # распаковку и KasmVNC. Много, но несопоставимо с шестью часами
-        # timeout-minutes у джобы, из-за которых залипший шаг держал слот молча.
         timeout-minutes: 35
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
           set -o pipefail
-          # Раньше стоял -qq, поэтому от зависшего шага не оставалось ни строки и
-          # причину приходилось угадывать. Теперь метка времени на каждой строке:
-          # при обрыве по таймауту последняя строка и покажет, где встало.
-          # printf вместо date — иначе форк на каждую строку.
           stamp() {
             while IFS= read -r line; do
               printf '%(%H:%M:%S)T %s\n' -1 "$line"
             done
           }
-          # quiet=0 обязателен: в образе раннера quiet=1 стоит в конфиге apt, и
-          # снятия -qq недостаточно — apt всё равно не печатает ни Get:, ни
-          # Unpacking, ни Setting up.
-          #
-          # Таймаут на попытку — 900 с, и это не запас на всякий случай. Замер:
-          # качать надо 94 МБ, а зеркало Azure выдаёт от 108 кБ/с до 30 МБ/с в
-          # зависимости от раннера, то есть честное время install — от секунд до
-          # двенадцати минут. Прежние 180 с были короче самой работы и убивали
-          # исправную закачку на 12%, трижды подряд.
-          #
-          # Настоящие залипания (когда байты не идут вовсе) ловит не этот
-          # таймаут, а Acquire::Timeout: он и должен отличать медленное от
-          # мёртвого, потому что срабатывает только когда данных нет совсем.
           apt_do() {
             local what="$1" attempt
             for attempt in 1 2; do
@@ -148,12 +112,9 @@ jobs:
             sudo tail -n 120 /var/log/apt/term.log 2>/dev/null | stamp
             echo "--- последние строки /var/log/dpkg.log ---"
             sudo tail -n 60 /var/log/dpkg.log 2>/dev/null | stamp
-            # STAT и WCHAN важнее списка имён: они и покажут, ждёт ли процесс
-            # ввода, висит в D-состоянии на диске или сидит в сетевом ожидании.
             echo "--- что делает dpkg/apt прямо сейчас ---"
             ps -C apt-get,apt,dpkg,debconf -o pid,stat,wchan:24,etimes,args || true
           }
-          # На обрыв по timeout-minutes раннер шлёт сигнал: успеваем вывалить логи.
           trap 'spill' TERM INT
           apt_do update
           apt_do install \
@@ -184,12 +145,6 @@ jobs:
         with:
           step: nix
 
-      # Инсталлятор nix не идемпотентен: на переиспользуемом воркере вторая
-      # попытка падает на уже существующем /etc/bash.bashrc.backup-before-nix.
-      # Поэтому ставим ровно один раз здесь, а qa-nix потом установку пропускает.
-      # nix.conf и netrc — файлы на машине, а не переменные окружения, поэтому
-      # их видят и вложенные джобы раннера. Настраиваем кеш один раз здесь, и
-      # тянуть из него будут все репозитории, которым он и не нужен явно.
       - name: nix
         env:
           ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
@@ -214,7 +169,6 @@ jobs:
           {
             printf 'experimental-features = nix-command flakes\n'
             printf 'max-jobs = auto\n'
-            # Кеш может лежать, а сборка от этого падать не должна.
             printf 'fallback = true\n'
             printf 'connect-timeout = 5\n'
             printf '%s' "$cache_conf"
@@ -234,8 +188,6 @@ jobs:
             nixpkgs#stylua nixpkgs#selene nixpkgs#attic-client nixpkgs#govulncheck
           echo "$HOME/.nix-profile/bin" >>"$GITHUB_PATH"
 
-      # Конфиг клиента ложится в $HOME, который у вложенных джоб тот же, так что
-      # логинимся один раз тут — дальше attic push работает без токена в репе.
       - name: attic login
         env:
           ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
@@ -271,8 +223,6 @@ jobs:
           curl -fsSL --retry 3 --retry-all-errors \
             "https://raw.githubusercontent.com/golangci/golangci-lint/${GOLANGCI_VERSION}/install.sh" \
             | sh -s -- -b "$TOOLS" "$GOLANGCI_VERSION"
-          # govulncheck приезжает из nixpkgs вместе с остальными qa-тулами: сборка
-          # из исходников занимала почти весь этот шаг ради той же версии.
           govulncheck -version 2>/dev/null | head -2
 
       - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
@@ -303,8 +253,6 @@ jobs:
           sudo unzip -q -o /tmp/gradle.zip -d /opt
           echo "/opt/gradle-${GRADLE_VERSION}/bin" >>"$GITHUB_PATH"
 
-      # ~/.gradle тот же, что у вложенных джоб, поэтому учётные данные кеша
-      # кладём сюда, а не в каждый android-репозиторий.
       - name: gradle remote cache
         env:
           GRADLE_CACHE_USER: ${{ secrets.GRADLE_CACHE_USER }}
@@ -322,8 +270,6 @@ jobs:
           } >"$HOME/.gradle/gradle.properties"
           chmod 600 "$HOME/.gradle/gradle.properties"
 
-          # Без этой проверки неверные учётные данные означают тихую деградацию
-          # на локальный кеш: сборка зелёная, кеш пустой, и никто не знает.
           code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
             -u "$GRADLE_CACHE_USER:$GRADLE_CACHE_PASSWORD" \
             "${GRADLE_CACHE_URL}probe-$(id -u)")
@@ -398,8 +344,6 @@ jobs:
           done
           df -h /
 
-      # Предзагрузка шла параллельно бутстрапу и к этому моменту почти наверняка
-      # закончилась. Не дождались — не беда, agent скачает архив сам.
       - name: wait for preseed
         run: |
           for _ in $(seq 1 30); do
@@ -426,9 +370,6 @@ jobs:
           POOL_TOKEN: ${{ secrets.POOL_TOKEN }}
           WORKER_ID: gh-${{ github.run_id }}
         run: |
-          # Уходим заметно раньше timeout-minutes и вразнобой: иначе когорта,
-          # поднятая одним холодным стартом, вымирает разом и ёмкость проваливается.
-          # Воркер дорабатывает текущую задачу и только потом выходит.
           WORKER_MAX_AGE=$((16200 + RANDOM % 2700))
           export WORKER_MAX_AGE
           echo "воркер отработает $((WORKER_MAX_AGE / 60)) мин"

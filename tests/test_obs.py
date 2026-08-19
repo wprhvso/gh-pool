@@ -2,8 +2,6 @@ from pool.obs import observability
 
 
 def test_without_a_collector_nothing_is_exported(monkeypatch):
-    # Воркер живёт на эфемерном раннере: экспортёр раз в секунду печатал отказ
-    # связи с localhost:4317 прямо в вывод шага.
     monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
 
     config = observability("pool-worker", "1.2.3")

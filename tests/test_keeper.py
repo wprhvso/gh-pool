@@ -121,8 +121,6 @@ def test_no_more_than_the_launch_budget_goes_out_at_once(monkeypatch):
 
 
 def test_the_ttl_is_measured_from_when_the_worker_began_serving():
-    # Прогон мог сутки простоять в очереди: его created_at ничего не говорит
-    # о возрасте воркера, и раньше такой воркер гасился сразу, как живой.
     long_queued = run(1, 100000)
     repo = FakeRepo([long_queued], jobs=20)
 
@@ -141,7 +139,6 @@ def test_a_worker_that_has_served_past_its_ttl_is_retired():
 
 
 def test_while_the_pool_is_silent_a_busy_run_is_left_alone():
-    # Прогрев сервера открывал окно, в котором занятые гасились по created_at.
     repo = FakeRepo([run(1, 30000), run(2, 90000)], jobs=20, ttl="6h")
 
     keeper.reconcile(repo, None)
@@ -323,8 +320,6 @@ def test_the_client_token_is_not_propagated_to_repositories(tmp_path):
 
 
 def test_a_run_still_inside_the_bootstrap_window_is_not_called_a_zombie():
-    # p90 бутстрапа на живом флоте — около 900 с; при BOOT_GRACE=240 здоровые
-    # прогоны гасились на прогреве и флот не набирался.
     warming = [run(i, 500) for i in range(20)]
     repo = FakeRepo(warming, jobs=20)
 

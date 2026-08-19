@@ -31,9 +31,6 @@ LOST_AFTER = float(os.getenv("LOST_AFTER", "300"))
 LEASE_WAIT = float(os.getenv("LEASE_WAIT", "30"))
 WORKER_STALE = float(os.getenv("WORKER_STALE", "120"))
 FLUSH_EVERY = float(os.getenv("FLUSH_EVERY", "0.2"))
-# WORKERS живёт в памяти, поэтому сразу после рестарта он пуст, и всякий, кто судит
-# по нему о живости флота, увидит ноль там, где на деле двадцать воркеров. Отдаём
-# момент старта, чтобы такой вывод можно было придержать.
 STARTED = time.time()
 
 TERMINAL = ("done", "failed", "cancelled")
@@ -174,7 +171,6 @@ def owned(tid: str, lease_token: str | None) -> dict[str, Any]:
 
 
 def touch(worker_id: str, task_id: str | None, now: float) -> None:
-    """first_seen переживает переучёт: по нему keeper мерит ttl воркера."""
     w = WORKERS.get(worker_id)
     if w is None:
         WORKERS[worker_id] = {"first_seen": now, "seen_at": now, "task_id": task_id}
