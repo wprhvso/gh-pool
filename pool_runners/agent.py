@@ -195,7 +195,7 @@ def template(archive: Path, version: str) -> Path:
             unpack(archive, staging)
             freeze(staging)
             try:
-                os.replace(staging, tpl)
+                staging.replace(tpl)
             except OSError:
                 thaw(staging)
                 shutil.rmtree(staging, ignore_errors=True)

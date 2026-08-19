@@ -342,8 +342,7 @@ def _pick_up(ctx: Ctx, session: Session, stats: Stats, note: str) -> None:
         ids = [
             found
             for job in ctx.api.acquirable(ctx.scale_set_id)
-            if isinstance(job, dict)
-            and (found := to_int(job.get("runnerRequestId")))
+            if isinstance(job, dict) and (found := to_int(job.get("runnerRequestId")))
         ]
         taken = _acquire(ctx, session, ids)
         if taken:

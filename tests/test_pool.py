@@ -106,7 +106,10 @@ def test_a_cancel_without_an_answer_is_still_fine(wire, pool: Pool) -> None:
 
 
 def test_the_tail_asks_for_the_size_and_then_the_end(wire, pool: Pool) -> None:
-    made = wire(Reply(200, b"", headers(X_Event_Size="5000")), Reply(200, b"хвост", headers()))
+    made = wire(
+        Reply(200, b"", headers(X_Event_Size="5000")),
+        Reply(200, "хвост".encode(), headers()),
+    )
     assert pool.tail("t-1", limit=1000) == "хвост"
 
     offsets = [
@@ -117,7 +120,7 @@ def test_the_tail_asks_for_the_size_and_then_the_end(wire, pool: Pool) -> None:
 
 
 def test_a_short_log_is_taken_from_the_start(wire, pool: Pool) -> None:
-    made = wire(Reply(200, b"", headers()), Reply(200, b"мало", headers()))
+    made = wire(Reply(200, b"", headers()), Reply(200, "мало".encode(), headers()))
     assert pool.tail("t-1") == "мало"
     assert made.urls()[1].endswith("offset=0")
 
