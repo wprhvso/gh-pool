@@ -74,7 +74,7 @@ def test_only_one_run_is_retired_in_a_tick():
 def test_a_run_past_its_ttl_is_retired():
     repo = FakeRepo([run(1, 100000), run(2, 10)], jobs=20, ttl="6h")
 
-    keeper.reconcile(repo)
+    keeper.reconcile(repo, {1: 30000.0, 2: 10.0})
 
     assert repo.cancelled == [1]
 
@@ -139,19 +139,20 @@ def test_a_worker_that_has_served_past_its_ttl_is_retired():
     assert repo.cancelled == [1]
 
 
-def test_without_a_worker_list_only_a_hard_backstop_retires_a_run():
-    repo = FakeRepo([run(1, 30000), run(2, 50000)], jobs=20, ttl="6h")
+def test_while_the_pool_is_silent_a_busy_run_is_left_alone():
+    # Прогрев сервера открывал окно, в котором занятые гасились по created_at.
+    repo = FakeRepo([run(1, 30000), run(2, 90000)], jobs=20, ttl="6h")
 
     keeper.reconcile(repo, None)
 
-    assert repo.cancelled == [2]
+    assert repo.cancelled == []
 
 
 def test_a_run_is_never_cancelled_twice():
     repo = FakeRepo([run(1, 100000), run(2, 10)], jobs=20)
 
-    keeper.reconcile(repo)
-    keeper.reconcile(repo)
+    keeper.reconcile(repo, {1: 30000.0, 2: 10.0})
+    keeper.reconcile(repo, {1: 30000.0, 2: 10.0})
 
     assert repo.cancelled == [1]
 
@@ -273,3 +274,12 @@ def test_a_pool_that_does_not_answer_is_not_believed(monkeypatch):
 
 def test_without_a_pool_address_there_is_nothing_to_ask():
     assert keeper.pool_workers({}) is None
+
+
+def test_the_idle_backlog_is_drained_in_bites(monkeypatch):
+    monkeypatch.setattr(keeper, "IDLE_BUDGET", 3)
+    repo = FakeRepo([run(i, 10 + i, "queued") for i in range(30)], jobs=2)
+
+    keeper.reconcile(repo, {})
+
+    assert len(repo.cancelled) == 3

@@ -32,6 +32,9 @@ BOOT_GRACE = 240
 # массовая потеря задач: пул считает их lost только через LOST_AFTER и не
 # перезапускает, а CI-джобы уходят на второй круг.
 RETIRE_BUDGET = 1
+# Прогоны без машины гасить безопасно, но не сотнями за тик: на разборе
+# накопившейся очереди это упирается в лимит запросов GitHub.
+IDLE_BUDGET = 25
 # Сколько поднимать за тик, чтобы холодный старт не шёл стадом.
 MAX_LAUNCH = 5
 # WORKERS на сервере в памяти: сразу после его рестарта он пуст. Столько ждём,
@@ -219,8 +222,9 @@ def _reconcile(r: Repo, workers: dict[int, float] | None = None) -> None:
         elif workers is None:
             # Судить по created_at нельзя: прогон мог сутки простоять в
             # очереди, и его возраст ничего не говорит о возрасте воркера.
-            # Остаётся только жёсткий backstop.
-            (expired if age(run) > 2 * ttl else started).append(run)
+            # Значит, пока пул молчит, занятых не трогаем вовсе — сверху их
+            # всё равно ограничивают timeout-minutes и WORKER_MAX_AGE.
+            started.append(run)
         elif run["id"] in workers:
             (expired if workers[run["id"]] > ttl else started).append(run)
         elif age(run) > BOOT_GRACE:
@@ -246,7 +250,10 @@ def _reconcile(r: Repo, workers: dict[int, float] | None = None) -> None:
         if run["id"] in r.stopping:
             continue
         busy = run["status"] == "in_progress"
-        if busy and costly >= RETIRE_BUDGET:
+        used, limit = (
+            (costly, RETIRE_BUDGET) if busy else (stopped - costly, IDLE_BUDGET)
+        )
+        if used >= limit:
             log(f"{r.slug} {len(victims) - stopped} more to retire, next tick")
             break
         r.stopping.add(run["id"])
