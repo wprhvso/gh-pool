@@ -29,6 +29,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Воркер живёт часами и умирает молча: изнутри джобы не видно ни OOM,
+      # ни упёршегося диска, ни того, на каком шаге всё встало. job-name задан
+      # руками, поэтому actions: read не нужен и в API экшен не ходит.
+      - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-start@main
+        with:
+          remote-write-url: ${{ secrets.PROMETHEUS_REMOTE_WRITE_URL }}
+          username: ${{ secrets.PROMETHEUS_REMOTE_WRITE_USERNAME }}
+          password: ${{ secrets.PROMETHEUS_REMOTE_WRITE_PASSWORD }}
+          job-name: worker
+          scrape-interval: 15s
+
       # Первая же джоба на свежем воркере иначе платит скачивание раннера (~200 МБ)
       # из своего времени. Кладём архив туда, откуда его возьмёт pool-runners:
       # agent.cache() — это $HOME/.cache/pool-runners, имя файла фиксировано.
@@ -60,6 +71,10 @@ jobs:
           ' >"$RUNNER_TEMP/preseed.log" 2>&1 &
           echo "предзагрузка раннера пошла фоном"
 
+      - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
+        with:
+          step: free disk
+
       # Образ ubuntu-latest занимает почти весь диск предустановленными SDK,
       # которыми пул не пользуется. Без этого не влезают nix, NDK и Rust nightly.
       - name: free disk
@@ -68,6 +83,10 @@ jobs:
             /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
             /usr/local/share/powershell /usr/share/swift
           df -h /
+
+      - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
+        with:
+          step: system deps
 
       # Шаг вставал насмерть: пять прогонов держали по слоту три с лишним часа,
       # а джобу отпускает только timeout-minutes, то есть почти шесть часов.
@@ -103,6 +122,10 @@ jobs:
           done
           command -v Xkasmvnc || echo "::warning::KasmVNC не встал — живой рабочий стол недоступен"
           echo "$TOOLS" >>"$GITHUB_PATH"
+
+      - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
+        with:
+          step: nix
 
       # Инсталлятор nix не идемпотентен: на переиспользуемом воркере вторая
       # попытка падает на уже существующем /etc/bash.bashrc.backup-before-nix.
@@ -142,6 +165,10 @@ jobs:
           sudo systemctl restart nix-daemon
           echo /nix/var/nix/profiles/default/bin >>"$GITHUB_PATH"
 
+      - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
+        with:
+          step: nix qa tools
+
       - name: nix qa tools
         run: |
           export PATH=/nix/var/nix/profiles/default/bin:$PATH
@@ -177,6 +204,10 @@ jobs:
           echo /usr/local/go/bin >>"$GITHUB_PATH"
           echo "$HOME/go/bin" >>"$GITHUB_PATH"
 
+      - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
+        with:
+          step: go tools
+
       - name: go tools
         run: |
           export PATH=/usr/local/go/bin:$HOME/go/bin:$PATH
@@ -186,6 +217,10 @@ jobs:
           # govulncheck приезжает из nixpkgs вместе с остальными qa-тулами: сборка
           # из исходников занимала почти весь этот шаг ради той же версии.
           govulncheck -version 2>/dev/null | head -2
+
+      - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
+        with:
+          step: rust
 
       - name: rust
         run: |
@@ -197,6 +232,10 @@ jobs:
           curl -fsSL --retry 3 \
             "$base/cargo-audit%2Fv${CARGO_AUDIT_VERSION}/$tgz" \
             | sudo tar -xz -C "$TOOLS" --strip-components=1 --wildcards '*/cargo-audit'
+
+      - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
+        with:
+          step: java and gradle
 
       - name: java and gradle
         run: |
@@ -236,6 +275,10 @@ jobs:
             401) echo "::error::кеш отверг учётные данные (401)" ; exit 1 ;;
             *) echo "::warning::кеш ответил $code" ;;
           esac
+
+      - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
+        with:
+          step: android sdk
 
       - name: android sdk
         run: |
@@ -277,6 +320,10 @@ jobs:
             "$al/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
             | sudo tar -xz -C "$TOOLS" actionlint
 
+      - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
+        with:
+          step: earthly and just
+
       - name: earthly and just
         run: |
           sudo curl -fsSL --retry 3 -o "$TOOLS/earthly" \
@@ -312,6 +359,10 @@ jobs:
       - name: python deps
         run: uv sync --frozen --no-dev
 
+      - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
+        with:
+          step: run worker
+
       - name: run worker
         env:
           POOL_SERVER: ${{ secrets.POOL_SERVER }}
@@ -325,3 +376,6 @@ jobs:
           export WORKER_MAX_AGE
           echo "воркер отработает $((WORKER_MAX_AGE / 60)) мин"
           uv run pool-worker
+
+      - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-stop@main
+        if: always()
