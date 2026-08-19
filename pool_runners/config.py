@@ -36,8 +36,6 @@ JOB_AVAILABLE = "JobAvailable"
 JOB_COMPLETED = "JobCompleted"
 CAPACITY_HEADER = "X-ScaleSetMaxCapacity"
 
-# Всплеск на jobs=20 иначе бьётся на три волны по два round-trip каждая.
-# Потолок оставлен конечным, чтобы не ловить secondary rate limit GitHub.
 SUBMIT_WORKERS = 24
 FLEET_INTERVAL = 10.0
 STATS_INTERVAL = 60.0

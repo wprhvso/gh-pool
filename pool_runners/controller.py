@@ -255,9 +255,6 @@ def _shrink(ctx: Ctx, surplus: int) -> int:
 
 
 def _scale(ctx: Ctx, stats: Stats, note: str, *, shrink: bool = False) -> None:
-    # При промахе часового кеша это сетевой HEAD на github.com. Под ctx.scaling он
-    # держал весь батч и обе ветки разом — сообщения и сверку, — поэтому резолвим
-    # до блокировки. Попадание в кеш стоит чтения словаря.
     with span("runners.scale", {"repo": ctx.slug, "scale.note": note}) as active:
         try:
             version = ctx.target.version or release_version()

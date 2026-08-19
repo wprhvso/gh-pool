@@ -96,8 +96,6 @@ def sweep(path: Path) -> None:
 
 
 def freeze(path: Path) -> None:
-    # шаблон общий: любая запись в него из задачи — порча для всех,
-    # без права записи это громкий EACCES вместо тихой беды
     for here, folders, files in os.walk(path):
         for name in (*files, *folders):
             spot = Path(here, name)
@@ -199,7 +197,6 @@ def template(archive: Path, version: str) -> Path:
             try:
                 os.replace(staging, tpl)
             except OSError:
-                # гонку выиграл сосед — берём его шаблон
                 thaw(staging)
                 shutil.rmtree(staging, ignore_errors=True)
         finally:
@@ -217,8 +214,6 @@ def populate(tpl: Path, root: Path) -> Path:
         thaw(root)
         shutil.rmtree(root, ignore_errors=True)
         shutil.copytree(tpl, root, copy_function=shutil.copy2, dirs_exist_ok=True)
-    # файлы — жёсткие ссылки на шаблон и остаются нетронутыми,
-    # а каталоги раннеру нужны для _work, _diag, .runner и прочего
     thaw(root)
     listener = root / LISTENER
     mode = listener.stat().st_mode
