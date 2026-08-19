@@ -116,9 +116,14 @@ class Tabs:
         await self._emit(TabActivated(index=index))
 
     async def close(self, index: int) -> None:
-        await self.cdp.send(
-            "Target.closeTarget", {"targetId": self._at(index).target_id}
-        )
+        target_id = self._at(index).target_id
+        await self.cdp.send("Target.closeTarget", {"targetId": target_id})
+        deadline = asyncio.get_running_loop().time() + ATTACH_TIMEOUT
+        while target_id in self._tabs:
+            if asyncio.get_running_loop().time() >= deadline:
+                log.warning("the browser never let go of %s", target_id)
+                return
+            await asyncio.sleep(0.02)
 
     async def bring_to_front(self, tab: Tab | None = None) -> None:
         target = tab or self.active

@@ -230,6 +230,15 @@ fetch('/api/stream?chunks=4&delay=0.4').then((response) => response.text()).then
 """,
 )
 
+FRAGMENT = PAGE.format(
+    title="fragment",
+    body="""
+<a id="jump" href="#target" style="position:absolute;left:40px;top:120px">jump</a>
+<div style="height:1500px"></div>
+<div id="target">target</div>
+""",
+)
+
 STATE = PAGE.format(
     title="state",
     body="""
@@ -284,6 +293,7 @@ class Site:
                 Route("/download", self._page(DOWNLOAD)),
                 Route("/upload", self._page(UPLOAD)),
                 Route("/net", self._page(NET)),
+                Route("/fragment", self._page(FRAGMENT)),
                 Route("/state", self._state),
                 Route("/title/{text}", self._title),
                 Route("/redirect", self._redirect),

@@ -59,3 +59,16 @@ async def test_a_network_idle_wait_outlasts_the_last_request(live: Session, site
     await live.wait_for_load(wait_until=WaitUntil.NETWORKIDLE)
 
     assert await live.evaluate("window.settled") is True
+
+
+async def test_history_walks_back_across_a_step_inside_one_document(
+    live: Session, site: Site
+):
+    await live.goto(site.url("/fragment"))
+    await live.click("#jump")
+    await live.wait_for_url("#target$", timeout=30)
+
+    await live.back()
+
+    assert await live.url() == site.url("/fragment")
+    assert await live.title() == "fragment"
