@@ -172,7 +172,11 @@ async def find(tid: str) -> dict[str, Any]:
 
 def owned(tid: str, lease_token: str | None) -> dict[str, Any]:
     t = TASKS.get(tid)
-    if t is None or not lease_token or t.get("lease_token") != lease_token:
+    if t is None or not lease_token:
+        raise HTTPException(409, "stale lease")
+    if t.get("lease_token") is None and t["status"] == "running":
+        t["lease_token"] = lease_token
+    if t["lease_token"] != lease_token:
         raise HTTPException(409, "stale lease")
     return t
 
@@ -252,19 +256,19 @@ async def flush() -> None:
 
 
 async def recover() -> None:
+    running = 0
     for t in await db.unfinished():
         if t["id"] in TASKS:
             continue
         TASKS[t["id"]] = t
         if t["status"] == "running":
-            t.update(status="lost", error="server restarted", finished_at=time.time())
-            DIRTY.add(t["id"])
-            tasks_lost.add(1, {"reason": "server_restarted"})
+            t.update(heartbeat_at=time.time(), lease_token=None)
+            running += 1
         else:
             QUEUE.append(t["id"])
     if QUEUE:
         new_task.set()
-    log.info("recovered", pending=len(QUEUE))
+    log.info("recovered", pending=len(QUEUE), running=running)
 
 
 async def keeper() -> None:
@@ -358,7 +362,9 @@ async def heartbeat(
     t = owned(tid, x_lease_token)
     now = time.time()
     t["heartbeat_at"] = now
-    touch(t["worker_id"], tid, now)
+    worker = t.get("worker_id")
+    if worker:
+        touch(worker, tid, now)
     return {"cancel": bool(t.get("cancel_requested"))}
 
 

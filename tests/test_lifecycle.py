@@ -77,8 +77,7 @@ async def test_work_left_over_from_a_previous_server_is_picked_up(client, blank)
     await server.recover()
 
     assert list(server.QUEUE) == ["waiting"]
-    assert server.TASKS["gone"]["status"] == "lost"
-    assert server.TASKS["gone"]["error"] == "server restarted"
+    assert server.TASKS["gone"]["status"] == "running"
 
 
 async def test_a_finished_task_leaves_memory_once_it_is_written_down(client):
@@ -240,3 +239,91 @@ async def test_artifacts_can_be_listed_and_dropped_while_the_database_is_away(
 
     assert [b["key"] for b in listing.json()] == ["k"]
     assert removed.json() == {"ok": True}
+
+
+async def test_a_running_task_survives_the_server_it_was_started_on(client, blank):
+    blank.pending = [
+        {
+            "id": "busy",
+            "status": "running",
+            "payload": {},
+            "type": "python",
+            "worker_id": "w1",
+        }
+    ]
+
+    await server.recover()
+
+    answer = await client.post(
+        "/v1/tasks/busy/heartbeat",
+        headers={**as_worker(), "X-Lease-Token": "token-from-before-the-restart"},
+    )
+
+    assert answer.status_code == 200
+    assert server.TASKS["busy"]["status"] == "running"
+    assert server.TASKS["busy"]["lease_token"] == "token-from-before-the-restart"
+
+
+async def test_a_recovered_task_gets_a_fresh_grace_period(client, blank):
+    blank.pending = [
+        {
+            "id": "busy",
+            "status": "running",
+            "payload": {},
+            "type": "python",
+            "worker_id": "w1",
+        }
+    ]
+
+    await server.recover()
+
+    assert server.TASKS["busy"]["heartbeat_at"] > time.time() - 5
+
+
+async def test_a_recovered_task_whose_worker_never_returns_is_declared_lost(
+    client, blank, monkeypatch
+):
+    blank.pending = [
+        {
+            "id": "busy",
+            "status": "running",
+            "payload": {},
+            "type": "python",
+            "worker_id": "w1",
+        }
+    ]
+    await server.recover()
+    server.TASKS["busy"]["heartbeat_at"] = time.time() - 1000
+
+    task = await reaping(monkeypatch, LOST_AFTER=1)
+    ok = await until(
+        lambda: any(r["id"] == "busy" and r["status"] == "lost" for r in blank.saved)
+    )
+    task.cancel()
+
+    assert ok
+
+
+async def test_a_second_token_cannot_steal_a_recovered_task(client, blank):
+    blank.pending = [
+        {
+            "id": "busy",
+            "status": "running",
+            "payload": {},
+            "type": "python",
+            "worker_id": "w1",
+        }
+    ]
+    await server.recover()
+
+    first = await client.post(
+        "/v1/tasks/busy/heartbeat",
+        headers={**as_worker(), "X-Lease-Token": "mine"},
+    )
+    second = await client.post(
+        "/v1/tasks/busy/heartbeat",
+        headers={**as_worker(), "X-Lease-Token": "someone-else"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 409
