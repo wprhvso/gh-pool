@@ -168,3 +168,18 @@ async def test_a_retry_is_a_new_task_that_remembers_its_parent(client):
     assert answer.json()["parent_id"] == tid
     assert server.TASKS[child]["status"] == "pending"
     assert server.TASKS[child]["payload"]["code"] == "result = 7"
+
+
+async def test_a_busy_worker_returns_to_the_list_after_a_restart(client, blank):
+    tid = await submit(client)
+    task = await take(client)
+    server.WORKERS.clear()
+
+    answer = await client.post(
+        f"/v1/tasks/{tid}/heartbeat",
+        headers={**as_worker(), "X-Lease-Token": task["lease_token"]},
+    )
+
+    assert answer.status_code == 200
+    assert "w1" in server.WORKERS
+    assert server.WORKERS["w1"]["task_id"] == tid

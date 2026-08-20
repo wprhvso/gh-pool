@@ -358,8 +358,7 @@ async def heartbeat(
     t = owned(tid, x_lease_token)
     now = time.time()
     t["heartbeat_at"] = now
-    if t["worker_id"] in WORKERS:
-        WORKERS[t["worker_id"]]["seen_at"] = now
+    touch(t["worker_id"], tid, now)
     return {"cancel": bool(t.get("cancel_requested"))}
 
 
