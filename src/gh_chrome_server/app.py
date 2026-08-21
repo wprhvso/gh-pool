@@ -9,12 +9,14 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from gh_chrome_protocol import trace
 from gh_chrome_server import (
     api_client,
+    api_health,
     api_player,
     api_runner,
     api_vnc,
     pool,
     storage,
 )
+from gh_chrome_server.cleaner import Cleaner
 from gh_chrome_server.config import settings
 from gh_chrome_server.db import Database
 from gh_chrome_server.events import Events
@@ -49,9 +51,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.tunnels = Tunnels()
     watchdog = Watchdog(app.state.sessions)
     await watchdog.start()
+    cleaner = Cleaner(app.state.sessions)
+    await cleaner.start()
     try:
         yield
     finally:
+        await cleaner.stop()
         await watchdog.stop()
         await db.close()
 
@@ -131,6 +136,7 @@ def create_app() -> FastAPI:
     app.add_middleware(LimitBody, limit=settings.max_upload)
     app.add_middleware(BindTrace)
     install_errors(app)
+    app.include_router(api_health.router)
     app.include_router(api_client.router)
     app.include_router(api_client.profiles_router)
     app.include_router(api_runner.router)

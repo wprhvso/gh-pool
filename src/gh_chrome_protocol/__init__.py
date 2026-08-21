@@ -56,7 +56,7 @@ PROFILE_NAME = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
 class SessionCreate(BaseModel):
     profile: str | None = Field(default=None, pattern=PROFILE_NAME)
     persist: bool = True
-    max_parallel: int | None = Field(default=None, ge=1)
+    max_sessions: int | None = Field(default=None, ge=1)
     params: SessionParams = Field(default_factory=SessionParams)
 
 

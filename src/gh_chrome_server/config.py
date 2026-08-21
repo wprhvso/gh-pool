@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     heartbeat_timeout: float = 30.0
     ready_timeout: float = 600.0
     watchdog_interval: float = 5.0
+    cleanup_interval: float = 3600.0
+    cleanup_delay: float = 60.0
+    cleanup_max_days: float = 7.0
+    cleanup_max_bytes: int = 64 << 30
     segment_seconds: float = 1.0
     max_upload: int = 1 << 30
 

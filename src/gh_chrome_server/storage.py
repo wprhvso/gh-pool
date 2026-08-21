@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import os
 import re
 import shutil
@@ -89,3 +90,20 @@ def _persist(tmp: IO[bytes]) -> None:
 def remove_session(session_id: UUID) -> None:
     shutil.rmtree(session_dir(session_id), ignore_errors=True)
     shutil.rmtree(files_dir(session_id), ignore_errors=True)
+
+
+def _tree_size(root: Path) -> int:
+    total = 0
+    for item in root.rglob("*"):
+        with contextlib.suppress(OSError):
+            if item.is_file():
+                total += item.stat().st_size
+    return total
+
+
+def session_size(session_id: UUID) -> int:
+    return _tree_size(session_dir(session_id)) + _tree_size(files_dir(session_id))
+
+
+def sessions_size() -> int:
+    return _tree_size(settings.sessions_dir) + _tree_size(settings.files_dir)

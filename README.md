@@ -150,32 +150,56 @@ Run `gh-chrome-server`. The runner needs no secrets of its own: the server mints
 a token for each session and hands it to the pool task along with the session id.
 `GH_CHROME_PROXY` sends the runner's traffic through a proxy of your own.
 
-On NixOS the flake ships the server as a module:
+`GET /healthz` is the one route with no credentials on it. It reaches for a
+connection and asks postgres a question: 200 while the database answers, 503
+once it stops. Nothing else is in the verdict — a server whose pool is
+unreachable and whose tunnels are all down still serves the API correctly, and
+taking it out of rotation would only make that worse.
 
-```nix
-{
-  inputs.gh-chrome.url = "github:wprhvso/gh-chrome";
+## Housekeeping
 
-  modules = [ inputs.gh-chrome.nixosModules.default ];
-}
-```
+A recording is about a gigabyte an hour and nothing asked the server to keep it
+forever, so a background pass throws old sessions out. It removes
+`sessions/<id>` and `files/<id>` and then the row, which takes the commands,
+events, downloads and uploads with it. Sessions that are still pending or
+active are never candidates, and `profiles/` is not the cleaner's business at
+any point: an archive is a Google account somebody signed in by hand, and it
+goes only when you ask for it with `DELETE /profiles/{name}`.
 
-```nix
-{
-  services.gh-chrome = {
-    enable = true;
-    port = 8001;
-    publicUrl = "https://chrome.example.com";
-    database.createLocally = true;
-    environmentFiles = [ "/var/lib/secrets/gh-chrome" ];
-  };
-}
-```
+Two limits, applied in that order. First everything closed longer than
+`CLEANUP_MAX_DAYS` ago. Then, if what the sessions hold is still over
+`CLEANUP_MAX_BYTES`, the oldest closed sessions go one at a time until it fits
+— all but the ones closed within `GH_CHROME_RUNNER_GRACE`, whose runner is
+still allowed to hand in a last segment. When there is nothing left to take and
+it still does not fit, the pass says so in the log and stops.
 
-The token and the PAT stay in the environment file. `database.createLocally`
-makes the database, makes the service user its owner and points the server at
-it over the local socket; a database of your own goes in `database.url`, or in
-the environment file when the password makes it a secret.
+| Variable | Meaning |
+| --- | --- |
+| `GH_CHROME_CLEANUP_MAX_DAYS` | how long a closed session is kept, default 7 |
+| `GH_CHROME_CLEANUP_MAX_BYTES` | what sessions and uploads may hold, default 64 GiB |
+| `GH_CHROME_CLEANUP_INTERVAL` | seconds between passes, default 3600 |
+| `GH_CHROME_CLEANUP_DELAY` | seconds before the first pass, default 60 |
+
+## Kubernetes
+
+One replica, `strategy: Recreate`. The tunnels, the queue of cancels and the
+set of sessions on their way out live in the process, and the recordings live
+on a disk, so a second replica would answer for sessions it cannot see.
+
+Storage is a PVC mounted at `/var/lib/gh-chrome`, which is where the image
+already points `GH_CHROME_STORAGE`. It holds `sessions/`, `files/` and
+`profiles/`; only the last one cannot be regenerated, and it is the one the
+cleaner never touches. Size the volume above `GH_CHROME_CLEANUP_MAX_BYTES` plus
+whatever the live sessions and the profiles need.
+
+`GH_CHROME_TOKEN` and `GH_CHROME_POOL_TOKEN` belong in a Secret, and
+`GH_CHROME_DATABASE_URL` too when the password is in it. The rest is a
+ConfigMap. `GH_CHROME_HOST` is already `0.0.0.0` in the image.
+
+Point both probes at `/healthz`. The root filesystem can be read-only, but the
+server still needs a writable `/tmp`: an upload over a megabyte is spooled
+there by starlette before it is handed to the storage directory, so give the
+pod an `emptyDir` at `/tmp` sized for `GH_CHROME_MAX_UPLOAD`.
 
 ## Packaging
 

@@ -156,20 +156,27 @@ async def test_a_command_queued_after_the_end_fails_the_caller(stack: Stack):
         await session.title()
 
 
-async def test_the_parallel_limit_turns_the_next_session_away(stack: Stack):
-    await stack.scripted(max_parallel=1)
+async def test_the_session_limit_turns_the_next_session_away(stack: Stack):
+    await stack.scripted(max_sessions=1)
 
     with pytest.raises(TooManySessions):
-        await stack.session(max_parallel=1)
+        await stack.session(max_sessions=1)
 
 
-async def test_the_parallel_limit_holds_when_the_requests_arrive_together(
+async def test_the_session_limit_counts_every_profile_not_just_this_one(stack: Stack):
+    await stack.scripted(max_sessions=1, profile="one")
+
+    with pytest.raises(TooManySessions):
+        await stack.session(max_sessions=1, profile="another")
+
+
+async def test_the_session_limit_holds_when_the_requests_arrive_together(
     stack: Stack,
 ):
-    await stack.scripted(max_parallel=2)
+    await stack.scripted(max_sessions=2)
 
     asked = await asyncio.gather(
-        *(stack.session(max_parallel=2) for _ in range(4)), return_exceptions=True
+        *(stack.session(max_sessions=2) for _ in range(4)), return_exceptions=True
     )
 
     made = [item for item in asked if not isinstance(item, BaseException)]
@@ -190,6 +197,16 @@ async def test_the_api_is_closed_without_the_token(
 
     assert response.status_code in {401, 403}
     assert stack.server.dispatched == []
+
+
+async def test_the_health_probe_answers_a_caller_with_no_credentials_at_all(
+    stack: Stack,
+):
+    async with httpx.AsyncClient(base_url=stack.server.url, timeout=30.0) as anonymous:
+        response = await anonymous.get("/healthz")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
 
 
 async def test_a_finished_session_can_be_deleted_but_a_live_one_cannot(

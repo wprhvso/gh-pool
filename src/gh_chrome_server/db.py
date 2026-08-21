@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -9,6 +10,7 @@ from psycopg.rows import DictRow, dict_row
 from psycopg_pool import AsyncConnectionPool
 
 MIGRATIONS = Path(__file__).parent / "migrations"
+PROBE_TIMEOUT = 5.0
 
 Params = tuple[Any, ...]
 
@@ -48,6 +50,10 @@ class Database:
 
     async def close(self) -> None:
         await self._pool.close()
+
+    async def probe(self) -> None:
+        async with asyncio.timeout(PROBE_TIMEOUT), self._pool.connection() as conn:
+            await conn.execute("select 1")
 
     @asynccontextmanager
     async def tx(self) -> AsyncGenerator[Tx]:

@@ -29,7 +29,7 @@ from gh_chrome_server.db import Database, Tx
 from gh_chrome_server.events import Events
 
 LIVE = ("pending", "active")
-_PARALLEL_LOCK = 0x6768_6301
+_LIMIT_LOCK = 0x6768_6301
 
 
 class SessionNotFound(Exception):
@@ -102,14 +102,14 @@ class Sessions:
     async def create(self, request: SessionCreate) -> SessionState:
         session_id = uuid4()
         async with self._db.tx() as tx:
-            if request.max_parallel is not None:
-                await tx.run("select pg_advisory_xact_lock(%s)", (_PARALLEL_LOCK,))
+            if request.max_sessions is not None:
+                await tx.run("select pg_advisory_xact_lock(%s)", (_LIMIT_LOCK,))
                 live = await tx.one(
                     "select count(*) as live from sessions where status in ('pending', 'active')"
                 )
-                if live is not None and int(live["live"]) >= request.max_parallel:
+                if live is not None and int(live["live"]) >= request.max_sessions:
                     raise TooManySessions(
-                        f"at most {request.max_parallel} sessions at a time"
+                        f"at most {request.max_sessions} sessions on this server at a time"
                     )
             stale = await self._claim_profile(tx, request.profile)
             row = await tx.one(
@@ -347,6 +347,19 @@ class Sessions:
             (heartbeat_timeout, ready_timeout),
         )
         return [row["id"] for row in rows]
+
+    async def closed_before(self, max_age: float) -> list[UUID]:
+        rows = await self._db.rows(
+            "select id from sessions where status in ('closed', 'dead') "
+            "and coalesce(closed_at, created_at) + make_interval(secs => %s) < now() "
+            "order by coalesce(closed_at, created_at)",
+            (max_age,),
+        )
+        return [row["id"] for row in rows]
+
+    async def forget(self, session_id: UUID) -> None:
+        async with self._db.tx() as tx:
+            await tx.run("delete from sessions where id = %s", (session_id,))
 
 
 def _printable(value: object) -> object:

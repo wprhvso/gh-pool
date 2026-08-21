@@ -99,9 +99,9 @@ def test_a_session_may_ask_for_no_profile_at_all():
 
 
 @pytest.mark.parametrize("limit", [0, -1])
-def test_a_parallel_limit_below_one_is_refused(limit: int):
+def test_a_session_limit_below_one_is_refused(limit: int):
     with pytest.raises(ValidationError):
-        SessionCreate(max_parallel=limit)
+        SessionCreate(max_sessions=limit)
 
 
 def test_a_pending_or_active_session_is_live_and_nothing_else_is():

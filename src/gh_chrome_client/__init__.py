@@ -72,7 +72,7 @@ async def new(
     *,
     profile: str | None = None,
     persist: bool = True,
-    max_parallel: int | None = None,
+    max_sessions: int | None = None,
     close_timeout: float = 120.0,
     server: str | None = None,
     token: str | None = None,
@@ -82,7 +82,7 @@ async def new(
     request = SessionCreate(
         profile=profile,
         persist=persist,
-        max_parallel=max_parallel,
+        max_sessions=max_sessions,
         params=SessionParams(**params),
     )
     try:
