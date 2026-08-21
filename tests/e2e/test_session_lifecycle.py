@@ -2,7 +2,7 @@ import asyncio
 
 import httpx
 import pytest
-from tests.e2e.stack import Stack, expression_of
+from tests.e2e.stack import Stack, expression_of, until
 
 from gh_chrome_client import (
     ElementNotFound,
@@ -279,6 +279,7 @@ async def test_the_runner_is_given_one_command_at_a_time(stack: Stack):
     runner.returns(Method.URL, "the quick one")
 
     slow = session.title(timeout=60)
+    await until(lambda: bool(runner.received), 15.0, "the slow command")
     queued = [session.url(timeout=60) for _ in range(3)]
     await asyncio.sleep(2)
     assert len(runner.received) == 1
