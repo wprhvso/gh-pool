@@ -25,9 +25,9 @@ from gh_pool.fleet.runners.config import (
 from gh_pool.fleet.runners.controller import install_stop_handler, run
 from gh_pool.fleet.runners.errors import RunnerError
 from gh_pool.fleet.runners.gh import preflight, release_version
-from gh_pool.obs import version as package_version
 from gh_pool.fleet.runners.http import backoff
 from gh_pool.fleet.runners.pool import Pool
+from gh_pool.obs import version as package_version
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

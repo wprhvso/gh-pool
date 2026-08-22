@@ -43,6 +43,7 @@ def boot() -> None:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.blobs_dir.mkdir(parents=True, exist_ok=True)
 
+
 meter = metrics.get_meter("gh_pool.server")
 
 
