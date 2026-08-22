@@ -1,0 +1,56 @@
+{
+  "typeCheckingMode": "strict",
+  "venvPath": ".",
+  "venv": ".venv",
+
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+    "build",
+    "dist",
+    "target",
+    "result",
+    "docker",
+    "packer",
+    "terraform"
+  ],
+
+  "extraPaths": [".", "src", "python"],
+
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+  "reportImportCycles": false,
+  "reportPrivateUsage": false,
+  "reportUnknownMemberType": false,
+  "reportUnknownVariableType": false,
+  "reportUnknownArgumentType": false,
+  "reportUnknownParameterType": false,
+  "reportUnknownLambdaType": false,
+  "reportAny": false,
+  "reportExplicitAny": false,
+  "reportUnusedCallResult": false,
+  "reportUnannotatedClassAttribute": false,
+  "reportImplicitStringConcatenation": false,
+  "reportImplicitOverride": false,
+  "reportIgnoreCommentWithoutRule": false,
+  "reportUnreachable": false,
+  "reportMissingParameterType": false,
+
+  "executionEnvironments": [
+    {
+      "root": "tests",
+      "extraPaths": [".", "src", "python"],
+      "reportArgumentType": "none"
+    },
+    {
+      "root": "tests_python",
+      "extraPaths": [".", "src", "python"],
+      "reportArgumentType": "none"
+    },
+    {
+      "root": ".",
+      "extraPaths": [".", "src", "python"]
+    }
+  ]
+}

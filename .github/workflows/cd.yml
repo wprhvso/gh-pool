@@ -8,16 +8,7 @@ on:
 
 jobs:
   check:
-    runs-on: pool
-    strategy:
-      fail-fast: false
-      matrix:
-        check: [ruff, format, pyright, pytest]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: wprhvso/qa-python@v1
-        with:
-          checks: ${{ matrix.check }}
+    uses: ./.github/workflows/ci.yml
 
   version:
     runs-on: pool

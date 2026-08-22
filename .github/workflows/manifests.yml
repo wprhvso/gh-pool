@@ -5,15 +5,39 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   kustomize:
     runs-on: pool
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: поставить kustomize и kubeconform
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          grab() {
+            local repo=$1 pattern=$2
+            local url
+            url=$(gh api "repos/$repo/releases/latest" \
+              --jq ".assets[] | select(.name | test(\"$pattern\")) | .browser_download_url" \
+              | head -1)
+            [ -n "$url" ] || { echo "::error::не нашёл релиз $repo по $pattern"; exit 1; }
+            curl -fsSL "$url" | tar xz -C "$RUNNER_TEMP/bin"
+          }
+          grab kubernetes-sigs/kustomize 'kustomize_v.*_linux_amd64\.tar\.gz'
+          grab yannh/kubeconform 'kubeconform-linux-amd64\.tar\.gz'
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
       - name: kustomize build + kubeconform
-        shell: nix shell nixpkgs#kustomize nixpkgs#kubeconform -c bash -euo pipefail {0}
         run: |
+          set -euo pipefail
           mapfile -t dirs < <(
             find deploy -name kustomization.yaml -printf '%h\n' | sort
           )
@@ -35,6 +59,11 @@ jobs:
     runs-on: pool
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - name: yamllint
-        run: nix shell nixpkgs#yamllint -c yamllint --strict --format github deploy
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uvx yamllint --strict --format github deploy
