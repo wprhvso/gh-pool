@@ -4,18 +4,9 @@ on:
   workflow_dispatch:
 
 env:
-  GO_VERSION: "1.26.3"
-  GOLANGCI_VERSION: "v2.12.2"
-  KTLINT_VERSION: "1.8.0"
-  DETEKT_VERSION: "1.23.8"
-  SHELLCHECK_VERSION: "v0.11.0"
-  SHFMT_VERSION: "v3.13.1"
-  ACTIONLINT_VERSION: "1.7.12"
-  GRADLE_VERSION: "9.7.0"
   ANDROID_PLATFORM: "37.0"
   ANDROID_BUILD_TOOLS: "37.0.0"
   ANDROID_NDK_VERSION: "26.3.11579264"
-  CARGO_AUDIT_VERSION: "0.22.2"
   KASMVNC_VERSION: "1.5.0"
   TOOLS: /opt/pool-tools/bin
   GRADLE_CACHE_URL: https://gradle-cache.murasya.ru/cache/
@@ -185,7 +176,10 @@ jobs:
           export PATH=/nix/var/nix/profiles/default/bin:$PATH
           nix profile install --accept-flake-config \
             nixpkgs#nixfmt-rfc-style nixpkgs#statix nixpkgs#deadnix \
-            nixpkgs#stylua nixpkgs#selene nixpkgs#attic-client nixpkgs#govulncheck
+            nixpkgs#stylua nixpkgs#selene nixpkgs#attic-client \
+            nixpkgs#govulncheck nixpkgs#golangci-lint \
+            nixpkgs#shellcheck nixpkgs#shfmt nixpkgs#actionlint nixpkgs#yamllint \
+            nixpkgs#ktlint nixpkgs#detekt nixpkgs#cargo-audit nixpkgs#just
           echo "$HOME/.nix-profile/bin" >>"$GITHUB_PATH"
 
       - name: attic login
@@ -199,31 +193,24 @@ jobs:
           export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
           attic login murasya https://cache.murasya.ru "$ATTIC_TOKEN"
 
-      - name: uv
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: python qa tools
         run: |
-          curl -LsSf --retry 3 https://astral.sh/uv/install.sh | sh
+          uv tool install ruff
+          uv tool install basedpyright
+          uv tool install pytest --with pytest-asyncio
+          uv tool update-shell || true
           echo "$HOME/.local/bin" >>"$GITHUB_PATH"
 
-      - name: go
-        run: |
-          curl -fsSL --retry 3 -o /tmp/go.tar.gz \
-            "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
-          sudo rm -rf /usr/local/go
-          sudo tar -C /usr/local -xzf /tmp/go.tar.gz
-          echo /usr/local/go/bin >>"$GITHUB_PATH"
-          echo "$HOME/go/bin" >>"$GITHUB_PATH"
-
-      - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
+      - uses: actions/setup-go@v6
         with:
-          step: go tools
+          go-version: stable
 
-      - name: go tools
-        run: |
-          export PATH=/usr/local/go/bin:$HOME/go/bin:$PATH
-          curl -fsSL --retry 3 --retry-all-errors \
-            "https://raw.githubusercontent.com/golangci/golangci-lint/${GOLANGCI_VERSION}/install.sh" \
-            | sh -s -- -b "$TOOLS" "$GOLANGCI_VERSION"
-          govulncheck -version 2>/dev/null | head -2
+      - name: go path
+        run: echo "$HOME/go/bin" >>"$GITHUB_PATH"
 
       - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
         with:
@@ -234,24 +221,19 @@ jobs:
           rustup toolchain install nightly --profile minimal \
             --component rustfmt --component clippy
           rustup default nightly
-          base=https://github.com/rustsec/rustsec/releases/download
-          tgz=cargo-audit-x86_64-unknown-linux-musl-v${CARGO_AUDIT_VERSION}.tgz
-          curl -fsSL --retry 3 \
-            "$base/cargo-audit%2Fv${CARGO_AUDIT_VERSION}/$tgz" \
-            | sudo tar -xz -C "$TOOLS" --strip-components=1 --wildcards '*/cargo-audit'
 
       - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
         with:
           step: java and gradle
 
-      - name: java and gradle
+      - name: java
         run: |
           echo "JAVA_HOME=$JAVA_HOME_21_X64" >>"$GITHUB_ENV"
           echo "$JAVA_HOME_21_X64/bin" >>"$GITHUB_PATH"
-          curl -fsSL --retry 3 -o /tmp/gradle.zip \
-            "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
-          sudo unzip -q -o /tmp/gradle.zip -d /opt
-          echo "/opt/gradle-${GRADLE_VERSION}/bin" >>"$GITHUB_PATH"
+
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: release
 
       - name: gradle remote cache
         env:
@@ -298,48 +280,23 @@ jobs:
             echo "ANDROID_NDK_ROOT=$sdk/ndk/${ANDROID_NDK_VERSION}"
           } >>"$GITHUB_ENV"
 
-      - name: kotlin qa tools
-        run: |
-          curl -fsSL --retry 3 -o "$TOOLS/ktlint" \
-            "https://github.com/pinterest/ktlint/releases/download/${KTLINT_VERSION}/ktlint"
-          chmod +x "$TOOLS/ktlint"
-          curl -fsSL --retry 3 -o /tmp/detekt.zip \
-            "https://github.com/detekt/detekt/releases/download/v${DETEKT_VERSION}/detekt-cli-${DETEKT_VERSION}.zip"
-          sudo unzip -q -o /tmp/detekt.zip -d /opt
-          sudo ln -sf "/opt/detekt-cli-${DETEKT_VERSION}/bin/detekt-cli" "$TOOLS/detekt"
-
-      - name: shell qa tools
-        run: |
-          sc=https://github.com/koalaman/shellcheck/releases/download
-          curl -fsSL --retry 3 \
-            "$sc/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" \
-            | sudo tar -xJ -C "$TOOLS" --strip-components=1 \
-              "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
-          sudo curl -fsSL --retry 3 -o "$TOOLS/shfmt" \
-            "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64"
-          sudo chmod +x "$TOOLS/shfmt"
-          al=https://github.com/rhysd/actionlint/releases/download
-          curl -fsSL --retry 3 \
-            "$al/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
-            | sudo tar -xz -C "$TOOLS" actionlint
-
       - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
         with:
-          step: earthly and just
+          step: earthly
 
-      - name: earthly and just
+      - name: earthly
         run: |
           sudo curl -fsSL --retry 3 -o "$TOOLS/earthly" \
             https://github.com/earthly/earthly/releases/latest/download/earthly-linux-amd64
           sudo chmod +x "$TOOLS/earthly"
           sudo "$TOOLS/earthly" bootstrap
-          curl -fsSL --retry 3 https://just.systems/install.sh \
-            | sudo bash -s -- --to "$TOOLS"
 
       - name: verify toolchain
         run: |
-          for t in nix uv go golangci-lint govulncheck cargo rustc ktlint detekt \
-                   shellcheck shfmt actionlint earthly just gradle java node docker; do
+          for t in nix uv ruff basedpyright pytest go golangci-lint govulncheck \
+                   cargo rustc cargo-audit ktlint detekt \
+                   shellcheck shfmt actionlint yamllint earthly just gradle java \
+                   nixfmt statix deadnix node docker; do
             printf '%-16s %s\n' "$t" "$(command -v "$t" || echo MISSING)"
           done
           df -h /
