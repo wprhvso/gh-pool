@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 from gh_pool import rpc
+from gh_pool.shell import shell
 
 DEPS = Path(os.getenv("GH_POOL_DEPS", "/tmp/pool-deps"))
 
@@ -83,4 +84,4 @@ def python(payload: dict[str, Any]) -> None:
         raise
 
 
-REGISTRY = {"python": python}
+REGISTRY = {"python": python, "shell": shell}

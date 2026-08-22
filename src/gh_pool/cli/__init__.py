@@ -12,6 +12,7 @@ from typing import Any, NoReturn
 import httpx
 from yaol import SpanKind, from_env, inject_headers, setup, shutdown, span
 
+from gh_pool.cli import shell
 from gh_pool.obs import version
 
 SERVER = os.getenv("GH_POOL_SERVER", "http://localhost:8000").rstrip("/")
@@ -112,6 +113,38 @@ def cmd_submit(args: argparse.Namespace) -> None:
         return
     print(f"--- {tid}", file=sys.stderr)
     finish(tid, follow(tid))
+
+
+def leased(tid: str) -> dict[str, Any]:
+    waiting = False
+    while True:
+        task = call("GET", f"/v1/tasks/{tid}").json()
+        if task["status"] != "pending":
+            return task
+        if not waiting:
+            waiting = True
+            print("--- жду свободного раннера", file=sys.stderr)
+        time.sleep(POLL)
+
+
+def cmd_sh(args: argparse.Namespace) -> None:
+    tid = args.id
+    if tid is None:
+        body = {"type": "shell", "payload": shell.payload(args.command)}
+        tid = call("POST", "/v1/tasks", json=body).json()["task_id"]
+    task = leased(tid)
+    if task["status"] != "running":
+        die(f"задача {task['status']}, шелла не будет", CODES.get(task["status"], 1))
+    print(
+        f"--- {tid} на {task.get('worker_id') or '?'}, отцепиться ~.", file=sys.stderr
+    )
+    status = shell.run(tid, SERVER, TOKEN)
+    if status == "detached":
+        print(f"--- отцепился, вернуться: pool sh {tid}", file=sys.stderr)
+        return
+    if status == "gone":
+        status = call("GET", f"/v1/tasks/{tid}").json()["status"]
+    finish(tid, status)
 
 
 def cmd_events(args: argparse.Namespace) -> None:
@@ -242,6 +275,11 @@ def main() -> None:
     s.add_argument("--payload-file")
     s.add_argument("-f", "--follow", action="store_true")
     s.set_defaults(fn=cmd_submit)
+
+    s = sub.add_parser("sh")
+    s.add_argument("id", nargs="?")
+    s.add_argument("-c", "--command")
+    s.set_defaults(fn=cmd_sh)
 
     s = sub.add_parser("events")
     s.add_argument("id")

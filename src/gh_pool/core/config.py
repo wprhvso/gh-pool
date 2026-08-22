@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     lease_wait: float = 30.0
     worker_stale: float = 120.0
     flush_every: float = 0.2
+    shell_cap: int = 1 << 20
+    shell_idle: float = 300.0
+    shell_poll: float = 10.0
     storage: Path = Path("/var/lib/gh-chrome")
     host: str = "127.0.0.1"
     port: int = 8000

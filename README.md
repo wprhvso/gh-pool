@@ -197,6 +197,7 @@ sha256, время и задача-создатель. Загрузка из з�
 ## CLI
 
 ```bash
+pool sh [id] [-c 'команда']                        живой shell на раннере
 pool submit python -p code='result = 2 + 2' [-f]   отправить, -f = следить за потоком
 pool submit python --payload-file task.json
 pool events <id> [-f] [-o offset]
@@ -213,6 +214,24 @@ pool health
 ```
 
 Коды возврата при `-f`: 0 done, 1 failed, 2 cancelled, 3 lost.
+
+## Shell
+
+`pool sh` кладёт в очередь задачу типа `shell`, свободный раннер поднимает на ней
+pty и сводит его с терминалом через сервер. Ни ключей, ни паролей, ни портов:
+обе стороны уже держат токены пула, а весь канал — те же POST и GET с офсетами,
+что и события.
+
+```bash
+pool sh                    новый shell на первом свободном раннере
+pool sh <id>               вернуться в уже открытый
+pool sh -c 'uname -a'      разовая команда в pty
+```
+
+Отцепиться — `~.` в начале строки, шелл останется жить. Обрыв сети клиента ничего
+не рушит: офсеты те же с обеих сторон, поэтому `pool sh <id>` продолжает ровно с
+того места, где связь пропала. Раннер сам сворачивается, если к шеллу
+`GH_POOL_SHELL_IDLE` секунд никто не приходил.
 
 ## Деплой раннеров
 
@@ -247,7 +266,8 @@ ghcr, манифесты подхватывает ArgoCD. Один образ о
 ## Переменные
 
 Сервер: `GH_POOL_DATABASE_URL`, `GH_POOL_WORKER_TOKEN`, `GH_POOL_CLIENT_TOKEN`, `GH_POOL_DATA_DIR`, `GH_POOL_BLOB_DIR`,
-`GH_POOL_EVENT_CAP`, `GH_POOL_FLUSH_EVERY`, `GH_POOL_LOST_AFTER`, `GH_POOL_LEASE_WAIT`, `GH_POOL_WORKER_STALE`, `HOST`, `PORT`.
+`GH_POOL_EVENT_CAP`, `GH_POOL_FLUSH_EVERY`, `GH_POOL_LOST_AFTER`, `GH_POOL_LEASE_WAIT`, `GH_POOL_WORKER_STALE`,
+`GH_POOL_SHELL_CAP`, `GH_POOL_SHELL_IDLE`, `GH_POOL_SHELL_POLL`, `HOST`, `PORT`.
 
 Воркер: `GH_POOL_SERVER`, `GH_POOL_WORKER_TOKEN`, `GH_POOL_WORKER_ID`, `GH_POOL_SPOOL_DIR`, `GH_POOL_SPOOL_CAP`,
 `GH_POOL_TASKS`, `GH_POOL_DEPS`.

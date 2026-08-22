@@ -27,6 +27,7 @@ from gh_pool.server import (
     api_player,
     api_runner,
     pool,
+    shell,
     storage,
     tasks,
 )
@@ -138,6 +139,7 @@ def create_app() -> FastAPI:
     app.include_router(api_runner.router)
     app.include_router(api_player.router)
     app.include_router(tasks.router)
+    app.include_router(shell.router)
     return app
 
 
