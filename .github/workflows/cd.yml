@@ -8,7 +8,7 @@ on:
 
 jobs:
   version:
-    runs-on: pool
+    runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.read.outputs.version }}
       prerelease: ${{ steps.read.outputs.prerelease }}
@@ -45,7 +45,7 @@ jobs:
           echo "release=$release" >> "$GITHUB_OUTPUT"
 
   release:
-    runs-on: pool
+    runs-on: ubuntu-latest
     needs: [version]
     if: needs.version.outputs.release == 'true'
 
@@ -71,7 +71,7 @@ jobs:
             --LATEST="${{ needs.version.outputs.prerelease == 'false' }}"
 
   pypi:
-    runs-on: pool
+    runs-on: ubuntu-latest
     needs: [version, release]
     if: needs.version.outputs.release == 'true'
 
@@ -90,7 +90,7 @@ jobs:
       - run: uv publish
 
   tag:
-    runs-on: pool
+    runs-on: ubuntu-latest
     needs: [version, release, pypi]
     if: needs.version.outputs.release == 'true'
 
