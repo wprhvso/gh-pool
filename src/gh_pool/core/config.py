@@ -11,7 +11,16 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="GH_POOL_", extra="ignore")
 
     token: str = ""
+    worker_token: str = "dev-worker"
+    client_token: str = "dev-client"
     database_url: str = "postgresql:///pool"
+    data_dir: Path = Path("./data")
+    blob_dir: Path | None = None
+    event_cap: int = 100 * 1024 * 1024
+    lost_after: float = 300.0
+    lease_wait: float = 30.0
+    worker_stale: float = 120.0
+    flush_every: float = 0.2
     storage: Path = Path("/var/lib/gh-chrome")
     host: str = "127.0.0.1"
     port: int = 8000
@@ -34,6 +43,10 @@ class Settings(BaseSettings):
     cleanup_max_bytes: int = 64 << 30
     segment_seconds: float = 1.0
     max_upload: int = 1 << 30
+
+    @property
+    def blobs_dir(self) -> Path:
+        return self.blob_dir or self.data_dir / "blobs"
 
     @property
     def sessions_dir(self) -> Path:

@@ -17,20 +17,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from opentelemetry import metrics
 from opentelemetry.metrics import CallbackOptions, Observation
 
+from gh_pool.core.config import settings
 from gh_pool.db import tasks as db
 
 log = structlog.get_logger()
-
-DATA_DIR = Path(os.getenv("GH_POOL_DATA_DIR", "./data"))
-BLOB_DIR = Path(os.getenv("GH_POOL_BLOB_DIR", str(DATA_DIR / "blobs")))
-WORKER_TOKEN = os.getenv("GH_POOL_WORKER_TOKEN", "dev-worker")
-CLIENT_TOKEN = os.getenv("GH_POOL_CLIENT_TOKEN", "dev-client")
-EVENT_CAP = int(os.getenv("GH_POOL_EVENT_CAP", str(100 * 1024 * 1024)))
-LOST_AFTER = float(os.getenv("GH_POOL_LOST_AFTER", "300"))
-LEASE_WAIT = float(os.getenv("GH_POOL_LEASE_WAIT", "30"))
-WORKER_STALE = float(os.getenv("GH_POOL_WORKER_STALE", "120"))
-FLUSH_EVERY = float(os.getenv("GH_POOL_FLUSH_EVERY", "0.2"))
-STARTED = time.time()
 
 TERMINAL = ("done", "failed", "cancelled")
 FINISHED = (*TERMINAL, "lost")
@@ -45,10 +35,13 @@ DIRTY_BLOBS: set[str] = set()
 new_task = asyncio.Event()
 event_locks: dict[str, asyncio.Lock] = {}
 flush_lock = asyncio.Lock()
-state = {"db": False}
+state: dict[str, Any] = {"db": False, "started_at": 0.0}
 
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-BLOB_DIR.mkdir(parents=True, exist_ok=True)
+
+def boot() -> None:
+    state["started_at"] = time.time()
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    settings.blobs_dir.mkdir(parents=True, exist_ok=True)
 
 meter = metrics.get_meter("gh_pool.server")
 
@@ -114,7 +107,7 @@ tasks_lost = meter.create_counter(
 
 
 def task_dir(tid: str) -> Path:
-    return DATA_DIR / tid
+    return settings.data_dir / tid
 
 
 def events_path(tid: str) -> Path:
@@ -128,7 +121,7 @@ def events_size(tid: str) -> int:
 
 def blob_path(key: str) -> Path:
     h = hashlib.sha256(key.encode()).hexdigest()
-    return BLOB_DIR / h[:2] / h
+    return settings.blobs_dir / h[:2] / h
 
 
 def _matches(given: str | None, token: str) -> bool:
@@ -136,17 +129,17 @@ def _matches(given: str | None, token: str) -> bool:
 
 
 def auth_worker(h: str | None) -> None:
-    if not _matches(h, WORKER_TOKEN):
+    if not _matches(h, settings.worker_token):
         raise HTTPException(401, "bad worker token")
 
 
 def auth_client(h: str | None) -> None:
-    if not _matches(h, CLIENT_TOKEN):
+    if not _matches(h, settings.client_token):
         raise HTTPException(401, "bad client token")
 
 
 def auth_any(h: str | None) -> None:
-    if not (_matches(h, WORKER_TOKEN) or _matches(h, CLIENT_TOKEN)):
+    if not (_matches(h, settings.worker_token) or _matches(h, settings.client_token)):
         raise HTTPException(401, "bad token")
 
 
@@ -287,7 +280,7 @@ async def keeper() -> None:
         for t in list(TASKS.values()):
             if (
                 t["status"] == "running"
-                and t.get("heartbeat_at", now) < now - LOST_AFTER
+                and t.get("heartbeat_at", now) < now - settings.lost_after
             ):
                 t.update(
                     status="lost",
@@ -306,7 +299,7 @@ async def keeper() -> None:
                     quiet_for=round(now - t["heartbeat_at"], 1),
                 )
         for wid, w in list(WORKERS.items()):
-            if w["seen_at"] < now - WORKER_STALE:
+            if w["seen_at"] < now - settings.worker_stale:
                 WORKERS.pop(wid, None)
                 log.info(
                     "worker_gone",
@@ -315,7 +308,7 @@ async def keeper() -> None:
                     quiet_for=round(now - w["seen_at"], 1),
                 )
         await flush()
-        await asyncio.sleep(FLUSH_EVERY)
+        await asyncio.sleep(settings.flush_every)
 
 
 router = APIRouter()
@@ -331,7 +324,7 @@ async def lease(
     if not worker_id:
         raise HTTPException(400, "worker_id required")
     touch(worker_id, None, time.time())
-    deadline = time.monotonic() + LEASE_WAIT
+    deadline = time.monotonic() + settings.lease_wait
     while True:
         t = grab(worker_id)
         if t:
@@ -375,7 +368,7 @@ async def append_events(
     lock = event_locks.setdefault(tid, asyncio.Lock())
     async with lock:
         size = events_size(tid)
-        if size >= EVENT_CAP:
+        if size >= settings.event_cap:
             return {"offset": size, "accepting": False}
         if offset != size:
             return JSONResponse({"offset": size, "accepting": True}, status_code=409)
@@ -390,7 +383,7 @@ async def append_events(
                     return f.tell()
 
             size = await to_thread.run_sync(w)
-        return {"offset": size, "accepting": size < EVENT_CAP}
+        return {"offset": size, "accepting": size < settings.event_cap}
 
 
 @router.post("/v1/tasks/{tid}/complete")
@@ -682,8 +675,8 @@ def report() -> Report:
         tasks=counts,
         queue=len(QUEUE),
         workers=len(WORKERS),
-        started_at=STARTED,
-        uptime=round(time.time() - STARTED, 1),
+        started_at=state["started_at"],
+        uptime=round(time.time() - state["started_at"], 1),
         pending_writes=len(DIRTY) + len(DIRTY_BLOBS),
         db=state["db"],
     )

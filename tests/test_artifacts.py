@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import hashlib
 
+from gh_pool.core.config import settings
 from gh_pool.server import tasks as server
 from tests.conftest import as_client, as_worker
 
@@ -91,4 +92,4 @@ async def test_a_failed_upload_leaves_no_scraps_behind(client, monkeypatch):
     with contextlib.suppress(OSError):
         await client.put("/v1/artifacts/k", content=b"bad", headers=as_worker())
 
-    assert list(server.BLOB_DIR.rglob("*.part")) == []
+    assert list(settings.blobs_dir.rglob("*.part")) == []

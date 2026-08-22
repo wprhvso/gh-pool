@@ -46,6 +46,7 @@ STATUS_CODES: Codes = {
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     storage.ensure_dirs()
+    tasks.boot()
     await migrate.upgrade()
     db = Database(settings.database_url)
     await db.open()

@@ -1,6 +1,7 @@
 import asyncio
 import time
 
+from gh_pool.core.config import settings
 from gh_pool.server import tasks as server
 from tests.conftest import as_client, as_worker, submit, take
 
@@ -174,7 +175,7 @@ async def test_listing_tasks_writes_nothing_to_disk(client, blank):
 
     await client.get(f"/v1/tasks/{tid}", headers=as_client())
 
-    assert list(server.DATA_DIR.iterdir()) == []
+    assert list(settings.data_dir.iterdir()) == []
 
 
 async def test_a_pending_task_the_server_forgot_is_still_cancelled(client, blank):

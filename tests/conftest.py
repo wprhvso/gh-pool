@@ -1,12 +1,10 @@
-import os
-import tempfile
+import asyncio
 import uuid
-
-os.environ.setdefault("GH_POOL_DATA_DIR", tempfile.mkdtemp(prefix="pool-tests-"))
 
 import httpx
 import pytest
 
+from gh_pool.core.config import settings
 from gh_pool.db import tasks as db
 from gh_pool.server import storage
 from gh_pool.server import tasks as server
@@ -83,11 +81,10 @@ def fake_db(monkeypatch):
 
 @pytest.fixture
 def blank(monkeypatch, tmp_path, fake_db):
-    monkeypatch.setattr(server, "DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(server, "BLOB_DIR", tmp_path / "blobs")
-    monkeypatch.setattr(server, "LEASE_WAIT", 0.05)
-    (tmp_path / "data").mkdir()
-    (tmp_path / "blobs").mkdir()
+    monkeypatch.setattr(settings, "data_dir", tmp_path / "data")
+    monkeypatch.setattr(settings, "blob_dir", tmp_path / "blobs")
+    monkeypatch.setattr(settings, "lease_wait", 0.05)
+    server.boot()
     server.TASKS.clear()
     server.QUEUE.clear()
     server.WORKERS.clear()
@@ -95,7 +92,7 @@ def blank(monkeypatch, tmp_path, fake_db):
     server.DIRTY.clear()
     server.DIRTY_BLOBS.clear()
     server.event_locks.clear()
-    server.new_task = __import__("asyncio").Event()
+    server.new_task = asyncio.Event()
     server.state["db"] = False
     yield fake_db
     server.TASKS.clear()

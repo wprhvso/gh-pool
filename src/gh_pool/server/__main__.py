@@ -13,7 +13,6 @@ from gh_pool.core.config import settings
 from gh_pool.db.engine import engine
 from gh_pool.obs import observability, version
 from gh_pool.protocol import trace
-from gh_pool.server import tasks
 from gh_pool.server.app import app
 
 
@@ -23,8 +22,8 @@ def main() -> None:
     if not settings.token:
         raise SystemExit("GH_POOL_TOKEN is not set")
     for name, value, dev in (
-        ("GH_POOL_WORKER_TOKEN", tasks.WORKER_TOKEN, "dev-worker"),
-        ("GH_POOL_CLIENT_TOKEN", tasks.CLIENT_TOKEN, "dev-client"),
+        ("GH_POOL_WORKER_TOKEN", settings.worker_token, "dev-worker"),
+        ("GH_POOL_CLIENT_TOKEN", settings.client_token, "dev-client"),
     ):
         if value == dev:
             raise SystemExit(f"{name} is still the development default")

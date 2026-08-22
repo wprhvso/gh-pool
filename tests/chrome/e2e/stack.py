@@ -165,6 +165,8 @@ class Server:
         self._patch.setattr(server_settings, "token", TOKEN)
         self._patch.setattr(server_settings, "database_url", self._database_url)
         self._patch.setattr(server_settings, "storage", self._storage)
+        self._patch.setattr(server_settings, "data_dir", self._storage / "tasks")
+        self._patch.setattr(server_settings, "blob_dir", self._storage / "blobs")
         self._patch.setattr(server_settings, "heartbeat_timeout", heartbeat_timeout)
         self._patch.setattr(server_settings, "ready_timeout", ready_timeout)
         self._patch.setattr(server_settings, "watchdog_interval", watchdog_interval)
