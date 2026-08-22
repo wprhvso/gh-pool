@@ -23,16 +23,16 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/bin"
           grab() {
-            local repo=$1 pattern=$2
-            local url
+            local repo=$1 suffix=$2 url
             url=$(gh api "repos/$repo/releases/latest" \
-              --jq ".assets[] | select(.name | test(\"$pattern\")) | .browser_download_url" \
-              | head -1)
-            [ -n "$url" ] || { echo "::error::не нашёл релиз $repo по $pattern"; exit 1; }
+              | jq -r --arg s "$suffix" \
+                  'first(.assets[] | select(.name | endswith($s)) | .browser_download_url)')
+            [ -n "$url" ] && [ "$url" != null ] \
+              || { echo "::error::не нашёл в релизе $repo файл на $suffix"; exit 1; }
             curl -fsSL "$url" | tar xz -C "$RUNNER_TEMP/bin"
           }
-          grab kubernetes-sigs/kustomize 'kustomize_v.*_linux_amd64\.tar\.gz'
-          grab yannh/kubeconform 'kubeconform-linux-amd64\.tar\.gz'
+          grab kubernetes-sigs/kustomize _linux_amd64.tar.gz
+          grab yannh/kubeconform -linux-amd64.tar.gz
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
       - name: kustomize build + kubeconform
