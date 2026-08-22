@@ -126,4 +126,6 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --frozen
-      - run: uv run pytest "${{ matrix.test }}" -q --no-header
+      - env:
+          TEST: ${{ matrix.test }}
+        run: uv run pytest "$TEST" -q --no-header

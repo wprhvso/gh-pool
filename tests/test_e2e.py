@@ -150,17 +150,25 @@ def result_of(task):
     return next(e["value"] for e in task.events() if e["kind"] == "result")
 
 
-def test_a_worker_signs_in_and_waits_for_work(live):
+def wait_for_worker(live):
     deadline = time.monotonic() + BOOT
     while time.monotonic() < deadline:
         rows = httpx.get(
             f"{live}/v1/workers", headers={"Authorization": f"Bearer {CLIENT_TOKEN}"}
         ).json()
         if rows:
-            assert rows[0]["id"] == "e2e-worker-1"
-            return
+            return rows
         time.sleep(0.2)
     raise AssertionError("no worker ever showed up")
+
+
+@pytest.fixture
+def worker(live):
+    return wait_for_worker(live)
+
+
+def test_a_worker_signs_in_and_waits_for_work(live):
+    assert wait_for_worker(live)[0]["id"] == "e2e-worker-1"
 
 
 def test_a_script_runs_out_there_and_the_answer_comes_back(pool):
@@ -290,7 +298,7 @@ def test_a_large_stream_of_output_survives_the_trip(pool):
     assert result_of(task) == "done"
 
 
-def test_health_knows_about_the_pool(pool):
+def test_health_knows_about_the_pool(pool, worker):
     health = pool.health()
 
     assert health["ok"] is True
@@ -340,6 +348,6 @@ def test_the_command_line_moves_artifacts_both_ways(live, tmp_path):
     assert json.loads(cli(live, "rm", "e2e/cli.bin").stdout) == {"ok": True}
 
 
-def test_the_command_line_shows_the_workers_and_the_health(live):
+def test_the_command_line_shows_the_workers_and_the_health(live, worker):
     assert "e2e-worker-1" in cli(live, "workers").stdout
     assert json.loads(cli(live, "health").stdout)["ok"] is True
