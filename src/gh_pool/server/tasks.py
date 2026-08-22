@@ -316,16 +316,7 @@ async def keeper() -> None:
         await asyncio.sleep(FLUSH_EVERY)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    t = asyncio.create_task(keeper())
-    yield
-    t.cancel()
-    await flush()
-
-
 router = APIRouter()
-health = APIRouter()
 
 
 @router.post("/v1/lease")
@@ -693,53 +684,3 @@ def report() -> Report:
         pending_writes=len(DIRTY) + len(DIRTY_BLOBS),
         db=state["db"],
     )
-
-
-@health.get("/healthz")
-async def healthz() -> Report:
-    return report()
-
-
-app = FastAPI(lifespan=lifespan)
-app.include_router(router)
-app.include_router(health)
-
-
-def version() -> str:
-    try:
-        return metadata.version("gh-pool")
-    except metadata.PackageNotFoundError:
-        return "0.0.0"
-
-
-def main() -> None:
-    import uvicorn
-    from yaol import (
-        instrument_fastapi,
-        instrument_runtime,
-        instrument_sqlalchemy,
-        setup,
-        shutdown,
-    )
-
-    from gh_pool.obs import observability
-
-    setup(observability("pool-server", version()))
-    instrument_fastapi(app)
-    instrument_sqlalchemy(engine())
-    instrument_runtime()
-    log.info("starting_pool_server", version=version())
-    try:
-        uvicorn.run(
-            app,
-            host=os.getenv("HOST", "0.0.0.0"),  # noqa: S104
-            port=int(os.getenv("PORT", "8000")),
-            access_log=False,
-            timeout_graceful_shutdown=5,
-        )
-    finally:
-        shutdown()
-
-
-if __name__ == "__main__":
-    main()

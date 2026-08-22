@@ -1,6 +1,6 @@
-# pool-runners
+# Флот раннеров
 
-Self-hosted раннеры GitHub Actions поверх [pool](https://github.com/wprhvso/pool).
+Self-hosted раннеры GitHub Actions поверх [pool](https://github.com/wprhvso/gh-pool).
 Контроллер держит в целевой репе эфемерный runner scale set, слушает её очередь
 job'ов и на каждый job отправляет в пул задачу, которая разворачивает раннера
 прямо внутри уже живого воркера.
@@ -71,14 +71,14 @@ token = "клиентский токен пула"
 ### 3. Запуск
 
 ```bash
-uv run pool-runners -c runners.toml --check    # проверить доступы и пул
-uv run pool-runners -c runners.toml
+uv run gh-pool-runners -c runners.toml --check    # проверить доступы и пул
+uv run gh-pool-runners -c runners.toml
 ```
 
 Одна репа и без конфига — тоже можно:
 
 ```bash
-GH_TOKEN=... POOL_SERVER=... POOL_CLIENT_TOKEN=... uv run pool-runners alice/app
+GH_TOKEN=... GH_POOL_SERVER=... GH_POOL_CLIENT_TOKEN=... uv run gh-pool-runners alice/app
 ```
 
 ### 4. `runs-on` в целевой репе
@@ -108,11 +108,11 @@ jobs:
 | `work` | `_work` | рабочая папка раннера, относительно его корня |
 | `version` | последняя | версия `actions/runner`, если хочется пин |
 | `sha256` | — | проверять архив раннера по хэшу (с `version`) |
-| `[pool] server` | `POOL_SERVER` | адрес сервера пула |
-| `[pool] token` | `POOL_CLIENT_TOKEN` | клиентский токен пула |
+| `[pool] server` | `GH_POOL_SERVER` | адрес сервера пула |
+| `[pool] token` | `GH_POOL_CLIENT_TOKEN` | клиентский токен пула |
 
-Без конфига то же самое читается из окружения: `GH_TOKEN`, `POOL_SERVER`,
-`POOL_CLIENT_TOKEN`, `RUNNERS_LABEL`, `RUNNERS_JOBS`, `RUNNERS_IDLE`,
+Без конфига то же самое читается из окружения: `GH_TOKEN`, `GH_POOL_SERVER`,
+`GH_POOL_CLIENT_TOKEN`, `RUNNERS_LABEL`, `RUNNERS_JOBS`, `RUNNERS_IDLE`,
 `RUNNERS_LIFETIME`, `RUNNERS_DRAIN`, `RUNNERS_WORK`, `RUNNERS_VERSION`,
 `RUNNERS_SHA256`, `RUNNERS_DEBUG`.
 
@@ -123,7 +123,7 @@ jobs:
 2. Приходит `JobAvailable` — контроллер забирает job (`acquirejobs`) и смотрит
    в `totalAssignedJobs`: столько раннеров и нужно.
 3. На каждого недостающего выписывается JIT-конфиг и уходит в пул задачей
-   `python` с исходником [`agent.py`](pool_runners/agent.py) в payload.
+   `python` с исходником [`agent.py`](src/gh_pool/fleet/runners/agent.py) в payload.
 4. Воркер пула выполняет его: качает `actions/runner` (архив кэшируется на
    воркере), распаковывает во временную папку и запускает `bin/Runner.Listener`
    с `ACTIONS_RUNNER_INPUT_JITCONFIG` и чистым окружением. Не `run.sh`: тот
@@ -160,8 +160,8 @@ scale set и подбирает из пула ранее отправленны�
 разделяемая машина. Что с этим сделано и что нет:
 
 - **Окружение воркера не наследуется.** Раннеру собирается чистый `env` из
-  белого списка (`PATH`, `HOME`, `LANG`, ...) плюс JIT-конфиг. `POOL_TOKEN`,
-  `POOL_SERVER`, `GITHUB_*` и `ACTIONS_*` внешней джобы туда не попадают.
+  белого списка (`PATH`, `HOME`, `LANG`, ...) плюс JIT-конфиг. `GH_POOL_WORKER_TOKEN`,
+  `GH_POOL_SERVER`, `GITHUB_*` и `ACTIONS_*` внешней джобы туда не попадают.
 - **Но uid тот же.** Job целевой репы может прочитать `/proc/<pid>/environ`
   воркера и вытащить его токен. Разделения пользователей тут нет: пускай в пул
   только те репы, которым доверяешь как самому пулу.
@@ -205,20 +205,3 @@ uv run pytest
 стандартная библиотека, никаких импортов из пакета и синтаксис, который поймёт
 Python 3.11.
 
-## Nix
-
-```nix
-{
-  inputs.pool-runners.url = "github:wprhvso/pool-runners";
-
-  imports = [ inputs.pool-runners.nixosModules.default ];
-
-  services.pool-runners = {
-    enable = true;
-    configFile = "/run/secrets/runners.toml";
-  };
-}
-```
-
-Конфиг заезжает креденшлом systemd, так что `configFile` спокойно лежит под
-`0400 root:root`. Сервис крутится под `DynamicUser`.

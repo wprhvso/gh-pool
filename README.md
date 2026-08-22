@@ -24,7 +24,7 @@ GitHub Actions как пул универсальных воркеров. Цен
 
 `pending → running → done | failed | cancelled | lost`
 
-`lost` ставит reaper, если хартбита не было `LOST_AFTER` секунд.
+`lost` ставит reaper, если хартбита не было `GH_POOL_LOST_AFTER` секунд.
 
 ## Запуск
 
@@ -34,8 +34,8 @@ cp .env.example .env
 createdb pool                                 # нужен Postgres
 
 uv run gh-pool-server
-POOL_TOKEN=... uv run gh-pool-worker
-POOL_CLIENT_TOKEN=... uv run gh-pool submit python -p code='result = 2 + 2' -f
+GH_POOL_WORKER_TOKEN=... uv run gh-pool-worker
+GH_POOL_CLIENT_TOKEN=... uv run gh-pool submit python -p code='result = 2 + 2' -f
 ```
 
 ## SDK
@@ -104,13 +104,13 @@ def value(task):
 Без `entry` код исполняется целиком, результатом становится переменная `result`,
 а `args` и `kwargs` доступны как глобальные.
 
-`deps` ставятся в `POOL_DEPS` (по умолчанию `/tmp/pool-deps`) и кэшируются по
+`deps` ставятся в `GH_POOL_DEPS` (по умолчанию `/tmp/pool-deps`) и кэшируются по
 набору, так что одинаковые зависимости ставятся один раз на жизнь раннера.
 
 Отмена приходит как SIGTERM, её можно поймать для уборки. Через 30 секунд SIGKILL.
 `timeout` поднимает `TimeoutError` внутри задачи, не дожидаясь смерти раннера.
 
-Нужен свой набор типов вместо встроенного — `POOL_TASKS=mypkg.tasks`, там словарь
+Нужен свой набор типов вместо встроенного — `GH_POOL_TASKS=mypkg.tasks`, там словарь
 `REGISTRY` из имени в `fn(payload)`.
 
 ## Обратный канал
@@ -168,7 +168,7 @@ def crunch(key):
 ```
 
 Ключ — любая строка, слэши и юникод разрешены, перезапись побеждает последняя.
-Байты лежат в `BLOB_DIR`, путь считается из sha256 ключа, все обращения к файлам
+Байты лежат в `GH_POOL_BLOB_DIR`, путь считается из sha256 ключа, все обращения к файлам
 уходят в отдельные потоки и лупа не трогают. В базе на каждый ключ строка: размер,
 sha256, время и задача-создатель. Загрузка из задачи отмечается событием `artifact`
 в её потоке.
@@ -182,7 +182,7 @@ sha256, время и задача-создатель. Загрузка из з�
 готовыми, упавшими и потерянными, — и `artifacts` с ключами.
 
 База при этом не стоит на пути задач. Очередь, лизы, хартбиты и отмены живут в
-памяти сервера, а сливает их в Postgres фоновый писатель раз в `FLUSH_EVERY` одной
+памяти сервера, а сливает их в Postgres фоновый писатель раз в `GH_POOL_FLUSH_EVERY` одной
 пачкой. Ни один запрос воркера базу не ждёт: сабмит, лиз, хартбит и завершение —
 это правка словаря в памяти.
 
@@ -231,82 +231,25 @@ uv run gh-pool-keeper run -c keeper.toml
 
 ## Nix
 
-`flake.nix` собирает пакет из `uv.lock` через uv2nix, так что версии в Nix ровно те
-же, что у `uv sync`, и второй список зависимостей вести не нужно.
+`flake.nix` даёт только окружение для разработки: Python, uv, ruff, postgres,
+chromium и X-инструменты под браузерные тесты.
 
-```bash
-nix build            # venv со всеми точками входа в result/bin
-nix develop          # то же плюс uv, ruff и postgres под тесты
-uv run gh-pool -- health
+```
+nix develop          # окружение
+uv run gh-pool ...   # точки входа
 ```
 
-Два модуля NixOS: `nixosModules.server` и `nixosModules.client`.
-
-```nix
-{
-  inputs.pool.url = "github:wprhvso/pool";
-
-  # сервер: демон, база и юзер заводятся сами
-  imports = [ pool.nixosModules.server ];
-  services.pool.server = {
-    enable = true;
-    host = "0.0.0.0";
-    openFirewall = true;
-    environmentFile = "/run/secrets/pool";   # WORKER_TOKEN и CLIENT_TOKEN
-    settings.FLUSH_EVERY = "0.1";
-  };
-}
-```
-
-`postgresql = true` по умолчанию поднимает локальный Postgres и заводит в нём базу
-с ролью, доступ идёт юникс-сокетом. Своя база — снимите флаг и задайте
-`databaseUrl`. Токены в стор не кладутся, их читает systemd из `environmentFile`.
-
-Клиентская сторона — CLI и два демона, каждый включается отдельно:
-
-```nix
-{
-  imports = [ pool.nixosModules.client ];
-
-  programs.pool = {
-    enable = true;                            # обёртка pool с адресом и токеном
-    server = "https://pool.example.com";
-    tokenFile = "/run/secrets/pool-client";
-  };
-
-  services.pool.worker = {
-    enable = true;                            # локальный раннер рядом с гитхабовскими
-    server = "https://pool.example.com";
-    environmentFile = "/run/secrets/pool-worker";
-  };
-
-  services.pool.keeper = {
-    enable = true;                            # держит фронт раннеров на гитхабе
-    configFile = "/run/secrets/keeper.toml";
-    build = true;                             # ещё и разложить воркфлоу с секретами
-  };
-}
-```
-
-Воркер выполняет присланный код, поэтому крутится под `DynamicUser` со своим
-кэшем и приватным `/tmp`. Изоляция это всё равно слабая: не ставьте воркер на
-машину, где есть что терять.
-
-Кипер тоже под `DynamicUser`, а конфиг заезжает к нему кредом systemd: файл
-читает root до сброса прав, так что `configFile` спокойно лежит под `0400
-root:root` рядом с остальными секретами. `build = true` перед каждым запуском
-делает то же, что `pool-keeper build` руками, — заводит недостающие репы,
-обновляет воркфлоу и ставит в них `POOL_SERVER` с `POOL_TOKEN`, — так что фронт
-раннеров поднимается с нуля одним `nixos-rebuild`. Трогает он только те репы,
-что перечислены в конфиге. Воркфлоу берётся из `workflows`, по умолчанию — из
-самого флейка.
+Доставка в кластер идёт через `Earthfile` и `deploy/gh-pool/`: образ уезжает в
+ghcr, манифесты подхватывает ArgoCD. Один образ обслуживает оба процесса —
+`gh-pool-relay` и `gh-pool-migrate` запускаются тем же образом с другой
+командой.
 
 ## Переменные
 
-Сервер: `DATABASE_URL`, `WORKER_TOKEN`, `CLIENT_TOKEN`, `DATA_DIR`, `BLOB_DIR`,
-`EVENT_CAP`, `FLUSH_EVERY`, `LOST_AFTER`, `LEASE_WAIT`, `WORKER_STALE`, `HOST`, `PORT`.
+Сервер: `GH_POOL_DATABASE_URL`, `GH_POOL_WORKER_TOKEN`, `GH_POOL_CLIENT_TOKEN`, `GH_POOL_DATA_DIR`, `GH_POOL_BLOB_DIR`,
+`GH_POOL_EVENT_CAP`, `GH_POOL_FLUSH_EVERY`, `GH_POOL_LOST_AFTER`, `GH_POOL_LEASE_WAIT`, `GH_POOL_WORKER_STALE`, `HOST`, `PORT`.
 
-Воркер: `POOL_SERVER`, `POOL_TOKEN`, `WORKER_ID`, `SPOOL_DIR`, `SPOOL_CAP`,
-`POOL_TASKS`, `POOL_DEPS`.
+Воркер: `GH_POOL_SERVER`, `GH_POOL_WORKER_TOKEN`, `GH_POOL_WORKER_ID`, `GH_POOL_SPOOL_DIR`, `GH_POOL_SPOOL_CAP`,
+`GH_POOL_TASKS`, `GH_POOL_DEPS`.
 
-Клиент: `POOL_SERVER`, `POOL_CLIENT_TOKEN`.
+Клиент: `GH_POOL_SERVER`, `GH_POOL_CLIENT_TOKEN`.

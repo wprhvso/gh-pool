@@ -1,5 +1,6 @@
 import os
 from dataclasses import replace
+from importlib import metadata
 
 from yaol import ObservabilityConfig, from_env
 
@@ -19,3 +20,10 @@ def observability(service: str, service_version: str) -> ObservabilityConfig:
         export_logs=False,
         export_metrics=False,
     )
+
+
+def version() -> str:
+    try:
+        return metadata.version("gh-pool")
+    except metadata.PackageNotFoundError:
+        return "0.0.0"

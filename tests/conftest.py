@@ -8,7 +8,9 @@ import httpx
 import pytest
 
 from gh_pool.db import tasks as db
+from gh_pool.server import storage
 from gh_pool.server import tasks as server
+from gh_pool.server.app import create_app
 from tests.postgres import NO_DATABASE, Cluster, start_cluster
 
 WORKER = "dev-worker"
@@ -101,9 +103,21 @@ def blank(monkeypatch, tmp_path, fake_db):
     server.WORKERS.clear()
 
 
+class FakeDatabase:
+    def __init__(self, broken: bool = False) -> None:
+        self.broken = broken
+
+    async def probe(self) -> None:
+        if self.broken:
+            raise RuntimeError("no database")
+
+
 @pytest.fixture
-async def client(blank):
-    transport = httpx.ASGITransport(app=server.app)
+async def client(blank, monkeypatch):
+    monkeypatch.setattr(storage, "ensure_dirs", lambda: None)
+    app = create_app()
+    app.state.db = FakeDatabase()
+    transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://pool") as c:
         yield c
 

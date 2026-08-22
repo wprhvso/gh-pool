@@ -21,8 +21,8 @@ through CDP.
 ## Quick start
 
 ```bash
-export GH_CHROME_URL=https://chrome.example.com
-export GH_CHROME_TOKEN=...
+export GH_POOL_URL=https://chrome.example.com
+export GH_POOL_TOKEN=...
 python examples/hello.py
 ```
 
@@ -67,9 +67,9 @@ secure origin.
 
 | Variable | Meaning |
 | --- | --- |
-| `GH_CHROME_VNC` | `0` on the runner skips the desktop |
-| `GH_CHROME_VNC_PORT` | port KasmVNC listens on, loopback only |
-| `GH_CHROME_VNC_FRAME_RATE` | updates per second, until a viewer sets its own |
+| `GH_POOL_VNC` | `0` on the runner skips the desktop |
+| `GH_POOL_VNC_PORT` | port KasmVNC listens on, loopback only |
+| `GH_POOL_VNC_FRAME_RATE` | updates per second, until a viewer sets its own |
 
 The workflow installs `kasmvncserver` from the KasmVNC releases and lets that
 step fail. Without it the runner falls back to Xvfb: the recording, the commands
@@ -123,8 +123,8 @@ The server and the runner both put the trace id in every log line, which is
 what lets a request be followed across three processes and two machines:
 
 ```
-2026-08-15 09:41:02 INFO    [4bf92f3577b34da6a3ce929d0e0e4736] gh_chrome_runner.loop: command click failed: timeout
-2026-08-15 09:41:02 INFO    [-] gh_chrome_runner.capture: segment 143 uploaded
+2026-08-15 09:41:02 INFO    [4bf92f3577b34da6a3ce929d0e0e4736] gh_pool.browser.loop: command click failed: timeout
+2026-08-15 09:41:02 INFO    [-] gh_pool.browser.capture: segment 143 uploaded
 ```
 
 A `-` is work that belongs to no request: the recorder, the heartbeat, the
@@ -138,17 +138,17 @@ keeps whatever context it was created in.
 
 | Variable | Meaning |
 | --- | --- |
-| `GH_CHROME_TOKEN` | shared secret for the API and the player |
-| `GH_CHROME_DATABASE_URL` | libpq connection string |
-| `GH_CHROME_STORAGE` | directory for recordings, profiles and uploads |
-| `GH_CHROME_PUBLIC_URL` | origin the runner connects back to |
-| `GH_CHROME_POOL_SERVER` | base URL of the [pool](https://github.com/wprhvso/pool) |
-| `GH_CHROME_POOL_TOKEN` | pool client token |
-| `GH_CHROME_RUNNER_SPEC` | what to install for the runner, defaults to the server's own version |
+| `GH_POOL_TOKEN` | shared secret for the API and the player |
+| `GH_POOL_DATABASE_URL` | libpq connection string |
+| `GH_POOL_STORAGE` | directory for recordings, profiles and uploads |
+| `GH_POOL_PUBLIC_URL` | origin the runner connects back to |
+| `GH_POOL_POOL_SERVER` | base URL of the [pool](https://github.com/wprhvso/gh-pool) |
+| `GH_POOL_POOL_TOKEN` | pool client token |
+| `GH_POOL_RUNNER_SPEC` | what to install for the runner, defaults to the server's own version |
 
-Run `gh-chrome-server`. The runner needs no secrets of its own: the server mints
+Run `gh-pool-server`. The runner needs no secrets of its own: the server mints
 a token for each session and hands it to the pool task along with the session id.
-`GH_CHROME_PROXY` sends the runner's traffic through a proxy of your own.
+`GH_POOL_PROXY` sends the runner's traffic through a proxy of your own.
 
 `GET /healthz` is the one route with no credentials on it. It reaches for a
 connection and asks postgres a question: 200 while the database answers, 503
@@ -169,16 +169,16 @@ goes only when you ask for it with `DELETE /profiles/{name}`.
 Two limits, applied in that order. First everything closed longer than
 `CLEANUP_MAX_DAYS` ago. Then, if what the sessions hold is still over
 `CLEANUP_MAX_BYTES`, the oldest closed sessions go one at a time until it fits
-— all but the ones closed within `GH_CHROME_RUNNER_GRACE`, whose runner is
+— all but the ones closed within `GH_POOL_RUNNER_GRACE`, whose runner is
 still allowed to hand in a last segment. When there is nothing left to take and
 it still does not fit, the pass says so in the log and stops.
 
 | Variable | Meaning |
 | --- | --- |
-| `GH_CHROME_CLEANUP_MAX_DAYS` | how long a closed session is kept, default 7 |
-| `GH_CHROME_CLEANUP_MAX_BYTES` | what sessions and uploads may hold, default 64 GiB |
-| `GH_CHROME_CLEANUP_INTERVAL` | seconds between passes, default 3600 |
-| `GH_CHROME_CLEANUP_DELAY` | seconds before the first pass, default 60 |
+| `GH_POOL_CLEANUP_MAX_DAYS` | how long a closed session is kept, default 7 |
+| `GH_POOL_CLEANUP_MAX_BYTES` | what sessions and uploads may hold, default 64 GiB |
+| `GH_POOL_CLEANUP_INTERVAL` | seconds between passes, default 3600 |
+| `GH_POOL_CLEANUP_DELAY` | seconds before the first pass, default 60 |
 
 ## Kubernetes
 
@@ -187,24 +187,24 @@ set of sessions on their way out live in the process, and the recordings live
 on a disk, so a second replica would answer for sessions it cannot see.
 
 Storage is a PVC mounted at `/var/lib/gh-chrome`, which is where the image
-already points `GH_CHROME_STORAGE`. It holds `sessions/`, `files/` and
+already points `GH_POOL_STORAGE`. It holds `sessions/`, `files/` and
 `profiles/`; only the last one cannot be regenerated, and it is the one the
-cleaner never touches. Size the volume above `GH_CHROME_CLEANUP_MAX_BYTES` plus
+cleaner never touches. Size the volume above `GH_POOL_CLEANUP_MAX_BYTES` plus
 whatever the live sessions and the profiles need.
 
-`GH_CHROME_TOKEN` and `GH_CHROME_POOL_TOKEN` belong in a Secret, and
-`GH_CHROME_DATABASE_URL` too when the password is in it. The rest is a
-ConfigMap. `GH_CHROME_HOST` is already `0.0.0.0` in the image.
+`GH_POOL_TOKEN` and `GH_POOL_POOL_TOKEN` belong in a Secret, and
+`GH_POOL_DATABASE_URL` too when the password is in it. The rest is a
+ConfigMap. `GH_POOL_HOST` is already `0.0.0.0` in the image.
 
 Point both probes at `/healthz`. The root filesystem can be read-only, but the
 server still needs a writable `/tmp`: an upload over a megabyte is spooled
 there by starlette before it is handed to the storage directory, so give the
-pod an `emptyDir` at `/tmp` sized for `GH_CHROME_MAX_UPLOAD`.
+pod an `emptyDir` at `/tmp` sized for `GH_POOL_MAX_UPLOAD`.
 
 ## Packaging
 
 The base distribution installs what the client needs and nothing else: `httpx`
-and `pydantic`. Extra `server` adds FastAPI, psycopg and uvicorn; extra `runner`
+and `pydantic`. Extra `server` adds FastAPI, psycopg and uvicorn; экстра `browser`
 adds websockets and python-xlib.
 
 ## Development
@@ -215,7 +215,7 @@ uv sync --all-extras
 ```
 
 ```bash
-gh-chrome-runner --session <id> --server http://127.0.0.1:8000
+gh-pool-browser --session <id> --server http://127.0.0.1:8000
 ```
 
 KasmVNC is not in nixpkgs, so the dev shell has no `Xkasmvnc` and the runner
@@ -244,13 +244,13 @@ it.
 | browser (`-m browser`) | an X server, Chrome, ffmpeg, zstd | navigation, the DOM, XTEST input, tabs, uploads, downloads, taps, the recording, profiles |
 
 The protocol tier answers commands from a scripted runner that speaks the
-runner's half of the wire; the browser tier starts `gh-chrome-runner` itself,
+runner's half of the wire; the browser tier starts `gh-pool-browser` itself,
 with its own display, its own Chrome and its own recorder, one session per test.
 
 | Variable | Meaning |
 | --- | --- |
-| `GH_CHROME_TEST_DATABASE_URL` | a cluster to test against; without it the suite puts up a throwaway one, which `initdb` will not do for root |
-| `GH_CHROME_TEST_CHROME` | the browser to drive, when it is not on `PATH` |
+| `GH_POOL_TEST_DATABASE_URL` | a cluster to test against; without it the suite puts up a throwaway one, which `initdb` will not do for root |
+| `GH_POOL_TEST_CHROME` | the browser to drive, when it is not on `PATH` |
 
 `-m "not browser"` leaves the browser tier out; `pytest tests/e2e/test_input.py`
 runs one part of it.
