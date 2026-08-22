@@ -6,8 +6,10 @@ import httpx
 import pytest
 
 from gh_pool import worker
+from gh_pool.server import storage
 from gh_pool.server import tasks as server
-from tests.conftest import as_client, submit, take
+from gh_pool.server.app import create_app
+from tests.conftest import FakeDatabase, as_client, submit, take
 
 
 @pytest.fixture
@@ -34,7 +36,10 @@ async def wired(blank, monkeypatch, tmp_path):
     monkeypatch.setattr(worker, "HEARTBEAT", 0.05)
     monkeypatch.setattr(worker, "KILL_GRACE", 10.0)
     monkeypatch.setattr(worker, "_current", None)
-    transport = httpx.ASGITransport(app=server.app)
+    monkeypatch.setattr(storage, "ensure_dirs", lambda: None)
+    app = create_app()
+    app.state.db = FakeDatabase()
+    transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://pool") as c:
         yield c
 
