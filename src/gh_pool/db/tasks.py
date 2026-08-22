@@ -5,7 +5,7 @@ from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.orm import Mapped, mapped_column
 
 from gh_pool.db.base import Base
-from gh_pool.db.engine import engine, session
+from gh_pool.db.engine import session
 
 
 class Task(Base):
@@ -44,11 +44,6 @@ def key_of(model: type[Base]) -> str:
 
 def as_dict(row: Base, model: type[Base]) -> dict[str, Any]:
     return {c: getattr(row, c) for c in model.__table__.columns.keys()}  # noqa: SIM118
-
-
-async def setup() -> None:
-    async with engine().begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
 
 
 async def save(model: type[Base], rows: list[dict[str, Any]]) -> None:

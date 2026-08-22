@@ -28,7 +28,7 @@ STATUS_CODES: Codes = {
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     db = Database(settings.database_url)
-    await db.open(migrate=False)
+    await db.open()
     app.state.db = db
     app.state.events = Events(db)
     app.state.sessions = Sessions(db, app.state.events)

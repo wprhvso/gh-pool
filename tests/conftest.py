@@ -43,9 +43,6 @@ class FakeDb:
         self.pending = []
         self.broken = False
 
-    async def setup(self):
-        self._check()
-
     async def save(self, _model, rows):
         self._check()
         self.saved.extend(rows)
@@ -77,7 +74,7 @@ class FakeDb:
 @pytest.fixture
 def fake_db(monkeypatch):
     fake = FakeDb()
-    for name in ("setup", "save", "fetch", "unfinished", "tasks", "artifacts", "drop"):
+    for name in ("save", "fetch", "unfinished", "tasks", "artifacts", "drop"):
         monkeypatch.setattr(db, name, getattr(fake, name))
     return fake
 

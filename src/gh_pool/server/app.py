@@ -18,6 +18,7 @@ from gh_pool.core.sessions import (
     SessionUnavailable,
     TooManySessions,
 )
+from gh_pool.db import migrate
 from gh_pool.protocol import trace
 from gh_pool.server import (
     api_client,
@@ -44,6 +45,7 @@ STATUS_CODES: Codes = {
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     storage.ensure_dirs()
+    await migrate.upgrade()
     db = Database(settings.database_url)
     await db.open()
     app.state.db = db

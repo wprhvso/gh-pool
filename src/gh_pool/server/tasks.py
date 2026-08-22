@@ -19,6 +19,7 @@ from opentelemetry import metrics
 from opentelemetry.metrics import CallbackOptions, Observation
 
 from gh_pool.db import tasks as db
+from gh_pool.db.engine import engine
 
 log = structlog.get_logger()
 
@@ -276,7 +277,6 @@ async def keeper() -> None:
     while True:
         if not started:
             try:
-                await db.setup()
                 await recover()
                 started = state["db"] = True
             except Exception as e:
@@ -715,7 +715,6 @@ def version() -> str:
 def main() -> None:
     import uvicorn
     from yaol import (
-        instrument_asyncpg,
         instrument_fastapi,
         instrument_runtime,
         instrument_sqlalchemy,
@@ -727,8 +726,7 @@ def main() -> None:
 
     setup(observability("pool-server", version()))
     instrument_fastapi(app)
-    instrument_asyncpg()
-    instrument_sqlalchemy(db.engine())
+    instrument_sqlalchemy(engine())
     instrument_runtime()
     log.info("starting_pool_server", version=version())
     try:

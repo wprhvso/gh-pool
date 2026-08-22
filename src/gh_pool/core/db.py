@@ -2,14 +2,12 @@ import asyncio
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, LiteralString
 
 from psycopg import AsyncConnection
 from psycopg.rows import DictRow, dict_row
 from psycopg_pool import AsyncConnectionPool
 
-MIGRATIONS = Path(__file__).parent / "migrations"
 PROBE_TIMEOUT = 5.0
 
 Params = tuple[Any, ...]
@@ -44,10 +42,8 @@ class Database:
             kwargs={"row_factory": dict_row},
         )
 
-    async def open(self, migrate: bool = True) -> None:
+    async def open(self) -> None:
         await self._pool.open(wait=True)
-        if migrate:
-            await self.migrate()
 
     async def close(self) -> None:
         await self._pool.close()
@@ -74,19 +70,3 @@ class Database:
         async with self._pool.connection() as conn:
             cur = await conn.execute(sql, params)
             return list(await cur.fetchall())
-
-    async def migrate(self) -> None:
-        async with self._pool.connection() as conn, conn.transaction():
-            await conn.execute(
-                "create table if not exists schema_migrations ("
-                "name text primary key, applied_at timestamptz not null default now())"
-            )
-            cur = await conn.execute("select name from schema_migrations")
-            applied = {row["name"] for row in await cur.fetchall()}
-            for path in sorted(MIGRATIONS.glob("*.sql")):
-                if path.name in applied:
-                    continue
-                await conn.execute(path.read_bytes())
-                await conn.execute(
-                    "insert into schema_migrations (name) values (%s)", (path.name,)
-                )
