@@ -24,7 +24,7 @@ KEYS = ("token", "workflow", "jobs", "ttl", "ref")
 UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 SECRETS = ("GH_POOL_SERVER", "GH_POOL_WORKER_TOKEN")
 ENV_KEYS = {"server": "GH_POOL_SERVER", "token": "GH_POOL_WORKER_TOKEN"}
-WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
+WORKFLOWS = Path(__file__).resolve().parents[3] / ".github" / "workflows"
 GRACE = 30
 BOOT_GRACE = 2400
 RETIRE_BUDGET = 1
@@ -339,7 +339,7 @@ def each(repos: list[Repo], fn: Callable[[Repo], None]) -> None:
 
 def version() -> str:
     try:
-        return metadata.version("pool")
+        return metadata.version("gh-pool")
     except metadata.PackageNotFoundError:
         return "0.0.0"
 

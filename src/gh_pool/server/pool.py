@@ -17,7 +17,7 @@ def run(session_id, url, token, workdir, spec, python):
     env = dict(os.environ)
     env["GH_POOL_SERVER"] = url
     env["GH_POOL_TOKEN"] = token
-    env["GH_CHROME_WORKDIR"] = str(root)
+    env["GH_POOL_WORKDIR"] = str(root)
     subprocess.run(
         [
             "uv",
@@ -27,7 +27,7 @@ def run(session_id, url, token, workdir, spec, python):
             python,
             "--with",
             spec,
-            "gh-chrome-runner",
+            "gh-pool-browser",
             "--session",
             session_id,
         ],
@@ -46,7 +46,7 @@ def runner_spec() -> str:
     if settings.runner_spec:
         return settings.runner_spec
     try:
-        return f"gh-chrome[runner]=={version('gh-chrome')}"
+        return f"gh-pool[browser]=={version('gh-pool')}"
     except PackageNotFoundError as missing:
         raise DispatchError("cannot tell which runner to install") from missing
 

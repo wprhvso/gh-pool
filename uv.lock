@@ -178,6 +178,12 @@ client = [
     { name = "pydantic" },
     { name = "yaol" },
 ]
+fleet = [
+    { name = "opentelemetry-api" },
+    { name = "pynacl" },
+    { name = "structlog" },
+    { name = "yaol" },
+]
 relay = [
     { name = "fastapi" },
     { name = "opentelemetry-api" },
@@ -198,7 +204,6 @@ server = [
     { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "pynacl" },
     { name = "python-multipart" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "structlog" },
@@ -214,7 +219,7 @@ worker = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "gh-pool", extra = ["browser", "client", "relay", "server", "worker"] },
+    { name = "gh-pool", extra = ["browser", "client", "fleet", "relay", "server", "worker"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
 ]
@@ -229,6 +234,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'client'", specifier = ">=0.28" },
     { name = "httpx", marker = "extra == 'server'", specifier = ">=0.28" },
     { name = "httpx", marker = "extra == 'worker'", specifier = ">=0.28" },
+    { name = "opentelemetry-api", marker = "extra == 'fleet'", specifier = ">=1.29" },
     { name = "opentelemetry-api", marker = "extra == 'relay'", specifier = ">=1.29" },
     { name = "opentelemetry-api", marker = "extra == 'server'", specifier = ">=1.29" },
     { name = "opentelemetry-api", marker = "extra == 'worker'", specifier = ">=1.29" },
@@ -241,11 +247,12 @@ requires-dist = [
     { name = "pydantic-settings", marker = "extra == 'browser'", specifier = ">=2.7" },
     { name = "pydantic-settings", marker = "extra == 'relay'", specifier = ">=2.7" },
     { name = "pydantic-settings", marker = "extra == 'server'", specifier = ">=2.7" },
-    { name = "pynacl", marker = "extra == 'server'", specifier = ">=1.5" },
+    { name = "pynacl", marker = "extra == 'fleet'", specifier = ">=1.5" },
     { name = "python-multipart", marker = "extra == 'server'", specifier = ">=0.0.20" },
     { name = "python-xlib", marker = "extra == 'browser'", specifier = ">=0.33" },
     { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'relay'", specifier = ">=2.0" },
     { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'server'", specifier = ">=2.0" },
+    { name = "structlog", marker = "extra == 'fleet'", specifier = ">=25.4" },
     { name = "structlog", marker = "extra == 'relay'", specifier = ">=25.4" },
     { name = "structlog", marker = "extra == 'server'", specifier = ">=25.4" },
     { name = "structlog", marker = "extra == 'worker'", specifier = ">=25.4" },
@@ -253,15 +260,16 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.34" },
     { name = "websockets", marker = "extra == 'browser'", specifier = ">=14.1" },
     { name = "yaol", marker = "extra == 'client'", specifier = ">=0.3" },
+    { name = "yaol", marker = "extra == 'fleet'", specifier = ">=0.3" },
     { name = "yaol", marker = "extra == 'relay'", specifier = ">=0.3" },
     { name = "yaol", marker = "extra == 'server'", specifier = ">=0.3" },
     { name = "yaol", marker = "extra == 'worker'", specifier = ">=0.3" },
 ]
-provides-extras = ["client", "browser", "worker", "server", "relay"]
+provides-extras = ["client", "browser", "worker", "server", "relay", "fleet"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "gh-pool", extras = ["browser", "client", "relay", "server", "worker"] },
+    { name = "gh-pool", extras = ["browser", "client", "fleet", "relay", "server", "worker"] },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.25" },
 ]

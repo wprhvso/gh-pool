@@ -6,7 +6,7 @@ from gh_pool.client import profiles
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="gh-chrome")
+    parser = argparse.ArgumentParser(prog="gh-pool")
     parser.add_argument("command", choices=["profiles"])
     parser.add_argument("--server", default=None)
     parser.add_argument("--token", default=None)

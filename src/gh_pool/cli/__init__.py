@@ -217,7 +217,7 @@ def cmd_health(args: argparse.Namespace) -> None:
 
 def version() -> str:
     try:
-        return metadata.version("pool")
+        return metadata.version("gh-pool")
     except metadata.PackageNotFoundError:
         return "0.0.0"
 
@@ -238,7 +238,7 @@ def observe() -> None:
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(prog="pool")
+    p = argparse.ArgumentParser(prog="gh-pool")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("submit")

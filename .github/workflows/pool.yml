@@ -358,7 +358,7 @@ jobs:
           tail -5 "$RUNNER_TEMP/preseed.log" 2>/dev/null || true
 
       - name: python deps
-        run: uv sync --frozen --no-dev
+        run: uv sync --frozen --no-dev --extra worker
 
       - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
         with:
@@ -366,14 +366,14 @@ jobs:
 
       - name: run worker
         env:
-          POOL_SERVER: ${{ secrets.POOL_SERVER }}
-          POOL_TOKEN: ${{ secrets.POOL_TOKEN }}
+          POOL_SERVER: ${{ secrets.GH_POOL_SERVER }}
+          POOL_TOKEN: ${{ secrets.GH_POOL_WORKER_TOKEN }}
           WORKER_ID: gh-${{ github.run_id }}
         run: |
           WORKER_MAX_AGE=$((16200 + RANDOM % 2700))
           export WORKER_MAX_AGE
           echo "воркер отработает $((WORKER_MAX_AGE / 60)) мин"
-          uv run pool-worker
+          uv run gh-pool-worker
 
       - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-stop@main
         if: always()

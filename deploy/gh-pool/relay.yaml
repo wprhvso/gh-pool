@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gh-pool-relay
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gh-pool-relay
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gh-pool-relay
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 986
+        runAsGroup: 983
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: relay
+          image: ghcr.io/wprhvso/gh-pool:0.1.0
+          imagePullPolicy: IfNotPresent
+          command: ["gh-pool-relay"]
+          env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gh-pool
+                  key: db_password
+            - name: GH_POOL_DATABASE_URL
+              value: postgresql://postgres:$(DB_PASSWORD)@$(HOST_IP):5432/gh_chrome
+            - name: GH_POOL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gh-pool
+                  key: token
+            - name: GH_POOL_RELAY_HOST
+              value: 0.0.0.0
+            - name: GH_POOL_RELAY_PORT
+              value: "8001"
+            - name: GH_POOL_PUBLIC_URL
+              value: https://chrome.murasya.ru
+          ports:
+            - name: http
+              containerPort: 8001
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

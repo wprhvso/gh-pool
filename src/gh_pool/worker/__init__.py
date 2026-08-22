@@ -419,7 +419,7 @@ def run_exec(ttype: str, payload_file: str) -> NoReturn:
 
 def version() -> str:
     try:
-        return metadata.version("pool")
+        return metadata.version("gh-pool")
     except metadata.PackageNotFoundError:
         return "0.0.0"
 

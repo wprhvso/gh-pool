@@ -40,7 +40,7 @@ worker = [
     "yaol>=0.3",
 ]
 
-# pool-server: API задач и сессий, диспатч, фоновые задачи, миграции.
+# gh-pool-server: API задач и сессий, диспатч, фоновые задачи, миграции.
 server = [
     "alembic>=1.14",
     "anyio>=4.4",
@@ -50,7 +50,6 @@ server = [
     "psycopg[binary,pool]>=3.2",
     "pydantic>=2.10",
     "pydantic-settings>=2.7",
-    "pynacl>=1.5",
     "python-multipart>=0.0.20",
     "sqlalchemy[asyncio]>=2.0",
     "structlog>=25.4",
@@ -58,7 +57,7 @@ server = [
     "yaol>=0.3",
 ]
 
-# pool-relay: только долгие сокеты. Ни httpx (некому диспатчить), ни
+# gh-pool-relay: только долгие сокеты. Ни httpx (некому диспатчить), ни
 # python-multipart (аплоады идут сырым потоком), ни alembic (миграции гоняет
 # server), ни pynacl.
 relay = [
@@ -73,16 +72,27 @@ relay = [
     "yaol>=0.3",
 ]
 
+# Кипер и флот раннеров: ходят в GitHub, шифруют секреты репозиториев.
+fleet = [
+    "opentelemetry-api>=1.29",
+    "pynacl>=1.5",
+    "structlog>=25.4",
+    "yaol>=0.3",
+]
+
 [project.scripts]
 gh-pool = "gh_pool.cli:main"
 gh-pool-server = "gh_pool.server.__main__:main"
 gh-pool-relay = "gh_pool.relay.__main__:main"
 gh-pool-worker = "gh_pool.worker:main"
+gh-pool-keeper = "gh_pool.fleet.workers:main"
+gh-pool-runners = "gh_pool.fleet.runners.__main__:cli"
+gh-pool-migrate = "gh_pool.db.migrate:upgrade_now"
 gh-pool-browser = "gh_pool.browser.__main__:main"
 
 [dependency-groups]
 dev = [
-    "gh-pool[browser,client,relay,server,worker]",
+    "gh-pool[browser,client,fleet,relay,server,worker]",
     "pytest>=8.3",
     "pytest-asyncio>=0.25",
 ]

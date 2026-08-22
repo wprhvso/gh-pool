@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gh-pool
+spec:
+  selector:
+    app.kubernetes.io/name: gh-pool-server
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gh-pool-relay
+spec:
+  selector:
+    app.kubernetes.io/name: gh-pool-relay
+  ports:
+    - name: http
+      port: 8001
+      targetPort: http
+      protocol: TCP

@@ -33,15 +33,15 @@ uv sync
 cp .env.example .env
 createdb pool                                 # нужен Postgres
 
-uv run pool-server
-POOL_TOKEN=... uv run pool-worker
-POOL_CLIENT_TOKEN=... uv run pool submit python -p code='result = 2 + 2' -f
+uv run gh-pool-server
+POOL_TOKEN=... uv run gh-pool-worker
+POOL_CLIENT_TOKEN=... uv run gh-pool submit python -p code='result = 2 + 2' -f
 ```
 
 ## SDK
 
 ```python
-from pool.sdk import Pool
+from gh_pool.client import Pool
 
 pool = Pool("https://pool.example.com", token="...")
 
@@ -118,7 +118,7 @@ def value(task):
 Задача отдаёт JSON когда хочет, а не только в конце:
 
 ```python
-from pool import emit
+from gh_pool import emit
 
 emit("status", "качаю")
 emit("progress", done=3, total=10)
@@ -160,7 +160,7 @@ pool.delete("in/data.csv")
 ```python
 @pool.remote
 def crunch(key):
-    from pool.rpc import download, put
+    from gh_pool.rpc import download, put
 
     download(key, "/tmp/in.csv")
     ...
@@ -223,8 +223,8 @@ pool health
 ```bash
 cp keeper.toml.example keeper.toml
 
-uv run pool-keeper build -c keeper.toml
-uv run pool-keeper run -c keeper.toml
+uv run gh-pool-keeper build -c keeper.toml
+uv run gh-pool-keeper run -c keeper.toml
 ```
 
 Помни: лимит конкурентных джоб — 20 на free, 40 на Pro, потолок одной джобы — 6 часов.
@@ -237,7 +237,7 @@ uv run pool-keeper run -c keeper.toml
 ```bash
 nix build            # venv со всеми точками входа в result/bin
 nix develop          # то же плюс uv, ruff и postgres под тесты
-nix run .# -- health
+uv run gh-pool -- health
 ```
 
 Два модуля NixOS: `nixosModules.server` и `nixosModules.client`.

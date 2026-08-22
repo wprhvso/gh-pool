@@ -42,7 +42,7 @@ _EXIT_ERROR = 1
 
 def _version() -> str:
     try:
-        return importlib.metadata.version("pool-runners")
+        return importlib.metadata.version("gh-pool")
     except importlib.metadata.PackageNotFoundError:
         return "0.0.0"
 

@@ -43,7 +43,7 @@ def configured(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "pool_server", "https://pool.example.com/")
     monkeypatch.setattr(settings, "pool_token", "a-pool-secret")
     monkeypatch.setattr(settings, "public_url", "https://chrome.example.com")
-    monkeypatch.setattr(settings, "runner_spec", "gh-chrome[runner]==9.9.9")
+    monkeypatch.setattr(settings, "runner_spec", "gh-pool[browser]==9.9.9")
     FakeClient.sent = []
     return monkeypatch
 
@@ -68,8 +68,8 @@ async def test_a_task_is_submitted_with_everything_the_runner_needs(
     assert kwargs["session_id"] == str(SESSION)
     assert kwargs["token"] == RUNNER_TOKEN
     assert kwargs["url"] == "https://chrome.example.com"
-    assert kwargs["spec"] == "gh-chrome[runner]==9.9.9"
-    assert "gh-chrome-runner" in sent["json"]["payload"]["code"]
+    assert kwargs["spec"] == "gh-pool[browser]==9.9.9"
+    assert "gh-pool-browser" in sent["json"]["payload"]["code"]
 
 
 async def test_a_pool_that_was_never_configured_is_not_asked(
@@ -142,9 +142,9 @@ async def test_an_answer_without_a_task_id_is_a_dispatch_failure(
 def test_the_runner_spec_is_the_one_the_operator_pinned(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setattr(settings, "runner_spec", "gh-chrome[runner] @ git+ssh://x")
+    monkeypatch.setattr(settings, "runner_spec", "gh-pool[browser] @ git+ssh://x")
 
-    assert pool.runner_spec() == "gh-chrome[runner] @ git+ssh://x"
+    assert pool.runner_spec() == "gh-pool[browser] @ git+ssh://x"
 
 
 def test_without_a_pin_the_runner_matches_the_server_that_dispatched_it(
@@ -153,4 +153,4 @@ def test_without_a_pin_the_runner_matches_the_server_that_dispatched_it(
     monkeypatch.setattr(settings, "runner_spec", "")
     monkeypatch.setattr(pool, "version", lambda _name: "1.2.3")
 
-    assert pool.runner_spec() == "gh-chrome[runner]==1.2.3"
+    assert pool.runner_spec() == "gh-pool[browser]==1.2.3"

@@ -10,7 +10,7 @@ from gh_pool.protocol import trace
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="gh-chrome-runner")
+    parser = argparse.ArgumentParser(prog="gh-pool-browser")
     parser.add_argument("--session", required=True, type=UUID)
     parser.add_argument("--server", default=None)
     parser.add_argument("--verbose", action="store_true")
@@ -25,7 +25,7 @@ def main() -> None:
     if args.server:
         settings.url = args.server
     if not settings.token:
-        raise SystemExit("GH_CHROME_TOKEN is not set")
+        raise SystemExit("GH_POOL_TOKEN is not set")
     sys.exit(asyncio.run(Runner(args.session).run()))
 
 

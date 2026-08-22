@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gh-pool-migrate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gh-pool-migrate
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 986
+        runAsGroup: 983
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: alembic
+          image: ghcr.io/wprhvso/gh-pool:0.1.0
+          imagePullPolicy: IfNotPresent
+          command: ["gh-pool-migrate"]
+          env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: HOME
+              value: /tmp
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gh-pool
+                  key: db_password
+            - name: GH_POOL_DATABASE_URL
+              value: postgresql://postgres:$(DB_PASSWORD)@$(HOST_IP):5432/gh_chrome
+          resources:
+            requests:
+              cpu: 10m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

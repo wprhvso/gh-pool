@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gh-pool-server
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gh-pool-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gh-pool-server
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 986
+        runAsGroup: 983
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: server
+          image: ghcr.io/wprhvso/gh-pool:0.1.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gh-pool
+                  key: db_password
+            - name: GH_POOL_DATABASE_URL
+              value: postgresql://postgres:$(DB_PASSWORD)@$(HOST_IP):5432/gh_chrome
+            - name: GH_POOL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gh-pool
+                  key: token
+            - name: GH_POOL_WORKER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gh-pool
+                  key: worker_token
+            - name: GH_POOL_CLIENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gh-pool
+                  key: client_token
+            - name: GH_POOL_POOL_SERVER
+              value: http://gh-pool:8000
+            - name: GH_POOL_POOL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gh-pool
+                  key: client_token
+            - name: GH_POOL_HOST
+              value: 0.0.0.0
+            - name: GH_POOL_PORT
+              value: "8000"
+            - name: GH_POOL_STORAGE
+              value: /var/lib/gh-chrome
+            - name: GH_POOL_DATA_DIR
+              value: /var/lib/gh-chrome/tasks
+            - name: GH_POOL_BLOB_DIR
+              value: /var/lib/gh-chrome/blobs
+            - name: GH_POOL_PUBLIC_URL
+              value: https://chrome.murasya.ru
+            - name: GH_POOL_CLEANUP_MAX_BYTES
+              value: "17179869184"
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/gh-chrome
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: gh-chrome-data
+        - name: tmp
+          emptyDir: {}
