@@ -16,6 +16,7 @@ spec:
         app.kubernetes.io/name: gh-pool-server
     spec:
       automountServiceAccountToken: false
+      enableServiceLinks: false
       imagePullSecrets:
         - name: ghcr
       terminationGracePeriodSeconds: 60
