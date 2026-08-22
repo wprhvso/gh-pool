@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     storage: Path = Path("/var/lib/gh-chrome")
     host: str = "127.0.0.1"
     port: int = 8000
+    relay_host: str = "127.0.0.1"
+    relay_port: int = 8001
     public_url: str = "http://127.0.0.1:8000"
     pool_server: str = ""
     pool_token: str = ""

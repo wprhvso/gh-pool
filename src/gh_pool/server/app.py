@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 
@@ -7,7 +8,6 @@ from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from gh_pool.protocol import trace
-from gh_pool.relay import vnc as api_vnc
 from gh_pool.relay.tunnel import TunnelDown, Tunnels
 from gh_pool.server import (
     api_client,
@@ -16,6 +16,7 @@ from gh_pool.server import (
     api_runner,
     pool,
     storage,
+    tasks,
 )
 from gh_pool.server.cleaner import Cleaner
 from gh_pool.server.config import settings
@@ -53,9 +54,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await watchdog.start()
     cleaner = Cleaner(app.state.sessions)
     await cleaner.start()
+    chores = asyncio.create_task(tasks.keeper())
     try:
         yield
     finally:
+        chores.cancel()
+        await tasks.flush()
         await cleaner.stop()
         await watchdog.stop()
         await db.close()
@@ -132,7 +136,7 @@ class BindTrace:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="gh-chrome", lifespan=lifespan)
+    app = FastAPI(title="gh-pool", lifespan=lifespan)
     app.add_middleware(LimitBody, limit=settings.max_upload)
     app.add_middleware(BindTrace)
     install_errors(app)
@@ -140,8 +144,8 @@ def create_app() -> FastAPI:
     app.include_router(api_client.router)
     app.include_router(api_client.profiles_router)
     app.include_router(api_runner.router)
-    app.include_router(api_vnc.router)
     app.include_router(api_player.router)
+    app.include_router(tasks.app.router)
     return app
 
 

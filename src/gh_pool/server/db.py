@@ -44,9 +44,10 @@ class Database:
             kwargs={"row_factory": dict_row},
         )
 
-    async def open(self) -> None:
+    async def open(self, migrate: bool = True) -> None:
         await self._pool.open(wait=True)
-        await self.migrate()
+        if migrate:
+            await self.migrate()
 
     async def close(self) -> None:
         await self._pool.close()

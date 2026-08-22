@@ -157,6 +157,10 @@ class Tunnels:
     def __init__(self) -> None:
         self._live: dict[UUID, Tunnel] = {}
 
+    def count(self) -> int:
+        """Сколько туннелей живо. Нужно, чтобы понять, можно ли гасить relay."""
+        return len(self._live)
+
     def connected(self, session_id: UUID) -> bool:
         found = self._live.get(session_id)
         return found is not None and found.alive

@@ -75,6 +75,8 @@ relay = [
 
 [project.scripts]
 gh-pool = "gh_pool.cli:main"
+gh-pool-server = "gh_pool.server.__main__:main"
+gh-pool-relay = "gh_pool.relay.__main__:main"
 gh-pool-worker = "gh_pool.worker:main"
 gh-pool-browser = "gh_pool.browser.__main__:main"
 
