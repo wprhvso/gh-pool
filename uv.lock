@@ -186,14 +186,10 @@ fleet = [
 ]
 relay = [
     { name = "fastapi" },
-    { name = "opentelemetry-api" },
     { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "structlog" },
     { name = "uvicorn", extra = ["standard"] },
-    { name = "yaol" },
 ]
 server = [
     { name = "alembic" },
@@ -235,7 +231,6 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'server'", specifier = ">=0.28" },
     { name = "httpx", marker = "extra == 'worker'", specifier = ">=0.28" },
     { name = "opentelemetry-api", marker = "extra == 'fleet'", specifier = ">=1.29" },
-    { name = "opentelemetry-api", marker = "extra == 'relay'", specifier = ">=1.29" },
     { name = "opentelemetry-api", marker = "extra == 'server'", specifier = ">=1.29" },
     { name = "opentelemetry-api", marker = "extra == 'worker'", specifier = ">=1.29" },
     { name = "psycopg", extras = ["binary", "pool"], marker = "extra == 'relay'", specifier = ">=3.2" },
@@ -250,10 +245,8 @@ requires-dist = [
     { name = "pynacl", marker = "extra == 'fleet'", specifier = ">=1.5" },
     { name = "python-multipart", marker = "extra == 'server'", specifier = ">=0.0.20" },
     { name = "python-xlib", marker = "extra == 'browser'", specifier = ">=0.33" },
-    { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'relay'", specifier = ">=2.0" },
     { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'server'", specifier = ">=2.0" },
     { name = "structlog", marker = "extra == 'fleet'", specifier = ">=25.4" },
-    { name = "structlog", marker = "extra == 'relay'", specifier = ">=25.4" },
     { name = "structlog", marker = "extra == 'server'", specifier = ">=25.4" },
     { name = "structlog", marker = "extra == 'worker'", specifier = ">=25.4" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'relay'", specifier = ">=0.34" },
@@ -261,7 +254,6 @@ requires-dist = [
     { name = "websockets", marker = "extra == 'browser'", specifier = ">=14.1" },
     { name = "yaol", marker = "extra == 'client'", specifier = ">=0.3" },
     { name = "yaol", marker = "extra == 'fleet'", specifier = ">=0.3" },
-    { name = "yaol", marker = "extra == 'relay'", specifier = ">=0.3" },
     { name = "yaol", marker = "extra == 'server'", specifier = ">=0.3" },
     { name = "yaol", marker = "extra == 'worker'", specifier = ">=0.3" },
 ]

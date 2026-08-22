@@ -13,6 +13,7 @@ from gh_pool.core.config import settings
 from gh_pool.db.engine import engine
 from gh_pool.obs import observability, version
 from gh_pool.protocol import trace
+from gh_pool.server import tasks
 from gh_pool.server.app import app
 
 
@@ -21,6 +22,12 @@ def main() -> None:
     trace.install_logging()
     if not settings.token:
         raise SystemExit("GH_POOL_TOKEN is not set")
+    for name, value, dev in (
+        ("GH_POOL_WORKER_TOKEN", tasks.WORKER_TOKEN, "dev-worker"),
+        ("GH_POOL_CLIENT_TOKEN", tasks.CLIENT_TOKEN, "dev-client"),
+    ):
+        if value == dev:
+            raise SystemExit(f"{name} is still the development default")
     setup(observability("pool-server", version()))
     instrument_fastapi(app)
     instrument_sqlalchemy(engine())

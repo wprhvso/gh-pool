@@ -62,14 +62,10 @@ server = [
 # server), ни pynacl.
 relay = [
     "fastapi>=0.115",
-    "opentelemetry-api>=1.29",
     "psycopg[binary,pool]>=3.2",
     "pydantic>=2.10",
     "pydantic-settings>=2.7",
-    "sqlalchemy[asyncio]>=2.0",
-    "structlog>=25.4",
     "uvicorn[standard]>=0.34",
-    "yaol>=0.3",
 ]
 
 # Кипер и флот раннеров: ходят в GitHub, шифруют секреты репозиториев.
@@ -99,9 +95,6 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/gh_pool"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"src/gh_pool/client/tap.js" = "gh_pool/client/tap.js"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

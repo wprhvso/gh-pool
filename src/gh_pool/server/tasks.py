@@ -3,6 +3,7 @@ import hashlib
 import os
 import time
 import uuid
+from secrets import compare_digest
 from collections import deque
 from collections.abc import Coroutine, Iterable
 from io import BufferedWriter
@@ -85,7 +86,7 @@ worker_gauge = meter.create_observable_gauge(
     description="Known workers by lease state",
 )
 task_gauge = meter.create_observable_gauge(
-    "gh_pool.tasks",
+    "pool.tasks",
     callbacks=[_observe_tasks],
     unit="{task}",
     description="In-memory tasks by status",
@@ -130,18 +131,22 @@ def blob_path(key: str) -> Path:
     return BLOB_DIR / h[:2] / h
 
 
+def _matches(given: str | None, token: str) -> bool:
+    return given is not None and compare_digest(given, f"Bearer {token}")
+
+
 def auth_worker(h: str | None) -> None:
-    if h != f"Bearer {WORKER_TOKEN}":
+    if not _matches(h, WORKER_TOKEN):
         raise HTTPException(401, "bad worker token")
 
 
 def auth_client(h: str | None) -> None:
-    if h != f"Bearer {CLIENT_TOKEN}":
+    if not _matches(h, CLIENT_TOKEN):
         raise HTTPException(401, "bad client token")
 
 
 def auth_any(h: str | None) -> None:
-    if h not in (f"Bearer {WORKER_TOKEN}", f"Bearer {CLIENT_TOKEN}"):
+    if not (_matches(h, WORKER_TOKEN) or _matches(h, CLIENT_TOKEN)):
         raise HTTPException(401, "bad token")
 
 
@@ -524,6 +529,7 @@ async def cancel(
         return {"status": "cancelled"}
     if t["status"] == "running":
         t["cancel_requested"] = True
+        TASKS.setdefault(tid, t)
         return {"status": "running", "cancel_requested": True}
     return {"status": t["status"], "note": "already terminal"}
 

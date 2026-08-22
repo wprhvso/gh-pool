@@ -6,6 +6,7 @@ workflow = "pool.yml"
 [pool]
 server = "https://pool.example.com"
 token = "change-me-worker"
+client_token = "change-me-client"
 
 [repos]
 "alice/pool" = "ghp_alice"

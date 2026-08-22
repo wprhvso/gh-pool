@@ -90,7 +90,6 @@ def adopt(env: MutableMapping[str, str] | None = None) -> list[tuple[str, str]]:
 
 
 def describe(env: Mapping[str, str] | None = None) -> list[tuple[str, str]]:
-    """Что бы сделал adopt, ничего не меняя. Для gh-pool doctor и тестов."""
     source: Mapping[str, str] = os.environ if env is None else env
     return [
         (name, new)

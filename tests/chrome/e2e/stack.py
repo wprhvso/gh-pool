@@ -493,7 +493,7 @@ class LiveRunner:
         env = {
             key: value
             for key, value in os.environ.items()
-            if not key.startswith("GH_CHROME_") and "proxy" not in key.lower()
+            if not key.startswith("GH_POOL_") and "proxy" not in key.lower()
         }
         env |= {
             "GH_POOL_SERVER": self._server_url,
