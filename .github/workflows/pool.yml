@@ -233,7 +233,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
         with:
-          gradle-version: release
+          gradle-version: current
 
       - name: gradle remote cache
         env:
