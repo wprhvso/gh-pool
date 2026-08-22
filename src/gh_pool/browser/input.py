@@ -1,6 +1,8 @@
 import asyncio
+import contextlib
 import random
 
+from gh_pool.browser.cdp import CdpError
 from gh_pool.browser.keyboard import Keyboard
 from gh_pool.browser.locate import (
     Box,
@@ -21,6 +23,23 @@ MAX_ATTEMPTS = 40
 SETTLE_DELAY = 0.05
 CLICK_BUDGET = 10.0
 MIN_ATTEMPTS = 5
+SETTLE_BUDGET = 1.0
+TYPING_BUDGET = 5.0
+
+SETTLE_JS = f"""
+Promise.race([
+  new Promise((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve(true)))),
+  new Promise((resolve) => setTimeout(() => resolve(false), {int(SETTLE_BUDGET * 1000)})),
+])
+"""
+
+TYPED_JS = """
+(() => {
+  const el = document.activeElement;
+  return el && typeof el.value === 'string' ? el.value.length : -1;
+})()
+"""
 
 SELECT_JS = """
 (() => {
@@ -72,24 +91,30 @@ class Input:
                 self._xtest.button(code, False)
                 if index + 1 < count:
                     await asyncio.sleep(self._rng.uniform(0.06, 0.12))
+            await self._settle()
             return
         raise ElementIntercepted(f"{selector} kept moving or stayed covered")
 
     async def hover(self, selector: str) -> None:
         await self._approach(selector)
+        await self._settle()
 
     async def type_into(self, selector: str, text: str, clear: bool = False) -> None:
         await self.click(selector)
         if clear:
             await self._keyboard.hotkey(["ctrl", "a"])
             await self._keyboard.press("delete")
+            await self._settle()
         await self._keyboard.type_text(text)
+        await self._landed()
 
     async def press(self, key: str) -> None:
         await self._keyboard.press(key)
+        await self._settle()
 
     async def hotkey(self, keys: list[str]) -> None:
         await self._keyboard.hotkey(keys)
+        await self._settle()
 
     async def select(self, selector: str, value: str) -> None:
         if await self._locator.box(selector) is None:
@@ -115,6 +140,23 @@ class Input:
 
     async def scroll_by(self, dy: int) -> None:
         await self._scroller.by_pixels(dy)
+        await self._settle()
+
+    async def _settle(self) -> None:
+        with contextlib.suppress(CdpError):
+            await self._tabs.evaluate(SETTLE_JS)
+
+    async def _landed(self) -> None:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + TYPING_BUDGET
+        seen = -2
+        while loop.time() < deadline:
+            await self._settle()
+            with contextlib.suppress(CdpError):
+                length = await self._tabs.evaluate(TYPED_JS)
+                if length == seen:
+                    return
+                seen = length
 
     async def _approach(self, selector: str) -> tuple[float, float]:
         box = await self._locator.stable_box(selector)
