@@ -24,7 +24,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: alembic
-          image: ghcr.io/wprhvso/gh-pool:0.1.0
+          image: ghcr.io/wprhvso/gh-pool:0.1.0@sha256:4f25b76f0eb4e692bf0e24f65682b37aa7973b871a5913a01e87949e0994711c
           imagePullPolicy: IfNotPresent
           command: ["gh-pool-migrate"]
           env:
