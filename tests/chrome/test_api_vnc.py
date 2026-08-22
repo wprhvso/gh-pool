@@ -9,9 +9,9 @@ from starlette.websockets import WebSocketDisconnect
 
 from gh_pool.browser.tunnel import Link
 from gh_pool.relay import vnc as api_vnc
+from gh_pool.relay.app import STATUS_CODES
 from gh_pool.relay.tunnel import Tunnels
-from gh_pool.server import auth
-from gh_pool.server.app import install_errors
+from gh_pool.server import auth, errors
 from gh_pool.server.config import settings
 from tests.chrome.test_tunnel import Pipe, RunnerEnd, ServerEnd, _desktop
 
@@ -46,7 +46,7 @@ async def _lifespan(app):
 def client(monkeypatch):
     monkeypatch.setattr(settings, "token", TOKEN)
     app = FastAPI(lifespan=_lifespan)
-    install_errors(app)
+    errors.install(app, STATUS_CODES)
     app.include_router(api_vnc.router)
     with TestClient(app) as started:
         yield started

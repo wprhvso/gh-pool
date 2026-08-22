@@ -8,24 +8,24 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from gh_pool.relay import api_runner, vnc
-from gh_pool.relay.tunnel import Tunnels
+from gh_pool.relay.tunnel import TunnelDown, Tunnels
+from gh_pool.server import errors
 from gh_pool.server.config import settings
 from gh_pool.server.db import Database
 from gh_pool.server.deps import Db, Tn
+from gh_pool.server.errors import Codes
 from gh_pool.server.events import Events
 from gh_pool.server.sessions import Sessions
 
 log = logging.getLogger(__name__)
 
+STATUS_CODES: Codes = {
+    TunnelDown: status.HTTP_503_SERVICE_UNAVAILABLE,
+}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    """Relay открывает базу, но не мигрирует её и не пасёт фоновые задачи.
-
-    Миграции и сторож принадлежат server: гонять их из двух процессов —
-    верный способ получить состязание на старте. Сюда база нужна только для
-    авторизации раннера и выдачи очередной команды.
-    """
     db = Database(settings.database_url)
     await db.open(migrate=False)
     app.state.db = db
@@ -59,6 +59,7 @@ async def healthz(db: Db, tunnels: Tn, response: Response) -> Health:
 
 def create_app() -> FastAPI:
     app = FastAPI(title="gh-pool-relay", lifespan=lifespan)
+    errors.install(app, STATUS_CODES)
     app.include_router(health)
     app.include_router(api_runner.router)
     app.include_router(vnc.router)

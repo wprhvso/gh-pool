@@ -5,9 +5,8 @@ from fastapi import FastAPI, Request, UploadFile
 from starlette.testclient import TestClient
 
 from gh_pool.protocol import trace
-from gh_pool.relay.tunnel import TunnelDown
-from gh_pool.server import pool, storage
-from gh_pool.server.app import BindTrace, LimitBody, install_errors
+from gh_pool.server import errors, pool, storage
+from gh_pool.server.app import STATUS_CODES, BindTrace, LimitBody
 from gh_pool.server.sessions import (
     SessionNotFound,
     SessionUnavailable,
@@ -45,7 +44,7 @@ def harness():
     app = FastAPI()
     app.add_middleware(LimitBody, limit=LIMIT)
     app.add_middleware(BindTrace)
-    install_errors(app)
+    errors.install(app, STATUS_CODES)
 
     async def files(file: UploadFile) -> dict[str, int]:
         content = await file.read()
@@ -69,7 +68,6 @@ def harness():
             "bad_name": storage.BadName(".."),
             "too_large": storage.TooLarge("more than that"),
             "dispatch": pool.DispatchError("the pool is unreachable"),
-            "tunnel": TunnelDown("no desktop"),
         }[name]
 
     app.add_api_route("/files", files, methods=["POST"])
@@ -146,7 +144,6 @@ def test_a_body_exactly_on_the_limit_is_allowed(harness: Harness):
         ("bad_name", 400),
         ("too_large", 413),
         ("dispatch", 502),
-        ("tunnel", 503),
     ],
 )
 def test_a_domain_failure_is_answered_with_the_status_it_means(

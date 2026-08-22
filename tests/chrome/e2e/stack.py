@@ -38,9 +38,11 @@ from gh_pool.protocol import (
     Upload,
 )
 from gh_pool.protocol.sse import parse_sse
+from gh_pool.relay.app import create_app as create_relay
 from gh_pool.server import pool
-from gh_pool.server.app import create_app
+from gh_pool.server.app import create_app as create_server
 from gh_pool.server.config import settings as server_settings
+from tests.chrome.e2e.gateway import Gateway
 
 log = logging.getLogger(__name__)
 
@@ -136,6 +138,10 @@ class Background:
         return f"http://127.0.0.1:{self.port}"
 
 
+def _behind_gateway() -> ASGIApp:
+    return Gateway(create_server(), create_relay())
+
+
 class Server:
     def __init__(self, database_url: str, storage: Path) -> None:
         self.dispatched: list[UUID] = []
@@ -165,7 +171,7 @@ class Server:
         self._patch.setattr(server_settings, "segment_seconds", segment_seconds)
         self._patch.setattr(server_settings, "max_upload", max_upload)
         self._patch.setattr(pool, "dispatch", self._dispatch)
-        self._background = Background(create_app())
+        self._background = Background(_behind_gateway())
         self._background.start()
         self._patch.setattr(server_settings, "public_url", self.url)
 
@@ -174,7 +180,7 @@ class Server:
             raise RuntimeError("the server is not running")
         port = self._background.port
         self._background.stop()
-        self._background = Background(create_app(), port=port)
+        self._background = Background(_behind_gateway(), port=port)
         self._background.start()
 
     def stop(self) -> None:

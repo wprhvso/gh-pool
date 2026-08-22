@@ -1,19 +1,19 @@
 import asyncio
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse, Response
+from fastapi import FastAPI, status
+from fastapi.responses import JSONResponse
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from gh_pool.protocol import trace
-from gh_pool.relay.tunnel import TunnelDown, Tunnels
 from gh_pool.server import (
     api_client,
     api_health,
     api_player,
     api_runner,
+    errors,
     pool,
     storage,
     tasks,
@@ -21,6 +21,7 @@ from gh_pool.server import (
 from gh_pool.server.cleaner import Cleaner
 from gh_pool.server.config import settings
 from gh_pool.server.db import Database
+from gh_pool.server.errors import Codes
 from gh_pool.server.events import Events
 from gh_pool.server.sessions import (
     SessionNotFound,
@@ -30,14 +31,13 @@ from gh_pool.server.sessions import (
 )
 from gh_pool.server.watchdog import Watchdog
 
-STATUS_CODES: dict[type[Exception], int] = {
+STATUS_CODES: Codes = {
     SessionNotFound: status.HTTP_404_NOT_FOUND,
     SessionUnavailable: status.HTTP_409_CONFLICT,
     TooManySessions: status.HTTP_429_TOO_MANY_REQUESTS,
     storage.BadName: status.HTTP_400_BAD_REQUEST,
     storage.TooLarge: status.HTTP_413_CONTENT_TOO_LARGE,
     pool.DispatchError: status.HTTP_502_BAD_GATEWAY,
-    TunnelDown: status.HTTP_503_SERVICE_UNAVAILABLE,
 }
 
 
@@ -49,7 +49,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.db = db
     app.state.events = Events(db)
     app.state.sessions = Sessions(db, app.state.events)
-    app.state.tunnels = Tunnels()
     watchdog = Watchdog(app.state.sessions)
     await watchdog.start()
     cleaner = Cleaner(app.state.sessions)
@@ -63,18 +62,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await cleaner.stop()
         await watchdog.stop()
         await db.close()
-
-
-def _reply(code: int) -> Callable[[Request, Exception], Response]:
-    def handler(_: Request, exc: Exception) -> Response:
-        return JSONResponse({"detail": str(exc)}, status_code=code)
-
-    return handler
-
-
-def install_errors(app: FastAPI) -> None:
-    for error, code in STATUS_CODES.items():
-        app.add_exception_handler(error, _reply(code))
 
 
 class LimitBody:
@@ -139,7 +126,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="gh-pool", lifespan=lifespan)
     app.add_middleware(LimitBody, limit=settings.max_upload)
     app.add_middleware(BindTrace)
-    install_errors(app)
+    errors.install(app, STATUS_CODES)
     app.include_router(api_health.router)
     app.include_router(api_client.router)
     app.include_router(api_client.profiles_router)
