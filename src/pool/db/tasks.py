@@ -1,19 +1,11 @@
-import os
 from typing import Any
 
 from sqlalchemy import BigInteger, Float, Select, String, Text, delete, select
 from sqlalchemy.dialects.postgresql import JSONB, insert
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
-URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://pool:pool@localhost/pool")
-
-engine = create_async_engine(URL, pool_size=5, max_overflow=5, pool_recycle=300)
-Session = async_sessionmaker(engine, expire_on_commit=False)
-
-
-class Base(DeclarativeBase):
-    pass
+from pool.db.base import Base
+from pool.db.engine import engine, session
 
 
 class Task(Base):
@@ -55,7 +47,7 @@ def as_dict(row: Base, model: type[Base]) -> dict[str, Any]:
 
 
 async def setup() -> None:
-    async with engine.begin() as conn:
+    async with engine().begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
 
@@ -68,25 +60,25 @@ async def save(model: type[Base], rows: list[dict[str, Any]]) -> None:
         index_elements=[key], set_={c: stmt.excluded[c] for c in rows[0] if c != key}
     )
     async with Session.begin() as session:
-        await session.execute(stmt)
+        await db.execute(stmt)
 
 
 async def fetch(model: type[Base], value: Any) -> dict[str, Any] | None:
-    async with Session() as session:
-        row = await session.get(model, value)
+    async with session()() as db:
+        row = await db.get(model, value)
         return None if row is None else as_dict(row, model)
 
 
 async def drop(model: type[Base], value: Any) -> None:
     async with Session.begin() as session:
-        await session.execute(
+        await db.execute(
             delete(model).where(getattr(model, key_of(model)) == value)
         )
 
 
 async def rows(model: type[Base], query: Select[Any]) -> list[dict[str, Any]]:
-    async with Session() as session:
-        return [as_dict(r, model) for r in await session.scalars(query)]
+    async with session()() as db:
+        return [as_dict(r, model) for r in await db.scalars(query)]
 
 
 async def tasks(status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
