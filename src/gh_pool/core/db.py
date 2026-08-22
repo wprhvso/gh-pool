@@ -8,6 +8,8 @@ from psycopg import AsyncConnection
 from psycopg.rows import DictRow, dict_row
 from psycopg_pool import AsyncConnectionPool
 
+from gh_pool.core import dsn
+
 PROBE_TIMEOUT = 5.0
 
 Params = tuple[Any, ...]
@@ -36,7 +38,7 @@ class Tx:
 class Database:
     def __init__(self, url: str) -> None:
         self._pool: AsyncConnectionPool[AsyncConnection[DictRow]] = AsyncConnectionPool(
-            url,
+            dsn.libpq(url),
             open=False,
             connection_class=AsyncConnection[DictRow],
             kwargs={"row_factory": dict_row},

@@ -19,6 +19,7 @@ from gh_pool.core.sessions import (
     TooManySessions,
 )
 from gh_pool.db import migrate
+from gh_pool.db.engine import dispose
 from gh_pool.protocol import trace
 from gh_pool.server import (
     api_client,
@@ -64,6 +65,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await cleaner.stop()
         await watchdog.stop()
         await db.close()
+        await dispose()
 
 
 class LimitBody:
