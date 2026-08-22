@@ -2,35 +2,24 @@ name: ci
 
 on:
   push:
-  pull_request:
-  workflow_call:
-  workflow_dispatch:
-
-permissions: {}
 
 jobs:
   ruff:
     runs-on: pool
     steps:
       - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
       - run: ruff check --output-format github .
 
   format:
     runs-on: pool
     steps:
       - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
       - run: ruff format --check --diff .
 
   pyright:
     runs-on: pool
     steps:
       - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
       - run: uv sync --frozen
       - run: basedpyright
 
@@ -38,50 +27,14 @@ jobs:
     runs-on: pool
     steps:
       - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
       - run: uv sync --frozen
+      - run: echo "$PWD/.venv/bin" >>"$GITHUB_PATH"
       - run: pytest --ignore=tests/chrome/e2e --ignore=tests/test_e2e.py
 
-  plan:
-    runs-on: pool
-    outputs:
-      tests: ${{ steps.collect.outputs.tests }}
-      count: ${{ steps.collect.outputs.count }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - run: uv sync --frozen
-      - id: collect
-        run: |
-          set -euo pipefail
-          pytest tests/chrome/e2e tests/test_e2e.py \
-            --collect-only -q --no-header \
-            | grep '::' > ids.txt
-          count=$(wc -l < ids.txt)
-          echo "count=$count" >> "$GITHUB_OUTPUT"
-          echo "собрано e2e: $count"
-          if [ "$count" -gt 256 ]; then
-            echo "::error::e2e больше 256 ($count), матрица столько не примет"
-            exit 1
-          fi
-          jq -R -s -c 'split("\n") | map(select(length > 0))' < ids.txt > tests.json
-          echo "tests=$(cat tests.json)" >> "$GITHUB_OUTPUT"
-
   e2e:
-    needs: plan
     runs-on: pool
-    name: ${{ matrix.test }}
-    strategy:
-      fail-fast: false
-      matrix:
-        test: ${{ fromJson(needs.plan.outputs.tests) }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
       - run: uv sync --frozen
-      - env:
-          TEST: ${{ matrix.test }}
-        run: pytest "$TEST" -q --no-header
+      - run: echo "$PWD/.venv/bin" >>"$GITHUB_PATH"
+      - run: pytest tests/chrome/e2e tests/test_e2e.py
