@@ -2,9 +2,13 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from gh_pool.config import adopt
+
+adopt()
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="GH_CHROME_", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="GH_POOL_", extra="ignore")
 
     token: str = ""
     database_url: str = "postgresql:///pool.client"

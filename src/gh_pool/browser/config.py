@@ -3,6 +3,10 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from gh_pool.config import adopt
+
+adopt()
+
 
 def _first_binary(*names: str) -> str:
     for name in names:
@@ -13,7 +17,7 @@ def _first_binary(*names: str) -> str:
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="GH_CHROME_", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="GH_POOL_", extra="ignore")
 
     url: str = "http://127.0.0.1:8000"
     token: str = ""

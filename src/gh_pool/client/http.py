@@ -55,12 +55,12 @@ async def _check_stream(response: httpx.Response) -> None:
 
 class Http:
     def __init__(self, server: str | None = None, token: str | None = None) -> None:
-        self.base_url = (server or os.environ.get("GH_CHROME_URL", DEFAULT_URL)).rstrip(
+        self.base_url = (server or os.environ.get("GH_POOL_SERVER", DEFAULT_URL)).rstrip(
             "/"
         )
-        secret = token if token is not None else os.environ.get("GH_CHROME_TOKEN", "")
+        secret = token if token is not None else os.environ.get("GH_POOL_TOKEN", "")
         if not secret:
-            raise GhChromeError("GH_CHROME_TOKEN is not set")
+            raise GhChromeError("GH_POOL_TOKEN is not set")
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
             headers={"Authorization": f"Bearer {secret}"},
