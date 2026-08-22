@@ -1,0 +1,14 @@
+jobs = 20
+idle = "5m"
+lifetime = "1h"
+drain = "1m"
+label = "pool"
+
+[pool]
+server = "https://pool.example.com"
+token = "change-me-client"
+
+[repos]
+"alice/app" = "github_pat_alice"
+"alice/heavy" = { token = "github_pat_alice", jobs = 40, label = "pool-big", lifetime = "3h" }
+"bob/oss" = { token = "github_pat_bob", version = "2.330.0" }
