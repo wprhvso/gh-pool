@@ -4,9 +4,9 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from gh_pool.core.config import settings
+from gh_pool.core.events import QUEUE_SIZE, SubscriberOverflow, Subscription
 from gh_pool.protocol import CloseReason, CommandError, ErrorCode, Event, SessionReady
-from gh_pool.server.config import settings
-from gh_pool.server.events import QUEUE_SIZE, SubscriberOverflow, Subscription
 from gh_pool.server.watchdog import Watchdog
 
 SESSION = uuid4()

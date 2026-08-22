@@ -2,9 +2,9 @@ import asyncio
 import contextlib
 import logging
 
+from gh_pool.core.config import settings
+from gh_pool.core.sessions import Sessions
 from gh_pool.protocol import CloseReason, CommandError, ErrorCode
-from gh_pool.server.config import settings
-from gh_pool.server.sessions import Sessions
 
 log = logging.getLogger(__name__)
 

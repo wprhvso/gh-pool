@@ -4,8 +4,8 @@ from uuid import uuid4
 
 import pytest
 
+from gh_pool.core.config import settings
 from gh_pool.server import storage
-from gh_pool.server.config import settings
 
 
 async def _chunks(*pieces: bytes) -> AsyncIterator[bytes]:

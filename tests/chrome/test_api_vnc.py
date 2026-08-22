@@ -8,11 +8,11 @@ from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from gh_pool.browser.tunnel import Link
+from gh_pool.core import auth, errors
+from gh_pool.core.config import settings
 from gh_pool.relay import vnc as api_vnc
 from gh_pool.relay.app import STATUS_CODES
 from gh_pool.relay.tunnel import Tunnels
-from gh_pool.server import auth, errors
-from gh_pool.server.config import settings
 from tests.chrome.test_tunnel import Pipe, RunnerEnd, ServerEnd, _desktop
 
 TOKEN = "a-shared-secret"

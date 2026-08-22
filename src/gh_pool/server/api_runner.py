@@ -6,6 +6,10 @@ from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
+from gh_pool.core.auth import Runner
+from gh_pool.core.config import settings
+from gh_pool.core.deps import Db, Ss
+from gh_pool.core.sessions import SessionUnavailable
 from gh_pool.protocol import (
     CloseReason,
     CommandEnvelope,
@@ -16,10 +20,6 @@ from gh_pool.protocol import (
     RunnerEvent,
 )
 from gh_pool.server import storage
-from gh_pool.server.auth import Runner
-from gh_pool.server.config import settings
-from gh_pool.server.deps import Db, Ss
-from gh_pool.server.sessions import SessionUnavailable
 from gh_pool.server.sse import Frame, sse_response
 
 router = APIRouter(prefix="/runner", tags=["runner"])

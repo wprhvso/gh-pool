@@ -5,8 +5,8 @@ from fastapi import FastAPI, WebSocket
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from gh_pool.server import auth
-from gh_pool.server.config import settings
+from gh_pool.core import auth
+from gh_pool.core.config import settings
 
 TOKEN = "a-shared-secret"
 SESSION = UUID("4b1f6bd6-2c4a-4e2f-9a51-6f7a2c0d0f11")

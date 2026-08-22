@@ -4,14 +4,15 @@ import pytest
 from fastapi import FastAPI, Request, UploadFile
 from starlette.testclient import TestClient
 
-from gh_pool.protocol import trace
-from gh_pool.server import errors, pool, storage
-from gh_pool.server.app import STATUS_CODES, BindTrace, LimitBody
-from gh_pool.server.sessions import (
+from gh_pool.core import errors
+from gh_pool.core.sessions import (
     SessionNotFound,
     SessionUnavailable,
     TooManySessions,
 )
+from gh_pool.protocol import trace
+from gh_pool.server import pool, storage
+from gh_pool.server.app import STATUS_CODES, BindTrace, LimitBody
 
 LIMIT = 4096
 BOUNDARY = "a-boundary-nobody-else-uses"

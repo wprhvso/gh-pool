@@ -5,6 +5,9 @@ from fastapi import APIRouter, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
+from gh_pool.core.auth import Token
+from gh_pool.core.config import settings
+from gh_pool.core.deps import Db, Ev, Ss
 from gh_pool.protocol import (
     CloseReason,
     CommandAccepted,
@@ -15,9 +18,6 @@ from gh_pool.protocol import (
 )
 from gh_pool.protocol.trace import TraceContext
 from gh_pool.server import pool, storage
-from gh_pool.server.auth import Token
-from gh_pool.server.config import settings
-from gh_pool.server.deps import Db, Ev, Ss
 from gh_pool.server.sse import Frame, resume_from, sse_response
 
 router = APIRouter(prefix="/sessions", tags=["client"])

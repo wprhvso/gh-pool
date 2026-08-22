@@ -5,8 +5,8 @@ from fastapi import APIRouter, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from gh_pool.core.deps import Db
 from gh_pool.server import tasks
-from gh_pool.server.deps import Db
 
 log = logging.getLogger(__name__)
 

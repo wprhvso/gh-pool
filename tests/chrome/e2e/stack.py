@@ -25,6 +25,7 @@ import gh_pool.client
 from gh_pool.browser.config import settings as runner_settings
 from gh_pool.browser.http import ServerClient
 from gh_pool.client import Session
+from gh_pool.core.config import settings as server_settings
 from gh_pool.protocol import (
     CommandEnvelope,
     CommandError,
@@ -41,7 +42,6 @@ from gh_pool.protocol.sse import parse_sse
 from gh_pool.relay.app import create_app as create_relay
 from gh_pool.server import pool
 from gh_pool.server.app import create_app as create_server
-from gh_pool.server.config import settings as server_settings
 from tests.chrome.e2e.gateway import Gateway
 
 log = logging.getLogger(__name__)

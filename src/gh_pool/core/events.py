@@ -5,8 +5,8 @@ from uuid import UUID
 
 from psycopg.types.json import Jsonb
 
+from gh_pool.core.db import Database, Tx
 from gh_pool.protocol import Event, EventData, EventType
-from gh_pool.server.db import Database, Tx
 
 QUEUE_SIZE = 1000
 LIVE = ("pending", "active")

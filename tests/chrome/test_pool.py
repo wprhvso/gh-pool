@@ -5,8 +5,8 @@ from uuid import uuid4
 import httpx
 import pytest
 
+from gh_pool.core.config import settings
 from gh_pool.server import pool
-from gh_pool.server.config import settings
 
 SESSION = uuid4()
 RUNNER_TOKEN = "the-token-the-runner-comes-back-with"

@@ -3,9 +3,9 @@ import contextlib
 import logging
 from uuid import UUID
 
+from gh_pool.core.config import settings
+from gh_pool.core.sessions import Sessions
 from gh_pool.server import storage
-from gh_pool.server.config import settings
-from gh_pool.server.sessions import Sessions
 
 log = logging.getLogger(__name__)
 

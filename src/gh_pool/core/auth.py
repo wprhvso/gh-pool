@@ -21,8 +21,8 @@ from fastapi.security import (
 )
 from starlette.requests import HTTPConnection
 
-from gh_pool.server.config import settings
-from gh_pool.server.sessions import Sessions
+from gh_pool.core.config import settings
+from gh_pool.core.sessions import Sessions
 
 REALM = "gh-chrome"
 BASIC_USER = "admin"

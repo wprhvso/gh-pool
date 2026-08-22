@@ -3,7 +3,7 @@ from uuid import UUID
 
 import httpx
 
-from gh_pool.server.config import settings
+from gh_pool.core.config import settings
 
 CODE = """
 import os

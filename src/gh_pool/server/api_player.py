@@ -4,10 +4,10 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, Response
 
+from gh_pool.core.auth import Basic, hand_out_ticket
+from gh_pool.core.config import settings
+from gh_pool.core.deps import Ss
 from gh_pool.server import manifest, storage
-from gh_pool.server.auth import Basic, hand_out_ticket
-from gh_pool.server.config import settings
-from gh_pool.server.deps import Ss
 
 router = APIRouter(prefix="/s", tags=["player"])
 

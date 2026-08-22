@@ -7,6 +7,9 @@ from uuid import UUID, uuid4
 from psycopg.rows import DictRow
 from psycopg.types.json import Jsonb
 
+from gh_pool.core.config import settings
+from gh_pool.core.db import Database, Tx
+from gh_pool.core.events import Events
 from gh_pool.protocol import (
     CloseReason,
     CommandError,
@@ -24,9 +27,6 @@ from gh_pool.protocol import (
     SessionStatus,
 )
 from gh_pool.protocol.trace import TraceContext
-from gh_pool.server.config import settings
-from gh_pool.server.db import Database, Tx
-from gh_pool.server.events import Events
 
 LIVE = ("pending", "active")
 _LIMIT_LOCK = 0x6768_6301

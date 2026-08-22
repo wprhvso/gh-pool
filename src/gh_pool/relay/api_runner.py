@@ -2,8 +2,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, WebSocket
 
-from gh_pool.server.auth import SocketRunner
-from gh_pool.server.deps import Tn
+from gh_pool.core.auth import SocketRunner
+from gh_pool.relay.deps import Tn
 
 router = APIRouter(prefix="/runner", tags=["runner"])
 

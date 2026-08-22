@@ -9,8 +9,8 @@ from tempfile import NamedTemporaryFile
 from typing import IO
 from uuid import UUID
 
+from gh_pool.core.config import settings
 from gh_pool.protocol import PROFILE_NAME
-from gh_pool.server.config import settings
 
 CHUNK = 1 << 20
 

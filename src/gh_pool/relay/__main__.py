@@ -2,8 +2,8 @@ import logging
 
 import uvicorn
 
+from gh_pool.core.config import settings
 from gh_pool.protocol import trace
-from gh_pool.server.config import settings
 
 
 def main() -> None:

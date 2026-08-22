@@ -12,7 +12,7 @@ from websockets.typing import Subprotocol
 
 from gh_pool.browser.tunnel import Tunnel
 from gh_pool.client import Session
-from gh_pool.server import auth
+from gh_pool.core import auth
 from tests.chrome.e2e.stack import Stack
 from tests.chrome.test_tunnel import BODY, _desktop
 
