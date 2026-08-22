@@ -3,10 +3,10 @@ from uuid import uuid4
 
 import pytest
 
-from pool.protocol import RunnerConfig, SessionParams
-from pool.browser import capture
-from pool.browser.capture import Capture
-from pool.browser.config import settings
+from gh_pool.protocol import RunnerConfig, SessionParams
+from gh_pool.browser import capture
+from gh_pool.browser.capture import Capture
+from gh_pool.browser.config import settings
 
 
 class FakeDisplay:

@@ -7,15 +7,15 @@ import httpx
 import pytest
 from tests.chrome.e2e.stack import Stack, Watch, expression_of
 
-from pool.client import EventType
-from pool.protocol import (
+from gh_pool.client import EventType
+from gh_pool.protocol import (
     CloseReason,
     CommandEnvelope,
     Method,
     SessionClosed,
     TabOpened,
 )
-from pool.protocol.sse import SseMessage, parse_sse
+from gh_pool.protocol.sse import SseMessage, parse_sse
 
 
 async def _frames(

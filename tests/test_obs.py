@@ -1,4 +1,4 @@
-from pool.obs import observability
+from gh_pool.obs import observability
 
 
 def test_without_a_collector_nothing_is_exported(monkeypatch):

@@ -6,7 +6,7 @@ from email.message import Message
 from typing import Self
 
 import pytest
-from pool.fleet.runners import http as http_mod
+from gh_pool.fleet.runners import http as http_mod
 
 
 class Clock:
@@ -76,7 +76,7 @@ def clear_stop():
 
 @pytest.fixture
 def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
-    from pool.fleet.runners import budget as budget_mod
+    from gh_pool.fleet.runners import budget as budget_mod
 
     made = Clock()
     monkeypatch.setattr(budget_mod, "time", made)

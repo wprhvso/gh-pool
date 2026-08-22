@@ -8,11 +8,11 @@ from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 from tests.test_tunnel import Pipe, RunnerEnd, ServerEnd, _desktop
 
-from pool.browser.tunnel import Link
-from pool.server import api_vnc, auth
-from pool.server.app import install_errors
-from pool.server.config import settings
-from pool.relay.tunnel import Tunnels
+from gh_pool.browser.tunnel import Link
+from gh_pool.server import api_vnc, auth
+from gh_pool.server.app import install_errors
+from gh_pool.server.config import settings
+from gh_pool.relay.tunnel import Tunnels
 
 TOKEN = "a-shared-secret"
 SESSION = uuid4()

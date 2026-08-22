@@ -4,7 +4,7 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from pool.server import manifest
+from gh_pool.server import manifest
 
 DASH = "{urn:mpeg:dash:schema:mpd:2011}"
 STARTED = datetime(2026, 8, 19, 10, 30, 0, tzinfo=UTC)

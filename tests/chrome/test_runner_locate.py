@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from pool.browser.locate import (
+from gh_pool.browser.locate import (
     Box,
     ElementMissing,
     Locator,

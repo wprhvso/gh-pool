@@ -7,8 +7,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from pool.fleet.runners.errors import HttpError
-from pool.fleet.runners.models import Session, Stats
+from gh_pool.fleet.runners.errors import HttpError
+from gh_pool.fleet.runners.models import Session, Stats
 
 QUEUE_TYPE = "RunnerScaleSetJobMessages"
 

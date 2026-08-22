@@ -1,7 +1,7 @@
 import asyncio
 
-import pool.client
-from pool.client import Rule, Tap
+import gh_pool.client
+from gh_pool.client import Rule, Tap
 
 RULE = Rule(
     name="search",

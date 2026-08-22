@@ -12,9 +12,9 @@ from tests.test_tunnel import BODY, _desktop
 from websockets.exceptions import InvalidStatus
 from websockets.typing import Subprotocol
 
-from pool.client import Session
-from pool.browser.tunnel import Tunnel
-from pool.server import auth
+from gh_pool.client import Session
+from gh_pool.browser.tunnel import Tunnel
+from gh_pool.server import auth
 
 
 async def _wait_connected(

@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from pool.client.errors import TapError, TapRejected, TapTimeout
-from pool.client.tap import SCRIPT, Captured, Rule, Tap
+from gh_pool.client.errors import TapError, TapRejected, TapTimeout
+from gh_pool.client.tap import SCRIPT, Captured, Rule, Tap
 
 CAPTURE = {
     "name": "generate",

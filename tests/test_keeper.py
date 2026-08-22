@@ -5,7 +5,7 @@ import urllib.error
 
 import pytest
 
-from pool import keeper
+from gh_pool import keeper
 
 
 class FakeRepo(keeper.Repo):

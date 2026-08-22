@@ -1,6 +1,6 @@
 import asyncio
 
-import pool.client
+import gh_pool.client
 
 
 async def main() -> None:

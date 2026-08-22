@@ -4,8 +4,8 @@ import pytest
 from tests.chrome.e2e.site import ASSET, Site
 from tests.chrome.e2e.stack import Stack, Watch
 
-from pool.client import EventType, RunnerError, Session, Topic
-from pool.protocol import Download
+from gh_pool.client import EventType, RunnerError, Session, Topic
+from gh_pool.protocol import Download
 
 pytestmark = pytest.mark.browser
 

@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy.dialects import postgresql
 
-from pool.db import tasks as db
+from gh_pool.db import tasks as db
 
 
 def sql(statement):

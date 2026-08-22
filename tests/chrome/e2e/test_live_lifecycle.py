@@ -6,15 +6,15 @@ import pytest
 from tests.chrome.e2e.site import Site
 from tests.chrome.e2e.stack import HEARTBEAT_INTERVAL, TOKEN, Stack, Watch, until
 
-import pool.client
-from pool.client import (
+import gh_pool.client
+from gh_pool.client import (
     Cancelled,
     CommandTimeout,
     EventType,
     SessionDead,
     SessionStatus,
 )
-from pool.protocol import CloseReason, SessionClosed
+from gh_pool.protocol import CloseReason, SessionClosed
 
 pytestmark = pytest.mark.browser
 

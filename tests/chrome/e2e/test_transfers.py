@@ -8,10 +8,10 @@ import httpx
 import pytest
 from tests.chrome.e2e.stack import Stack, Watch, file_id_of
 
-from pool.client import EventType, GhChromeError
-from pool.protocol import CommandEnvelope, Download, Method
-from pool.server import storage
-from pool.server.storage import BadName
+from gh_pool.client import EventType, GhChromeError
+from gh_pool.protocol import CommandEnvelope, Download, Method
+from gh_pool.server import storage
+from gh_pool.server.storage import BadName
 
 PAYLOAD = os.urandom(1 << 18)
 MAX_UPLOAD = 1 << 20

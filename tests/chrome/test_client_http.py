@@ -11,14 +11,14 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 from tests.chrome.e2e.stack import Background
 
-from pool.client.errors import (
+from gh_pool.client.errors import (
     GhChromeError,
     Rejected,
     SessionUnavailable,
     TooManySessions,
 )
-from pool.client.http import Http, _check
-from pool.protocol import (
+from gh_pool.client.http import Http, _check
+from gh_pool.protocol import (
     Bare,
     Method,
     SessionCreate,

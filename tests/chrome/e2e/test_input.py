@@ -4,7 +4,7 @@ import pytest
 from tests.chrome.e2e.site import Site
 from tests.chrome.e2e.stack import Stack
 
-from pool.client import (
+from gh_pool.client import (
     ElementIntercepted,
     ElementNotFound,
     GhChromeError,

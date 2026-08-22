@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from pool.protocol.trace import (
+from gh_pool.protocol.trace import (
     NO_TRACE,
     TraceContext,
     TraceIdFilter,

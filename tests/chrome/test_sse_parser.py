@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from pool.protocol.sse import SseMessage, parse_sse
+from gh_pool.protocol.sse import SseMessage, parse_sse
 
 
 async def _chunks(*pieces: bytes) -> AsyncIterator[bytes]:

@@ -5,8 +5,8 @@ import httpx
 import pytest
 from tests.chrome.e2e.stack import Stack, Watch, until
 
-from pool.client import CommandTimeout, EventType, SessionDead
-from pool.protocol import CloseReason, Method, SessionClosed
+from gh_pool.client import CommandTimeout, EventType, SessionDead
+from gh_pool.protocol import CloseReason, Method, SessionClosed
 
 HEARTBEAT_TIMEOUT = 2.0
 

@@ -1,8 +1,8 @@
 import asyncio
 import os
 
-import pool.client
-from pool.client import Topic
+import gh_pool.client
+from gh_pool.client import Topic
 
 USERNAME = os.environ["DEMO_USERNAME"]
 PASSWORD = os.environ["DEMO_PASSWORD"]

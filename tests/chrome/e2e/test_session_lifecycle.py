@@ -4,7 +4,7 @@ import httpx
 import pytest
 from tests.chrome.e2e.stack import Stack, expression_of, until
 
-from pool.client import (
+from gh_pool.client import (
     ElementNotFound,
     GhChromeError,
     SessionDead,
@@ -12,7 +12,7 @@ from pool.client import (
     Speed,
     TooManySessions,
 )
-from pool.protocol import ErrorCode, Method
+from gh_pool.protocol import ErrorCode, Method
 
 
 async def _status(api: httpx.AsyncClient, session_id: object) -> str:

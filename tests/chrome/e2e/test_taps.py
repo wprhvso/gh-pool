@@ -4,7 +4,7 @@ import json
 import pytest
 from tests.chrome.e2e.site import Site
 
-from pool.client import Rule, Session, Tap
+from gh_pool.client import Rule, Session, Tap
 
 pytestmark = pytest.mark.browser
 

@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from pool.fleet.runners import __main__ as cli_mod
-from pool.fleet.runners.config import Server, Target
-from pool.fleet.runners.errors import RunnerError
+from gh_pool.fleet.runners import __main__ as cli_mod
+from gh_pool.fleet.runners.config import Server, Target
+from gh_pool.fleet.runners.errors import RunnerError
 from tests.fleet.fake import FakePool
 
 CONFIG = """

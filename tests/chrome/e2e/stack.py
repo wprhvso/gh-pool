@@ -25,9 +25,9 @@ from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 from starlette.types import ASGIApp
 
-import pool.client
-from pool.client import Session
-from pool.protocol import (
+import gh_pool.client
+from gh_pool.client import Session
+from gh_pool.protocol import (
     CommandEnvelope,
     CommandError,
     ErrorCode,
@@ -39,12 +39,12 @@ from pool.protocol import (
     RunnerConfig,
     Upload,
 )
-from pool.protocol.sse import parse_sse
-from pool.browser.config import settings as runner_settings
-from pool.browser.http import ServerClient
-from pool.server import pool
-from pool.server.app import create_app
-from pool.server.config import settings as server_settings
+from gh_pool.protocol.sse import parse_sse
+from gh_pool.browser.config import settings as runner_settings
+from gh_pool.browser.http import ServerClient
+from gh_pool.server import pool
+from gh_pool.server.app import create_app
+from gh_pool.server.config import settings as server_settings
 
 log = logging.getLogger(__name__)
 
@@ -506,7 +506,7 @@ class LiveRunner:
             [
                 sys.executable,
                 "-m",
-                "pool.browser",
+                "gh_pool.browser",
                 "--session",
                 str(self._id),
                 "--verbose",

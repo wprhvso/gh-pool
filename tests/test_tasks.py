@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from pool import rpc, tasks
+from gh_pool import rpc, tasks
 
 
 @pytest.fixture

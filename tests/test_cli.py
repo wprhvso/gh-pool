@@ -4,7 +4,7 @@ import json
 import httpx
 import pytest
 
-from pool import cli
+from gh_pool import cli
 
 
 class Fake:

@@ -1,8 +1,8 @@
 import httpx
 from tests.chrome.e2e.stack import Stack, until
 
-from pool.protocol import Method
-from pool.protocol.trace import TraceContext
+from gh_pool.protocol import Method
+from gh_pool.protocol.trace import TraceContext
 
 TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736"
 PARENT = f"00-{TRACE_ID}-00f067aa0ba902b7-01"

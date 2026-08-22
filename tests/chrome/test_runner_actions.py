@@ -2,18 +2,18 @@ from typing import Any
 
 import pytest
 
-from pool.protocol import (
+from gh_pool.protocol import (
     CommandError,
     ErrorCode,
     Method,
     SessionParams,
     Topic,
 )
-from pool.browser.actions import Actions
-from pool.browser.cdp import CdpError
-from pool.browser.locate import ElementIntercepted, ElementMissing
-from pool.browser.navigation import NavigationFailed
-from pool.browser.tabs import NoActiveTab
+from gh_pool.browser.actions import Actions
+from gh_pool.browser.cdp import CdpError
+from gh_pool.browser.locate import ElementIntercepted, ElementMissing
+from gh_pool.browser.navigation import NavigationFailed
+from gh_pool.browser.tabs import NoActiveTab
 
 
 class FakeCdp:

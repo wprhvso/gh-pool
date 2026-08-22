@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pool.fleet.runners.budget import Budget
-from pool.fleet.runners.config import RATE_BLIND_WAIT, RATE_WINDOW
+from gh_pool.fleet.runners.budget import Budget
+from gh_pool.fleet.runners.config import RATE_BLIND_WAIT, RATE_WINDOW
 from tests.fleet.conftest import Clock, headers
 
 

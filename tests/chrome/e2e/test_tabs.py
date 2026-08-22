@@ -2,8 +2,8 @@ import pytest
 from tests.chrome.e2e.site import Site
 from tests.chrome.e2e.stack import Stack, Watch
 
-from pool.client import EventType, Session, Topic
-from pool.protocol import TabActivated, TabClosed, TabOpened
+from gh_pool.client import EventType, Session, Topic
+from gh_pool.protocol import TabActivated, TabClosed, TabOpened
 
 pytestmark = pytest.mark.browser
 

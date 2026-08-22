@@ -16,7 +16,7 @@ from tests.chrome.e2e.stack import (
     start_cluster,
 )
 
-from pool.client import Session
+from gh_pool.client import Session
 
 NO_DATABASE = (
     "no postgres to test against: install one, or point "

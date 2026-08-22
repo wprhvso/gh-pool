@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from pool.fleet.runners.models import Session, Stats, to_int
+from gh_pool.fleet.runners.models import Session, Stats, to_int
 
 
 @pytest.mark.parametrize(

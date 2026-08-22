@@ -6,7 +6,7 @@ import pytest
 from tests.chrome.e2e.site import Site
 from tests.chrome.e2e.stack import Server, Stack, until
 
-from pool.client import Session
+from gh_pool.client import Session
 
 pytestmark = [pytest.mark.browser, pytest.mark.recording]
 

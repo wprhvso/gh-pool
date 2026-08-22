@@ -4,7 +4,7 @@ import hashlib
 
 from conftest import as_client, as_worker
 
-from pool import server
+from gh_pool import server
 
 
 async def test_an_artifact_comes_back_byte_for_byte(client):

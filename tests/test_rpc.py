@@ -6,7 +6,7 @@ from urllib.parse import unquote
 
 import pytest
 
-from pool import rpc
+from gh_pool import rpc
 
 
 class Store(BaseHTTPRequestHandler):

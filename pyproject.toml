@@ -1,38 +1,104 @@
-[project]
-name = "pool"
-version = "0.1.0"
-description = "GitHub Actions as a generic worker pool"
-requires-python = ">=3.14"
-dependencies = [
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.30",
-    "httpx>=0.27",
-    "anyio>=4.4",
-    "python-multipart>=0.0.9",
-    "sqlalchemy[asyncio]>=2.0",
-    "asyncpg>=0.30",
-    "yaol>=0.2",
-]
-
-[project.optional-dependencies]
-keeper = ["pynacl>=1.5"]
-
-[project.scripts]
-pool = "pool.cli:main"
-pool-server = "pool.server:main"
-pool-worker = "pool.worker:main"
-pool-keeper = "pool.keeper:main"
-
-[dependency-groups]
-dev = ["pytest>=8.3", "pytest-asyncio>=0.25"]
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[project]
+name = "gh-pool"
+version = "0.6.0"
+description = "Пул задач на раннерах GitHub Actions, браузерные сессии и флот раннеров"
+readme = "README.md"
+requires-python = ">=3.14"
+
+# База намеренно пуста. Голый gh-pool ставится внутрь кода задачи ради
+# `from gh_pool import emit`, а rpc.py и tasks.py написаны на одной стандартной
+# библиотеке. Каждая лишняя зависимость здесь — секунды на старте каждой джобы.
+dependencies = []
+
+[project.optional-dependencies]
+# Клиент: SDK задач и клиент браузерных сессий.
+client = [
+    "httpx>=0.28",
+    "pydantic>=2.10",
+    "yaol>=0.3",
+]
+
+# То, что ставится в джобе рядом с Chrome. Держать узким: ставится через
+# uv run --with на каждый запуск сессии.
+browser = [
+    "httpx>=0.28",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "python-xlib>=0.33",
+    "websockets>=14.1",
+]
+
+# Исполнитель задач: крутится на раннере, тянет задачи и пасёт подпроцессы.
+worker = [
+    "httpx>=0.28",
+    "opentelemetry-api>=1.29",
+    "structlog>=25.4",
+    "yaol>=0.3",
+]
+
+# pool-server: API задач и сессий, диспатч, фоновые задачи, миграции.
+server = [
+    "alembic>=1.14",
+    "anyio>=4.4",
+    "fastapi>=0.115",
+    "httpx>=0.28",
+    "opentelemetry-api>=1.29",
+    "psycopg[binary,pool]>=3.2",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "pynacl>=1.5",
+    "python-multipart>=0.0.20",
+    "sqlalchemy[asyncio]>=2.0",
+    "structlog>=25.4",
+    "uvicorn[standard]>=0.34",
+    "yaol>=0.3",
+]
+
+# pool-relay: только долгие сокеты. Ни httpx (некому диспатчить), ни
+# python-multipart (аплоады идут сырым потоком), ни alembic (миграции гоняет
+# server), ни pynacl.
+relay = [
+    "fastapi>=0.115",
+    "opentelemetry-api>=1.29",
+    "psycopg[binary,pool]>=3.2",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "sqlalchemy[asyncio]>=2.0",
+    "structlog>=25.4",
+    "uvicorn[standard]>=0.34",
+    "yaol>=0.3",
+]
+
+[project.scripts]
+gh-pool = "gh_pool.cli:main"
+gh-pool-worker = "gh_pool.worker:main"
+gh-pool-browser = "gh_pool.browser.__main__:main"
+
+[dependency-groups]
+dev = [
+    "gh-pool[browser,client,relay,server,worker]",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+]
+
 [tool.hatch.build.targets.wheel]
-packages = ["src/pool"]
+packages = ["src/gh_pool"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/gh_pool/client/tap.js" = "gh_pool/client/tap.js"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+xfail_strict = true
+markers = [
+    "browser: водит настоящий Chrome на настоящем X-дисплее",
+    "recording: нужен ffmpeg, чтобы писать экран",
+    "patient_watchdog: сторож не должен торопить сессию",
+]

@@ -6,7 +6,7 @@ import httpx
 import pytest
 from conftest import as_client, submit, take
 
-from pool import server, worker
+from gh_pool import server, worker
 
 
 @pytest.fixture
@@ -252,7 +252,7 @@ class _Handed:
 
 def exec_child(ttype, payload, code):
     proc = subprocess.run(
-        [sys.executable, "-m", "pool.worker", "exec", ttype, str(payload)],
+        [sys.executable, "-m", "gh_pool.worker", "exec", ttype, str(payload)],
         capture_output=True,
         text=True,
         check=False,

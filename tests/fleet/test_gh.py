@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from pool.fleet.runners import gh as gh_mod
-from pool.fleet.runners.config import Target
-from pool.fleet.runners.errors import RateLimited, RunnerError
-from pool.fleet.runners.http import Reply
+from gh_pool.fleet.runners import gh as gh_mod
+from gh_pool.fleet.runners.config import Target
+from gh_pool.fleet.runners.errors import RateLimited, RunnerError
+from gh_pool.fleet.runners.http import Reply
 from tests.fleet.conftest import headers
 from tests.fleet.fake import refused
 

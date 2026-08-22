@@ -1,7 +1,7 @@
 import pytest
 from tests.chrome.e2e.site import Site
 
-from pool.client import NavigationFailed, Session, WaitUntil
+from gh_pool.client import NavigationFailed, Session, WaitUntil
 
 pytestmark = pytest.mark.browser
 

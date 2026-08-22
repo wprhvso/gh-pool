@@ -3,7 +3,7 @@ import asyncio
 import pytest
 from conftest import as_client, as_worker, submit, take
 
-from pool import server
+from gh_pool import server
 
 
 async def test_a_submitted_task_is_leased_with_its_payload(client):

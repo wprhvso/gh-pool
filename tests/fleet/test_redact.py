@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pool.fleet.runners.errors import HttpError, RateLimited
-from pool.fleet.runners.redact import redact
+from gh_pool.fleet.runners.errors import HttpError, RateLimited
+from gh_pool.fleet.runners.redact import redact
 
 
 def test_plain_text_is_left_alone() -> None:

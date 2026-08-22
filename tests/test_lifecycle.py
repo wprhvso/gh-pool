@@ -3,7 +3,7 @@ import time
 
 from conftest import as_client, as_worker, submit, take
 
-from pool import server
+from gh_pool import server
 
 
 async def until(condition, timeout=2.0):

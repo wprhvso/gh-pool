@@ -6,7 +6,7 @@ os.environ.setdefault("DATA_DIR", tempfile.mkdtemp(prefix="pool-tests-"))
 import httpx
 import pytest
 
-from pool import db, server
+from gh_pool import db, server
 
 WORKER = "dev-worker"
 CLIENT = "dev-client"

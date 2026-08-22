@@ -4,9 +4,9 @@ import urllib.request
 from typing import Any
 
 import pytest
-from pool.fleet.runners import http as http_mod
-from pool.fleet.runners.budget import Budget
-from pool.fleet.runners.errors import HttpError, RateLimited, RunnerError
+from gh_pool.fleet.runners import http as http_mod
+from gh_pool.fleet.runners.budget import Budget
+from gh_pool.fleet.runners.errors import HttpError, RateLimited, RunnerError
 from tests.fleet.conftest import Clock, Response, headers, http_error
 
 

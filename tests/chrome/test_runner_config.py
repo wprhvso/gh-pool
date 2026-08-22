@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from pool.browser.config import Settings, settings
+from gh_pool.browser.config import Settings, settings
 
 
 def test_every_directory_the_runner_uses_is_under_its_own_workdir(

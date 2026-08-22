@@ -6,14 +6,14 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from pool.client.errors import (
+from gh_pool.client.errors import (
     ElementNotFound,
     Rejected,
     SessionDead,
     SessionNotReady,
 )
-from pool.client.session import Session
-from pool.protocol import (
+from gh_pool.client.session import Session
+from gh_pool.protocol import (
     CommandAccepted,
     CommandArgs,
     CommandError,

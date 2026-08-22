@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from pool.protocol import (
+from gh_pool.protocol import (
     MAX_TIMEOUT,
     Bare,
     CommandEnvelope,

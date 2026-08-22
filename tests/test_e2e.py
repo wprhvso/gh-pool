@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from pool.sdk import Failed, Pool, Remote
+from gh_pool.sdk import Failed, Pool, Remote
 
 WORKER_TOKEN = "e2e-worker"
 CLIENT_TOKEN = "e2e-client"
@@ -96,7 +96,7 @@ def live(tmp_path_factory):
         wait_for_health(url, server)
         (root / "spool").mkdir()
         worker = spawn(
-            ["-m", "pool.worker"],
+            ["-m", "gh_pool.worker"],
             {
                 "POOL_SERVER": url,
                 "POOL_TOKEN": WORKER_TOKEN,
@@ -123,7 +123,7 @@ def pool(live):
 
 def cli(live, *args, check=True):
     proc = subprocess.run(
-        [sys.executable, "-m", "pool.cli", *args],
+        [sys.executable, "-m", "gh_pool.cli", *args],
         env={
             **os.environ,
             "POOL_SERVER": live,

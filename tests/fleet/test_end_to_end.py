@@ -5,9 +5,9 @@ import time
 from pathlib import Path
 
 import pytest
-from pool.fleet.runners import controller as ctrl
-from pool.fleet.runners.config import Server, Target
-from pool.fleet.runners.models import Stats
+from gh_pool.fleet.runners import controller as ctrl
+from gh_pool.fleet.runners.config import Server, Target
+from gh_pool.fleet.runners.models import Stats
 from tests.fleet.fake import FakePool, FakeScaleSet, job
 from tests.fleet.test_agent import JOB, _tarball
 
@@ -19,7 +19,7 @@ def stage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     room = tmp_path / "cache"
     room.mkdir()
     monkeypatch.setenv("RUNNERS_CACHE", str(room))
-    from pool.fleet.runners import agent as agent_mod
+    from gh_pool.fleet.runners import agent as agent_mod
 
     _tarball(room / f"actions-runner-linux-{agent_mod.arch()}-{VERSION}.tar.gz", JOB)
     monkeypatch.setattr(ctrl, "FLEET_INTERVAL", 0.2)

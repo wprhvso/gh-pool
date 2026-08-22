@@ -6,13 +6,13 @@ import psycopg
 import pytest
 from tests.chrome.e2e.stack import Server, Stack
 
-from pool.protocol import Method
-from pool.server import storage
-from pool.server.cleaner import Cleaner
-from pool.server.config import settings
-from pool.server.db import Database
-from pool.server.events import Events
-from pool.server.sessions import Sessions
+from gh_pool.protocol import Method
+from gh_pool.server import storage
+from gh_pool.server.cleaner import Cleaner
+from gh_pool.server.config import settings
+from gh_pool.server.db import Database
+from gh_pool.server.events import Events
+from gh_pool.server.sessions import Sessions
 
 KIB = 1 << 10
 

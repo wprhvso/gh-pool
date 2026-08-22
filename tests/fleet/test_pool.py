@@ -5,11 +5,11 @@ import urllib.parse
 from typing import Any
 
 import pytest
-from pool.fleet.runners import pool as pool_mod
-from pool.fleet.runners.config import Server
-from pool.fleet.runners.errors import RunnerError
-from pool.fleet.runners.http import Reply
-from pool.fleet.runners.pool import Pool
+from gh_pool.fleet.runners import pool as pool_mod
+from gh_pool.fleet.runners.config import Server
+from gh_pool.fleet.runners.errors import RunnerError
+from gh_pool.fleet.runners.http import Reply
+from gh_pool.fleet.runners.pool import Pool
 from tests.fleet.conftest import headers
 
 

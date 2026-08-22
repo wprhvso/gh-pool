@@ -4,9 +4,9 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from pool.server import storage
-from pool.server.cleaner import DAY, Cleaner
-from pool.server.config import settings
+from gh_pool.server import storage
+from gh_pool.server.cleaner import DAY, Cleaner
+from gh_pool.server.config import settings
 
 KIB = 1 << 10
 HOUR = 3600.0

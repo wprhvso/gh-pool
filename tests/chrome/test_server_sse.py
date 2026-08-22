@@ -6,8 +6,8 @@ from pydantic import BaseModel
 from starlette.datastructures import Headers
 from starlette.requests import Request
 
-from pool.protocol import SessionReady, TabOpened
-from pool.server import sse
+from gh_pool.protocol import SessionReady, TabOpened
+from gh_pool.server import sse
 
 
 class Payload(BaseModel):

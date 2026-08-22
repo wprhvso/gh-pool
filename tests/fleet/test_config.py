@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from pool.fleet.runners.config import Target, env_target, load, secs
-from pool.fleet.runners.errors import RunnerError
+from gh_pool.fleet.runners.config import Target, env_target, load, secs
+from gh_pool.fleet.runners.errors import RunnerError
 
 CONFIG = """
 jobs = 8
