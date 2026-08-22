@@ -28,7 +28,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: server
-          image: ghcr.io/wprhvso/gh-pool:0.1.4@sha256:36f21f9bf1513bc86c054128fb81819a253bdcd278a6a39a5deb9ecc60b4e409
+          image: ghcr.io/wprhvso/gh-pool:0.1.5@sha256:32a3bdee9bbdb8062f6b763478365ef7a3d0aa443f069c12a85d547ef4bdd174
           imagePullPolicy: IfNotPresent
           env:
             - name: HOST_IP
