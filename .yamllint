@@ -1,0 +1,18 @@
+extends: default
+
+rules:
+  line-length:
+    max: 100
+    # Пин образа по digest в 100 символов не влезает и не переносится.
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+  # Манифесты без `---` в начале — норма.
+  document-start: disable
+  truthy:
+    # `on:` в GitHub Actions — ключ, а не булево.
+    check-keys: false
+  comments:
+    min-spaces-from-content: 1
