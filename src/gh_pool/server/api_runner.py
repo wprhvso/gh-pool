@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request, WebSocket, status
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
@@ -16,9 +16,9 @@ from gh_pool.protocol import (
     RunnerEvent,
 )
 from gh_pool.server import storage
-from gh_pool.server.auth import Runner, SocketRunner
+from gh_pool.server.auth import Runner
 from gh_pool.server.config import settings
-from gh_pool.server.deps import Db, Ss, Tn
+from gh_pool.server.deps import Db, Ss
 from gh_pool.server.sessions import SessionUnavailable
 from gh_pool.server.sse import Frame, sse_response
 
@@ -83,14 +83,6 @@ async def stream_commands(
             )
 
     return sse_response(frames())
-
-
-@router.websocket("/{session_id}/tunnel")
-async def serve_tunnel(
-    session_id: UUID, websocket: WebSocket, tunnels: Tn, _: SocketRunner
-) -> None:
-    await websocket.accept()
-    await tunnels.serve(session_id, websocket)
 
 
 @router.post(

@@ -7,7 +7,7 @@ from fastapi import APIRouter, FastAPI, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from gh_pool.relay import vnc
+from gh_pool.relay import api_runner, vnc
 from gh_pool.relay.tunnel import Tunnels
 from gh_pool.server.config import settings
 from gh_pool.server.db import Database
@@ -60,6 +60,7 @@ async def healthz(db: Db, tunnels: Tn, response: Response) -> Health:
 def create_app() -> FastAPI:
     app = FastAPI(title="gh-pool-relay", lifespan=lifespan)
     app.include_router(health)
+    app.include_router(api_runner.router)
     app.include_router(vnc.router)
     return app
 
