@@ -35,6 +35,7 @@ docker:
     WORKDIR /app
     RUN useradd --system --create-home --uid 10001 gh-pool && mkdir -p /var/lib/gh-chrome && chown gh-pool:gh-pool /var/lib/gh-chrome
     COPY +build/venv /app/.venv
+    COPY .github/workflows /app/workflows
     USER gh-pool
     VOLUME /var/lib/gh-chrome
     EXPOSE 8000
