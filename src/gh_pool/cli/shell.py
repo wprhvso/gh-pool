@@ -161,7 +161,10 @@ def wire_stdin(
             link.detached = True
             link.over("detached")
 
-    loop.add_reader(fd, ready)
+    try:
+        loop.add_reader(fd, ready)
+    except (OSError, NotImplementedError):
+        return None
     return fd
 
 

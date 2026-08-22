@@ -1,3 +1,4 @@
+import asyncio
 import os
 import socket
 import subprocess
@@ -5,6 +6,7 @@ import sys
 import threading
 import time
 import uuid
+from unittest import mock
 
 import httpx
 import pytest
@@ -205,6 +207,19 @@ def test_a_tilde_at_the_start_of_a_line_survives_when_nothing_follows_it():
 
     assert escape.filter(b"~") == (b"", False)
     assert escape.filter(b"/tmp\n") == (b"~/tmp\n", False)
+
+
+async def test_a_stdin_the_loop_cannot_watch_leaves_the_shell_read_only(tmp_path):
+    from gh_pool.cli import shell as cli
+
+    plain = tmp_path / "stdin"
+    plain.write_text("не сработает как epoll")
+    loop = asyncio.get_running_loop()
+    with plain.open() as handle:
+        with mock.patch.object(cli.sys, "stdin", handle):
+            fd = cli.wire_stdin(loop, cli.Link(None, "x"), asyncio.Queue())
+
+    assert fd is None
 
 
 def free_port():
