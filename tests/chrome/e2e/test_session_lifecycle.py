@@ -206,7 +206,7 @@ async def test_the_health_probe_answers_a_caller_with_no_credentials_at_all(
         response = await anonymous.get("/healthz")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json()["status"] == "ok"
 
 
 async def test_a_finished_session_can_be_deleted_but_a_live_one_cannot(

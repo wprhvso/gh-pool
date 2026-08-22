@@ -221,7 +221,7 @@ def test_events_can_be_watched_while_the_task_is_still_going(pool):
 
 def test_an_artifact_written_by_a_task_can_be_fetched_by_the_client(pool):
     task = pool.run(
-        "from pool import rpc\n"
+        "from gh_pool import rpc\n"
         "rpc.put('e2e/report.txt', b'written from inside')\n"
         "result = 'stored'"
     )
@@ -235,7 +235,9 @@ def test_an_artifact_written_by_a_task_can_be_fetched_by_the_client(pool):
 def test_an_artifact_the_client_uploaded_can_be_read_by_a_task(pool):
     pool.put("e2e/input.txt", b"from the client")
 
-    task = pool.run("from pool import rpc\nresult = rpc.get('e2e/input.txt').decode()")
+    task = pool.run(
+        "from gh_pool import rpc\nresult = rpc.get('e2e/input.txt').decode()"
+    )
 
     assert result_of(task) == "from the client"
 
