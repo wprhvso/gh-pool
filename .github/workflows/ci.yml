@@ -8,10 +8,6 @@ on:
 
 permissions: {}
 
-env:
-  RUFF_VERSION: 0.16.2
-  BASEDPYRIGHT_VERSION: 1.39.9
-
 jobs:
   ruff:
     runs-on: pool
@@ -19,10 +15,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-      - run: uvx ruff@$RUFF_VERSION check --output-format github .
+      - run: ruff check --output-format github .
 
   format:
     runs-on: pool
@@ -30,10 +23,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-      - run: uvx ruff@$RUFF_VERSION format --check --diff .
+      - run: ruff format --check --diff .
 
   pyright:
     runs-on: pool
@@ -41,30 +31,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
       - run: uv sync --frozen
-      - run: uvx basedpyright@$BASEDPYRIGHT_VERSION --outputjson > report.json || true
-      - name: разобрать отчёт
-        run: |
-          set -euo pipefail
-          uv run --no-project python - <<'PY'
-          import json, sys
-          report = json.load(open("report.json"))
-          for d in report.get("generalDiagnostics", []):
-              if d.get("severity") != "error":
-                  continue
-              start = d.get("range", {}).get("start", {})
-              print(
-                  f"::error file={d['file']},"
-                  f"line={start.get('line', 0) + 1},"
-                  f"col={start.get('character', 0) + 1}::{d['message']}"
-              )
-          errors = report.get("summary", {}).get("errorCount", 0)
-          print(f"ошибок: {errors}")
-          sys.exit(1 if errors else 0)
-          PY
+      - run: basedpyright
 
   unit:
     runs-on: pool
@@ -72,12 +40,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
       - run: uv sync --frozen
-      # e2e разъезжаются по своим джобам ниже; здесь всё остальное.
-      - run: uv run pytest --ignore=tests/chrome/e2e --ignore=tests/test_e2e.py
+      - run: pytest --ignore=tests/chrome/e2e --ignore=tests/test_e2e.py
 
   plan:
     runs-on: pool
@@ -88,21 +52,16 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
       - run: uv sync --frozen
       - id: collect
         run: |
           set -euo pipefail
-          uv run pytest tests/chrome/e2e tests/test_e2e.py \
+          pytest tests/chrome/e2e tests/test_e2e.py \
             --collect-only -q --no-header \
             | grep '::' > ids.txt
           count=$(wc -l < ids.txt)
           echo "count=$count" >> "$GITHUB_OUTPUT"
           echo "собрано e2e: $count"
-          # Матрица GitHub Actions ограничена 256 задачами. Молча срезать
-          # хвост нельзя — это выглядело бы как зелёный прогон.
           if [ "$count" -gt 256 ]; then
             echo "::error::e2e больше 256 ($count), матрица столько не примет"
             exit 1
@@ -122,10 +81,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
       - run: uv sync --frozen
       - env:
           TEST: ${{ matrix.test }}
-        run: uv run pytest "$TEST" -q --no-header
+        run: pytest "$TEST" -q --no-header

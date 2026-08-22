@@ -179,7 +179,8 @@ jobs:
             nixpkgs#stylua nixpkgs#selene nixpkgs#attic-client \
             nixpkgs#govulncheck nixpkgs#golangci-lint \
             nixpkgs#shellcheck nixpkgs#shfmt nixpkgs#actionlint nixpkgs#yamllint \
-            nixpkgs#ktlint nixpkgs#detekt nixpkgs#cargo-audit nixpkgs#just
+            nixpkgs#ktlint nixpkgs#detekt nixpkgs#cargo-audit nixpkgs#just \
+            nixpkgs#kustomize nixpkgs#kubeconform
           echo "$HOME/.nix-profile/bin" >>"$GITHUB_PATH"
 
       - name: attic login
@@ -296,6 +297,7 @@ jobs:
           for t in nix uv ruff basedpyright pytest go golangci-lint govulncheck \
                    cargo rustc cargo-audit ktlint detekt \
                    shellcheck shfmt actionlint yamllint earthly just gradle java \
+                   kustomize kubeconform \
                    nixfmt statix deadnix node docker; do
             printf '%-16s %s\n' "$t" "$(command -v "$t" || echo MISSING)"
           done

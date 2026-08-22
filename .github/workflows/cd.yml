@@ -15,7 +15,6 @@ jobs:
       release: ${{ steps.read.outputs.release }}
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v5
       - id: read
         run: |
           set -euo pipefail
@@ -83,7 +82,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
       - run: uv build --out-dir dist
