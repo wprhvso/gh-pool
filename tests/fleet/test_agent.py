@@ -296,8 +296,8 @@ def test_a_matching_checksum_is_accepted(cache: Path) -> None:
 def test_the_worker_environment_stays_home(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv("POOL_TOKEN", "воркерский")
-    monkeypatch.setenv("POOL_SERVER", "https://pool.example.com")
+    monkeypatch.setenv("GH_POOL_WORKER_TOKEN", "воркерский")
+    monkeypatch.setenv("GH_POOL_SERVER", "https://pool.example.com")
     monkeypatch.setenv("POOL_TASK", "деадбиф")
     monkeypatch.setenv("GITHUB_TOKEN", "ghs_чужой")
     monkeypatch.setenv("ACTIONS_RUNTIME_TOKEN", "внешний")

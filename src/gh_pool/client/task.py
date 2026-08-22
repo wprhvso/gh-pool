@@ -176,10 +176,10 @@ class Pool:
     ) -> None:
         self.http = httpx.Client(
             base_url=(
-                server or os.getenv("POOL_SERVER", "http://localhost:8000")
+                server or os.getenv("GH_POOL_SERVER", "http://localhost:8000")
             ).rstrip("/"),
             headers={
-                "Authorization": f"Bearer {token or os.getenv('POOL_CLIENT_TOKEN', 'dev-client')}"
+                "Authorization": f"Bearer {token or os.getenv('GH_POOL_CLIENT_TOKEN', 'dev-client')}"
             },
             timeout=httpx.Timeout(timeout, read=300.0),
         )

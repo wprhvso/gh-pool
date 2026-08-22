@@ -4,7 +4,6 @@ from uuid import UUID
 import httpx
 import psycopg
 import pytest
-from tests.chrome.e2e.stack import Server, Stack
 
 from gh_pool.protocol import Method
 from gh_pool.server import storage
@@ -13,6 +12,7 @@ from gh_pool.server.config import settings
 from gh_pool.server.db import Database
 from gh_pool.server.events import Events
 from gh_pool.server.sessions import Sessions
+from tests.chrome.e2e.stack import Server, Stack
 
 KIB = 1 << 10
 

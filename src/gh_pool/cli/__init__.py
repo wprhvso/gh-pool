@@ -13,8 +13,8 @@ from typing import Any, NoReturn
 import httpx
 from yaol import SpanKind, from_env, inject_headers, setup, shutdown, span
 
-SERVER = os.getenv("POOL_SERVER", "http://localhost:8000").rstrip("/")
-TOKEN = os.getenv("POOL_CLIENT_TOKEN", "dev-client")
+SERVER = os.getenv("GH_POOL_SERVER", "http://localhost:8000").rstrip("/")
+TOKEN = os.getenv("GH_POOL_CLIENT_TOKEN", "dev-client")
 POLL = 0.5
 TERMINAL = ("done", "failed", "cancelled", "lost")
 CODES: dict[str | None, int] = {"done": 0, "failed": 1, "cancelled": 2, "lost": 3}

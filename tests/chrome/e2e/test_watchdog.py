@@ -3,10 +3,10 @@ from typing import Any
 
 import httpx
 import pytest
-from tests.chrome.e2e.stack import Stack, Watch, until
 
 from gh_pool.client import CommandTimeout, EventType, SessionDead
 from gh_pool.protocol import CloseReason, Method, SessionClosed
+from tests.chrome.e2e.stack import Stack, Watch, until
 
 HEARTBEAT_TIMEOUT = 2.0
 

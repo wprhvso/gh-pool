@@ -2,10 +2,10 @@ import base64
 import struct
 
 import pytest
-from tests.chrome.e2e.site import Site
-from tests.chrome.e2e.stack import Stack
 
 from gh_pool.client import ElementNotFound, ElementState, RunnerError, Session
+from tests.chrome.e2e.site import Site
+from tests.chrome.e2e.stack import Stack
 
 pytestmark = pytest.mark.browser
 

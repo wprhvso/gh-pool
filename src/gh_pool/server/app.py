@@ -7,13 +7,13 @@ from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from gh_pool.protocol import trace
+from gh_pool.relay import vnc as api_vnc
 from gh_pool.relay.tunnel import TunnelDown, Tunnels
 from gh_pool.server import (
     api_client,
     api_health,
     api_player,
     api_runner,
-    api_vnc,
     pool,
     storage,
 )

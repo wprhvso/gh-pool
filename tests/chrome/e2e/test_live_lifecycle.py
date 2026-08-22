@@ -3,8 +3,6 @@ from typing import Any
 
 import httpx
 import pytest
-from tests.chrome.e2e.site import Site
-from tests.chrome.e2e.stack import HEARTBEAT_INTERVAL, TOKEN, Stack, Watch, until
 
 import gh_pool.client
 from gh_pool.client import (
@@ -15,6 +13,8 @@ from gh_pool.client import (
     SessionStatus,
 )
 from gh_pool.protocol import CloseReason, SessionClosed
+from tests.chrome.e2e.site import Site
+from tests.chrome.e2e.stack import HEARTBEAT_INTERVAL, TOKEN, Stack, Watch, until
 
 pytestmark = pytest.mark.browser
 

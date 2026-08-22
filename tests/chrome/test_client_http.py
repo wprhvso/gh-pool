@@ -9,7 +9,6 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
-from tests.chrome.e2e.stack import Background
 
 from gh_pool.client.errors import (
     GhChromeError,
@@ -24,6 +23,7 @@ from gh_pool.protocol import (
     SessionCreate,
     SessionStatus,
 )
+from tests.chrome.e2e.stack import Background
 
 TOKEN = "a-shared-secret"
 SESSION = UUID("2f1c9f38-6d0f-4a63-9e33-2f8a3f3f6b21")
@@ -142,17 +142,17 @@ def _response(code: int, body: str = "no") -> httpx.Response:
 
 
 def test_a_client_without_a_token_refuses_to_start(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("GH_CHROME_TOKEN", raising=False)
+    monkeypatch.delenv("GH_POOL_TOKEN", raising=False)
 
-    with pytest.raises(GhChromeError, match="GH_CHROME_TOKEN"):
+    with pytest.raises(GhChromeError, match="GH_POOL_TOKEN"):
         Http("http://127.0.0.1:1")
 
 
 async def test_the_server_and_the_token_are_taken_from_the_environment(
     monkeypatch: pytest.MonkeyPatch, server: Background, recorder: Recorder
 ):
-    monkeypatch.setenv("GH_CHROME_URL", f"{server.url}/")
-    monkeypatch.setenv("GH_CHROME_TOKEN", TOKEN)
+    monkeypatch.setenv("GH_POOL_SERVER", f"{server.url}/")
+    monkeypatch.setenv("GH_POOL_TOKEN", TOKEN)
     client = Http()
 
     try:

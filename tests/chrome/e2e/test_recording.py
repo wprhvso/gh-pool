@@ -3,10 +3,10 @@ from xml.etree import ElementTree as ET
 
 import httpx
 import pytest
-from tests.chrome.e2e.site import Site
-from tests.chrome.e2e.stack import Server, Stack, until
 
 from gh_pool.client import Session
+from tests.chrome.e2e.site import Site
+from tests.chrome.e2e.stack import Server, Stack, until
 
 pytestmark = [pytest.mark.browser, pytest.mark.recording]
 

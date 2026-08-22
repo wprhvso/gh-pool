@@ -4,11 +4,11 @@ import urllib.request
 from typing import Any
 
 import pytest
-from tests.fleet.conftest import Clock, Response, headers, http_error
 
 from gh_pool.fleet.runners import http as http_mod
 from gh_pool.fleet.runners.budget import Budget
 from gh_pool.fleet.runners.errors import HttpError, RateLimited, RunnerError
+from tests.fleet.conftest import Clock, Response, headers, http_error
 
 
 class Calls:

@@ -22,7 +22,7 @@ from gh_pool.obs import observability
 API = "https://api.github.com"
 KEYS = ("token", "workflow", "jobs", "ttl", "ref")
 UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
-SECRETS = ("POOL_SERVER", "POOL_TOKEN")
+SECRETS = ("GH_POOL_SERVER", "GH_POOL_WORKER_TOKEN")
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 GRACE = 30
 BOOT_GRACE = 2400
@@ -156,7 +156,7 @@ def ask(base: str, path: str, token: str) -> Any:
 
 
 def pool_workers(pool: dict[str, str], token: str) -> dict[int, float] | None:
-    base = (pool.get("POOL_SERVER") or "").strip()
+    base = (pool.get("GH_POOL_SERVER") or "").strip()
     if not base:
         return None
     if not token:

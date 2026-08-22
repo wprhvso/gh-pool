@@ -1,4 +1,4 @@
-from conftest import as_client, as_worker, submit, take
+from tests.conftest import as_client, as_worker, submit, take
 
 from gh_pool import server
 

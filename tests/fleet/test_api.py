@@ -6,13 +6,13 @@ import time
 from typing import Any
 
 import pytest
-from tests.fleet.fake import refused
 
 from gh_pool.fleet.runners import api as api_mod
 from gh_pool.fleet.runners.api import ScaleSet
 from gh_pool.fleet.runners.config import Target
 from gh_pool.fleet.runners.errors import HttpError, RunnerError
 from gh_pool.fleet.runners.models import Session
+from tests.fleet.fake import refused
 
 PIPELINE = "https://x.pipelines.actions.githubusercontent.com/OPAQUE"
 QUEUE = "https://q.example/queue?sessionId=abc"

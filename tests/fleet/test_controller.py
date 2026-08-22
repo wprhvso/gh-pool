@@ -6,13 +6,13 @@ import time
 from dataclasses import replace
 
 import pytest
-from tests.fleet.fake import FakePool, FakeScaleSet, job, message, refused
 
 from gh_pool.fleet.runners import controller as ctrl
 from gh_pool.fleet.runners.config import Server, Target
 from gh_pool.fleet.runners.errors import RunnerError
 from gh_pool.fleet.runners.fleet import Fleet
 from gh_pool.fleet.runners.models import Stats
+from tests.fleet.fake import FakePool, FakeScaleSet, job, message, refused
 
 
 def _ctx(

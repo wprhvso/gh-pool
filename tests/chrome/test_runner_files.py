@@ -8,11 +8,11 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import RedirectResponse, Response
 from starlette.routing import Route
-from tests.chrome.e2e.stack import Background
 
 from gh_pool.browser.config import settings
 from gh_pool.browser.files import Files, _one_segment, _reachable
 from gh_pool.protocol import Upload
+from tests.chrome.e2e.stack import Background
 
 PAYLOAD = b"a file the page asked for" * 20
 

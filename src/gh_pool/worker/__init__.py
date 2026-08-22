@@ -30,15 +30,15 @@ from yaol import (
 
 from gh_pool.obs import observability
 
-SERVER = os.getenv("POOL_SERVER", "http://localhost:8000").rstrip("/")
-TOKEN = os.getenv("POOL_TOKEN", "dev-worker")
-WORKER_ID = os.getenv("WORKER_ID") or f"local-{uuid.uuid4().hex[:8]}"
-SPOOL_DIR = Path(os.getenv("SPOOL_DIR", "/tmp"))
-SPOOL_CAP = int(os.getenv("SPOOL_CAP", str(256 * 1024 * 1024)))
+SERVER = os.getenv("GH_POOL_SERVER", "http://localhost:8000").rstrip("/")
+TOKEN = os.getenv("GH_POOL_WORKER_TOKEN", "dev-worker")
+WORKER_ID = os.getenv("GH_POOL_WORKER_ID") or f"local-{uuid.uuid4().hex[:8]}"
+SPOOL_DIR = Path(os.getenv("GH_POOL_SPOOL_DIR", "/tmp"))
+SPOOL_CAP = int(os.getenv("GH_POOL_SPOOL_CAP", str(256 * 1024 * 1024)))
 HEARTBEAT = 15.0
 KILL_GRACE = 30.0
 CHUNK = 1 << 20
-MAX_AGE = float(os.getenv("WORKER_MAX_AGE", "0"))
+MAX_AGE = float(os.getenv("GH_POOL_WORKER_MAX_AGE", "0"))
 
 _current: "Spool | None" = None
 
@@ -281,7 +281,7 @@ async def _serve(
         str(payload_path),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
-        env={**os.environ, "PYTHONUNBUFFERED": "1", "POOL_TASK": tid},
+        env={**os.environ, "PYTHONUNBUFFERED": "1", "GH_POOL_TASK": tid},
         start_new_session=True,
     )
 
@@ -395,7 +395,7 @@ async def loop() -> None:
 def run_exec(ttype: str, payload_file: str) -> NoReturn:
     import importlib
 
-    tasks = importlib.import_module(os.getenv("POOL_TASKS", "gh_pool.tasks"))
+    tasks = importlib.import_module(os.getenv("GH_POOL_TASKS", "gh_pool.tasks"))
     fn = tasks.REGISTRY.get(ttype)
     if fn is None:
         print(f"unknown task type: {ttype}")  # noqa: T201

@@ -8,7 +8,8 @@ from pathlib import Path
 
 import httpx
 import pytest
-from gh_pool.sdk import Failed, Pool, Remote
+
+from gh_pool.client.task import Failed, Pool, Remote
 
 WORKER_TOKEN = "e2e-worker"
 CLIENT_TOKEN = "e2e-client"
@@ -97,8 +98,8 @@ def live(tmp_path_factory):
         worker = spawn(
             ["-m", "gh_pool.worker"],
             {
-                "POOL_SERVER": url,
-                "POOL_TOKEN": WORKER_TOKEN,
+                "GH_POOL_SERVER": url,
+                "GH_POOL_WORKER_TOKEN": WORKER_TOKEN,
                 "WORKER_ID": "e2e-worker-1",
                 "SPOOL_DIR": str(root / "spool"),
                 "POOL_DEPS": str(root / "deps"),
@@ -125,8 +126,8 @@ def cli(live, *args, check=True):
         [sys.executable, "-m", "gh_pool.cli", *args],
         env={
             **os.environ,
-            "POOL_SERVER": live,
-            "POOL_CLIENT_TOKEN": CLIENT_TOKEN,
+            "GH_POOL_SERVER": live,
+            "GH_POOL_CLIENT_TOKEN": CLIENT_TOKEN,
             "OTEL_SDK_DISABLED": "true",
         },
         capture_output=True,

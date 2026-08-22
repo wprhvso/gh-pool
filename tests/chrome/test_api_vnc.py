@@ -6,13 +6,14 @@ import pytest
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
-from tests.test_tunnel import Pipe, RunnerEnd, ServerEnd, _desktop
 
 from gh_pool.browser.tunnel import Link
+from gh_pool.relay import vnc as api_vnc
 from gh_pool.relay.tunnel import Tunnels
-from gh_pool.server import api_vnc, auth
+from gh_pool.server import auth
 from gh_pool.server.app import install_errors
 from gh_pool.server.config import settings
+from tests.chrome.test_tunnel import Pipe, RunnerEnd, ServerEnd, _desktop
 
 TOKEN = "a-shared-secret"
 SESSION = uuid4()

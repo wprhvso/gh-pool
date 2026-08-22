@@ -31,9 +31,9 @@ def test_without_a_choice_a_browser_is_looked_for_by_name():
 
 
 def test_the_settings_come_from_the_environment(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("GH_CHROME_URL", "https://chrome.example.com")
-    monkeypatch.setenv("GH_CHROME_TOKEN", "a-secret")
-    monkeypatch.setenv("GH_CHROME_DISPLAY", "77")
+    monkeypatch.setenv("GH_POOL_SERVER", "https://chrome.example.com")
+    monkeypatch.setenv("GH_POOL_TOKEN", "a-secret")
+    monkeypatch.setenv("GH_POOL_DISPLAY", "77")
 
     read = Settings()
 
@@ -45,6 +45,6 @@ def test_the_settings_come_from_the_environment(monkeypatch: pytest.MonkeyPatch)
 def test_a_setting_nobody_declared_is_ignored_rather_than_fatal(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setenv("GH_CHROME_SOMETHING_ELSE", "1")
+    monkeypatch.setenv("GH_POOL_SOMETHING_ELSE", "1")
 
     assert Settings().display == 99

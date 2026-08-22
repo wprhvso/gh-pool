@@ -5,12 +5,12 @@ import time
 from pathlib import Path
 
 import pytest
-from tests.fleet.fake import FakePool, FakeScaleSet, job
-from tests.fleet.test_agent import JOB, _tarball
 
 from gh_pool.fleet.runners import controller as ctrl
 from gh_pool.fleet.runners.config import Server, Target
 from gh_pool.fleet.runners.models import Stats
+from tests.fleet.fake import FakePool, FakeScaleSet, job
+from tests.fleet.test_agent import JOB, _tarball
 
 VERSION = "2.999.0"
 

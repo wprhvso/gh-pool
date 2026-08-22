@@ -4,7 +4,7 @@ import sys
 
 import httpx
 import pytest
-from conftest import as_client, submit, take
+from tests.conftest import as_client, submit, take
 
 from gh_pool import server, worker
 

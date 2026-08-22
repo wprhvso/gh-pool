@@ -15,8 +15,8 @@ def run(session_id, url, token, workdir, spec, python):
     root = Path(workdir) / session_id
     root.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
-    env["GH_CHROME_URL"] = url
-    env["GH_CHROME_TOKEN"] = token
+    env["GH_POOL_SERVER"] = url
+    env["GH_POOL_TOKEN"] = token
     env["GH_CHROME_WORKDIR"] = str(root)
     subprocess.run(
         [

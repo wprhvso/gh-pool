@@ -1,6 +1,6 @@
 import pytest
 
-from gh_pool import sdk
+from gh_pool.client import task as sdk
 
 
 class FakePool:

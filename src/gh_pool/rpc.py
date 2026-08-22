@@ -12,9 +12,9 @@ from typing import IO, Any
 from urllib.parse import quote
 
 MARK = "::pool::"
-SERVER = os.getenv("POOL_SERVER", "http://localhost:8000").rstrip("/")
-TOKEN = os.getenv("POOL_TOKEN", "dev-worker")
-TASK = os.getenv("POOL_TASK")
+SERVER = os.getenv("GH_POOL_SERVER", "http://localhost:8000").rstrip("/")
+TOKEN = os.getenv("GH_POOL_WORKER_TOKEN", "dev-worker")
+TASK = os.getenv("GH_POOL_TASK")
 
 _lock = threading.Lock()
 _missing = object()

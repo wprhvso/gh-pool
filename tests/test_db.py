@@ -67,7 +67,7 @@ async def test_saving_nothing_touches_no_session(monkeypatch):
     def explode(*_, **__):
         raise AssertionError("the session should not have been opened")
 
-    monkeypatch.setattr(db.Session, "begin", explode)
+    monkeypatch.setattr(db.session(), "begin", explode)
 
     assert await db.save(db.Task, []) is None
 

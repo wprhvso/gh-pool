@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from tests.fleet.conftest import Clock, headers
-
 from gh_pool.fleet.runners.budget import Budget
 from gh_pool.fleet.runners.config import RATE_BLIND_WAIT, RATE_WINDOW
+from tests.fleet.conftest import Clock, headers
 
 
 def _fresh(clock: Clock, left: float, window: float = 3600.0) -> Budget:

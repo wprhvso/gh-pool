@@ -11,7 +11,7 @@ from typing import Any, NoReturn
 
 from gh_pool import rpc
 
-DEPS = Path(os.getenv("POOL_DEPS", "/tmp/pool-deps"))
+DEPS = Path(os.getenv("GH_POOL_DEPS", "/tmp/pool-deps"))
 
 
 def install(deps: list[str]) -> None:

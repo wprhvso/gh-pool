@@ -1,5 +1,5 @@
 import pytest
-from conftest import as_client, as_worker, submit, take
+from tests.conftest import as_client, as_worker, submit, take
 
 
 async def test_a_client_cannot_lease_work(client):

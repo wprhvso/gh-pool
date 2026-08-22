@@ -78,7 +78,7 @@ def free_display() -> int:
 
 
 def chrome_binary() -> str | None:
-    chosen = os.environ.get("GH_CHROME_TEST_CHROME")
+    chosen = os.environ.get("GH_POOL_TEST_CHROME")
     if chosen:
         return chosen if Path(chosen).exists() else None
     for name in CHROME_NAMES:
@@ -184,7 +184,7 @@ class Cluster:
 
 
 def start_cluster(base: Path) -> Cluster | None:
-    given = os.environ.get("GH_CHROME_TEST_DATABASE_URL")
+    given = os.environ.get("GH_POOL_TEST_DATABASE_URL")
     if given:
         return Cluster(given)
     binaries = _postgres_bin()
@@ -565,20 +565,20 @@ class LiveRunner:
             if not key.startswith("GH_CHROME_") and "proxy" not in key.lower()
         }
         env |= {
-            "GH_CHROME_URL": self._server_url,
-            "GH_CHROME_TOKEN": self._token,
-            "GH_CHROME_WORKDIR": str(self.workdir),
-            "GH_CHROME_DISPLAY": str(self.display),
-            "GH_CHROME_DEBUG_PORT": str(free_port()),
-            "GH_CHROME_VNC_PORT": str(free_port()),
-            "GH_CHROME_VNC": "1" if self._vnc else "0",
-            "GH_CHROME_HEARTBEAT_INTERVAL": str(HEARTBEAT_INTERVAL),
-            "GH_CHROME_UPLOAD_ALLOW_PRIVATE": "1",
+            "GH_POOL_SERVER": self._server_url,
+            "GH_POOL_TOKEN": self._token,
+            "GH_POOL_WORKDIR": str(self.workdir),
+            "GH_POOL_DISPLAY": str(self.display),
+            "GH_POOL_DEBUG_PORT": str(free_port()),
+            "GH_POOL_VNC_PORT": str(free_port()),
+            "GH_POOL_VNC": "1" if self._vnc else "0",
+            "GH_POOL_HEARTBEAT_INTERVAL": str(HEARTBEAT_INTERVAL),
+            "GH_POOL_UPLOAD_ALLOW_PRIVATE": "1",
             "NO_PROXY": "*",
         }
         chrome = chrome_binary()
         if chrome is not None:
-            env["GH_CHROME_CHROME_BINARY"] = chrome
+            env["GH_POOL_CHROME_BINARY"] = chrome
         return env | self._extra
 
 

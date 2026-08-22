@@ -2,9 +2,9 @@ import asyncio
 import json
 
 import pytest
-from tests.chrome.e2e.site import Site
 
 from gh_pool.client import Rule, Session, Tap
+from tests.chrome.e2e.site import Site
 
 pytestmark = pytest.mark.browser
 

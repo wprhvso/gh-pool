@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 import pytest
+
+from gh_pool.client import Session
 from tests.chrome.e2e.site import Site
 from tests.chrome.e2e.stack import (
     TOKEN,
@@ -16,11 +18,9 @@ from tests.chrome.e2e.stack import (
     start_cluster,
 )
 
-from gh_pool.client import Session
-
 NO_DATABASE = (
     "no postgres to test against: install one, or point "
-    "GH_CHROME_TEST_DATABASE_URL at a cluster"
+    "GH_POOL_TEST_DATABASE_URL at a cluster"
 )
 
 

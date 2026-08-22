@@ -1,9 +1,9 @@
 import pytest
-from tests.chrome.e2e.site import Site
-from tests.chrome.e2e.stack import TOKEN, Stack
 
 import gh_pool.client
 from gh_pool.client import ProfileInfo
+from tests.chrome.e2e.site import Site
+from tests.chrome.e2e.stack import TOKEN, Stack
 
 pytestmark = pytest.mark.browser
 

@@ -1,12 +1,13 @@
 import os
 import tempfile
 
-os.environ.setdefault("DATA_DIR", tempfile.mkdtemp(prefix="pool-tests-"))
+os.environ.setdefault("GH_POOL_DATA_DIR", tempfile.mkdtemp(prefix="pool-tests-"))
 
 import httpx
 import pytest
 
-from gh_pool import db, server
+from gh_pool.db import tasks as db
+from gh_pool.server import tasks as server
 
 WORKER = "dev-worker"
 CLIENT = "dev-client"

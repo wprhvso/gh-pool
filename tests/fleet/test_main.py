@@ -5,11 +5,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tests.fleet.fake import FakePool
 
 from gh_pool.fleet.runners import __main__ as cli_mod
 from gh_pool.fleet.runners.config import Server, Target
 from gh_pool.fleet.runners.errors import RunnerError
+from tests.fleet.fake import FakePool
 
 CONFIG = """
 label = "pool"
@@ -101,7 +101,7 @@ def test_repos_from_the_command_line_use_the_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("GH_TOKEN", "ghp_env")
-    monkeypatch.setenv("POOL_SERVER", "https://pool.env/")
+    monkeypatch.setenv("GH_POOL_SERVER", "https://pool.env/")
     monkeypatch.setenv("RUNNERS_LABEL", "своя")
 
     targets, server = cli_mod._targets(

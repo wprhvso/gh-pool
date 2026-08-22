@@ -128,8 +128,8 @@ def test_a_missing_config_says_so(tmp_path: Path) -> None:
 def test_the_pool_falls_back_to_the_environment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("POOL_SERVER", "https://pool.env/")
-    monkeypatch.setenv("POOL_CLIENT_TOKEN", "из окружения")
+    monkeypatch.setenv("GH_POOL_SERVER", "https://pool.env/")
+    monkeypatch.setenv("GH_POOL_CLIENT_TOKEN", "из окружения")
     path = _write(tmp_path, '[repos]\n"alice/app" = "ghp"\n')
 
     _targets, server = load(path)

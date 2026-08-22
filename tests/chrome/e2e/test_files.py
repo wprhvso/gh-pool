@@ -1,11 +1,11 @@
 from pathlib import Path
 
 import pytest
-from tests.chrome.e2e.site import ASSET, Site
-from tests.chrome.e2e.stack import Stack, Watch
 
 from gh_pool.client import EventType, RunnerError, Session, Topic
 from gh_pool.protocol import Download
+from tests.chrome.e2e.site import ASSET, Site
+from tests.chrome.e2e.stack import Stack, Watch
 
 pytestmark = pytest.mark.browser
 
@@ -48,7 +48,7 @@ async def test_a_file_from_a_url_lands_in_the_file_input(live: Session, site: Si
 async def test_an_upload_url_the_runner_should_not_reach_is_refused(
     stack: Stack, site: Site, url: str, desktop: None
 ):
-    session = await stack.live(runner_env={"GH_CHROME_UPLOAD_ALLOW_PRIVATE": "0"})
+    session = await stack.live(runner_env={"GH_POOL_UPLOAD_ALLOW_PRIVATE": "0"})
     await session.goto(site.url("/upload"))
 
     with pytest.raises(RunnerError, match="upload will not fetch"):

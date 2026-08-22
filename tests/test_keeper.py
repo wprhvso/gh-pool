@@ -5,7 +5,7 @@ import urllib.error
 
 import pytest
 
-from gh_pool import keeper
+from gh_pool.fleet import workers as keeper
 
 
 class FakeRepo(keeper.Repo):
@@ -234,7 +234,7 @@ def fake_pool(monkeypatch, listing, up=9999):
     monkeypatch.setattr(keeper.urllib.request, "urlopen", urlopen)
 
 
-POOL = {"POOL_SERVER": "http://pool"}
+POOL = {"GH_POOL_SERVER": "http://pool"}
 
 
 def test_the_workers_are_matched_to_their_runs_by_id(monkeypatch):
@@ -315,8 +315,8 @@ def test_the_client_token_is_not_propagated_to_repositories(tmp_path):
     _, _, pool, client = keeper.load(cfg)
 
     assert client == "client"
-    assert "POOL_CLIENT_TOKEN" not in pool
-    assert pool == {"POOL_SERVER": "http://pool", "POOL_TOKEN": "worker"}
+    assert "GH_POOL_CLIENT_TOKEN" not in pool
+    assert pool == {"GH_POOL_SERVER": "http://pool", "GH_POOL_WORKER_TOKEN": "worker"}
 
 
 def test_a_run_still_inside_the_bootstrap_window_is_not_called_a_zombie():

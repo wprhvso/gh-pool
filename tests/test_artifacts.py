@@ -2,7 +2,7 @@ import asyncio
 import contextlib
 import hashlib
 
-from conftest import as_client, as_worker
+from tests.conftest import as_client, as_worker
 
 from gh_pool import server
 

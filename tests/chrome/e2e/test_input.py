@@ -1,8 +1,6 @@
 from typing import Any
 
 import pytest
-from tests.chrome.e2e.site import Site
-from tests.chrome.e2e.stack import Stack
 
 from gh_pool.client import (
     ElementIntercepted,
@@ -11,6 +9,8 @@ from gh_pool.client import (
     Session,
     Speed,
 )
+from tests.chrome.e2e.site import Site
+from tests.chrome.e2e.stack import Stack
 
 pytestmark = pytest.mark.browser
 

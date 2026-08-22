@@ -2,7 +2,6 @@ import asyncio
 
 import httpx
 import pytest
-from tests.chrome.e2e.stack import Stack, expression_of, until
 
 from gh_pool.client import (
     ElementNotFound,
@@ -13,6 +12,7 @@ from gh_pool.client import (
     TooManySessions,
 )
 from gh_pool.protocol import ErrorCode, Method
+from tests.chrome.e2e.stack import Stack, expression_of, until
 
 
 async def _status(api: httpx.AsyncClient, session_id: object) -> str:
