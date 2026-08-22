@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>gh-chrome — {{SESSION_ID}}</title>
+    <style>
+      :root { color-scheme: dark; --bar: 2.75rem; }
+      body { margin: 0; background: #111; color: #eee; font: 14px system-ui, sans-serif; }
+      header { display: flex; gap: 1rem; align-items: center; height: var(--bar); padding: 0 1rem; box-sizing: border-box; }
+      header code { color: #9ab; }
+      nav { display: flex; gap: 0.25rem; }
+      button { font: inherit; color: #9ab; background: #1b1b1b; border: 1px solid #2c2c2c; border-radius: 4px; padding: 0.2rem 0.7rem; cursor: pointer; }
+      button[aria-selected="true"] { color: #111; background: #9ab; border-color: #9ab; }
+      button:disabled { opacity: 0.4; cursor: default; }
+      a { color: #9ab; }
+      #status { margin-left: auto; color: #9ab; }
+      main { position: relative; height: calc(100vh - var(--bar)); background: #000; }
+      iframe, video { display: block; width: 100%; height: 100%; border: 0; background: #000; }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>gh-chrome</strong>
+      <code>{{SESSION_ID}}</code>
+      <nav>
+        <button id="live-tab" aria-selected="true">live desktop</button>
+        <button id="recording-tab" aria-selected="false">recording</button>
+      </nav>
+      <a id="detach" href="#" target="_blank" rel="noopener" hidden>open on its own</a>
+      <span id="status">connecting…</span>
+    </header>
+    <main>
+      <iframe id="desktop" title="live desktop" allow="clipboard-read; clipboard-write" allowfullscreen></iframe>
+      <video id="player" controls autoplay muted hidden></video>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js" crossorigin="anonymous"></script>
+    <script>
+      const id = "{{SESSION_ID}}";
+      const status = document.getElementById("status");
+      const desktop = document.getElementById("desktop");
+      const detach = document.getElementById("detach");
+      const video = document.getElementById("player");
+      const tabs = {
+        live: document.getElementById("live-tab"),
+        recording: document.getElementById("recording-tab"),
+      };
+      let player = null;
+      let current = "live";
+
+      function select(pane) {
+        current = pane;
+        for (const [name, tab] of Object.entries(tabs)) {
+          tab.setAttribute("aria-selected", String(name === pane));
+        }
+        desktop.hidden = pane !== "live";
+        detach.hidden = pane !== "live" || !desktop.src;
+        video.hidden = pane !== "recording";
+        if (pane === "recording") startPlayer();
+        say();
+      }
+
+      function startPlayer() {
+        if (player) return;
+        player = dashjs.MediaPlayer().create();
+        player.updateSettings({
+          streaming: {
+            delay: { liveDelay: 3 },
+            liveCatchup: { enabled: true },
+            retryAttempts: { MPD: 30, MediaSegment: 10 },
+          },
+        });
+        player.initialize(video, `/s/${id}/manifest.mpd`, true);
+        player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, () => say(player.isDynamic() ? "live" : "recorded"));
+        player.on(dashjs.MediaPlayer.events.ERROR, (e) => say("error: " + (e.error?.message ?? "unknown")));
+        player.on(dashjs.MediaPlayer.events.PLAYBACK_ENDED, () => say("ended"));
+      }
+
+      let recordingStatus = "loading…";
+      let desktopStatus = "waiting for the desktop…";
+
+      function say(recording) {
+        if (recording !== undefined) recordingStatus = recording;
+        status.textContent = current === "live" ? desktopStatus : recordingStatus;
+      }
+
+      // The KasmVNC client resolves its websocket against the origin root, so it is
+      // told where this session lives; it also reconnects on its own, which is why a
+      // blip has to persist before the frame is thrown away and reloaded.
+      const client = new URLSearchParams({
+        path: `s/${id}/vnc/websockify`,
+        resize: "scale",
+        reconnect: "true",
+        reconnect_delay: "2000",
+        reconnect_retries: "1000",
+      });
+      const GIVE_UP = 4;
+
+      async function watch() {
+        let attached = false;
+        let missed = 0;
+        for (;;) {
+          try {
+            const response = await fetch(`/s/${id}/vnc.json`, { cache: "no-store" });
+            const connected = response.ok && (await response.json()).connected;
+            missed = connected ? 0 : missed + 1;
+            if (connected && !attached) {
+              attached = true;
+              desktop.src = detach.href = `/s/${id}/vnc/?${client}`;
+            } else if (attached && missed >= GIVE_UP) {
+              attached = false;
+              desktop.removeAttribute("src");
+            }
+            detach.hidden = !attached || current !== "live";
+            desktopStatus = connected ? "connected" : "waiting for the desktop…";
+          } catch {
+            desktopStatus = "server unreachable";
+          }
+          say();
+          await new Promise((done) => setTimeout(done, attached ? 5000 : 1500));
+        }
+      }
+
+      tabs.live.addEventListener("click", () => select("live"));
+      tabs.recording.addEventListener("click", () => select("recording"));
+      select("live");
+      watch();
+    </script>
+  </body>
+</html>
