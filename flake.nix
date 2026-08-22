@@ -1,21 +1,67 @@
 {
   description = "Пул задач на раннерах GitHub Actions, браузерные сессии и флот раннеров";
 
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+    pyproject-nix = {
+      url = "github:pyproject-nix/pyproject.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    uv2nix = {
+      url = "github:pyproject-nix/uv2nix";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    pyproject-build-systems = {
+      url = "github:pyproject-nix/build-system-pkgs";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.uv2nix.follows = "uv2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
 
   outputs =
-    { nixpkgs, ... }:
+    {
+      self,
+      nixpkgs,
+      pyproject-nix,
+      uv2nix,
+      pyproject-build-systems,
+      ...
+    }:
     let
       inherit (nixpkgs) lib;
 
-      systems = [
-        "x86_64-linux"
-        "aarch64-linux"
-      ];
+      forAllSystems = lib.genAttrs lib.systems.flakeExposed;
 
-      forAllSystems = lib.genAttrs systems;
+      workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
+      overlay = workspace.mkPyprojectOverlay { sourcePreference = "wheel"; };
+      deps = workspace.deps.optionals;
+
+      pythonSet =
+        pkgs:
+        (pkgs.callPackage pyproject-nix.build.packages { python = pkgs.python314; }).overrideScope (
+          lib.composeManyExtensions [
+            pyproject-build-systems.overlays.wheel
+            overlay
+          ]
+        );
     in
     {
+      packages = forAllSystems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        rec {
+          gh-pool = (pythonSet pkgs).mkVirtualEnv "gh-pool-env" deps;
+          default = gh-pool;
+        }
+      );
+
       devShells = forAllSystems (
         system:
         let
@@ -63,6 +109,13 @@
         }
       );
 
-      formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.nixfmt);
+      nixosModules = rec {
+        client = import ./nix/client.nix self;
+        default = client;
+      };
+
+      checks = forAllSystems (system: {
+        inherit (self.packages.${system}) gh-pool;
+      });
     };
 }
