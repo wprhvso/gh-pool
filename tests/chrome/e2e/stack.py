@@ -171,8 +171,13 @@ class Server:
         self._patch.setattr(server_settings, "segment_seconds", segment_seconds)
         self._patch.setattr(server_settings, "max_upload", max_upload)
         self._patch.setattr(pool, "dispatch", self._dispatch)
-        self._background = Background(_behind_gateway())
-        self._background.start()
+        try:
+            self._background = Background(_behind_gateway())
+            self._background.start()
+        except BaseException:
+            self._background = None
+            self._patch.undo()
+            raise
         self._patch.setattr(server_settings, "public_url", self.url)
 
     def restart(self) -> None:

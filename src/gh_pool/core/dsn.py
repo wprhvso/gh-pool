@@ -11,26 +11,14 @@ SCHEMES = (
 )
 
 
-def _split(raw: str) -> tuple[str, str]:
-    for scheme in SCHEMES:
-        if raw.startswith(scheme):
-            return scheme, raw[len(scheme) :]
-    return "", raw
-
-
-def sqlalchemy(raw: str) -> str:
-    scheme, rest = _split(raw)
-    if not scheme:
-        return raw
-    if scheme == "postgresql+asyncpg://":
-        log.warning(
-            "URL базы записан под asyncpg — читаю его как %s://; "
-            "поправьте переменную окружения",
-            DRIVER,
-        )
-    return f"{DRIVER}://{rest}"
-
-
 def libpq(raw: str) -> str:
-    scheme, rest = _split(raw)
-    return f"postgresql://{rest}" if scheme else raw
+    for scheme in SCHEMES:
+        if not raw.startswith(scheme):
+            continue
+        if scheme == "postgresql+asyncpg://":
+            log.warning(
+                "адрес базы записан под asyncpg — драйвер давно psycopg; "
+                "поправьте переменную окружения"
+            )
+        return f"postgresql://{raw[len(scheme) :]}"
+    return raw
