@@ -11,7 +11,7 @@ deps:
     ENV UV_LINK_MODE=copy
     ENV UV_PYTHON_DOWNLOADS=never
     WORKDIR /app
-    COPY pyproject.toml uv.lock ./
+    COPY pyproject.toml uv.lock README.md ./
     RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --extra server --extra relay --no-dev --no-install-project
 
 build:
