@@ -1,5 +1,6 @@
 import os
 import tempfile
+import uuid
 
 os.environ.setdefault("GH_POOL_DATA_DIR", tempfile.mkdtemp(prefix="pool-tests-"))
 
@@ -8,9 +9,31 @@ import pytest
 
 from gh_pool.db import tasks as db
 from gh_pool.server import tasks as server
+from tests.postgres import NO_DATABASE, Cluster, start_cluster
 
 WORKER = "dev-worker"
 CLIENT = "dev-client"
+
+
+@pytest.fixture(scope="session")
+def cluster(tmp_path_factory):
+    started = start_cluster(tmp_path_factory.mktemp("postgres"))
+    if started is None:
+        pytest.skip(NO_DATABASE)
+    try:
+        yield started
+    finally:
+        started.stop()
+
+
+@pytest.fixture
+def database(cluster: Cluster):
+    name = f"gh_pool_test_{uuid.uuid4().hex[:12]}"
+    url = cluster.create(name)
+    try:
+        yield url
+    finally:
+        cluster.drop(name)
 
 
 class FakeDb:

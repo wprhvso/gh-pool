@@ -34,7 +34,8 @@ def test_a_server_whose_database_answers_is_healthy(probe):
         answer = client.get("/healthz")
 
     assert answer.status_code == 200
-    assert answer.json() == {"status": "ok"}
+    assert answer.json()["status"] == "ok"
+    assert answer.json()["ok"] is True
     assert database.probes == 1
 
 
@@ -47,7 +48,8 @@ def test_a_server_whose_database_went_away_says_so(probe, failure: Exception):
         answer = client.get("/healthz")
 
     assert answer.status_code == 503
-    assert answer.json() == {"status": "down"}
+    assert answer.json()["status"] == "down"
+    assert answer.json()["ok"] is False
 
 
 def test_the_probe_asks_for_no_credentials(probe):

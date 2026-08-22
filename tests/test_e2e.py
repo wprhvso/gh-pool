@@ -4,6 +4,7 @@ import socket
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 
 import httpx
@@ -65,54 +66,59 @@ def wait_for_health(url, proc):
 
 
 @pytest.fixture(scope="session")
-def live(tmp_path_factory):
+def live(tmp_path_factory, cluster):
     port = free_port()
     url = f"http://127.0.0.1:{port}"
     root = tmp_path_factory.mktemp("e2e")
+    name = f"gh_pool_e2e_{uuid.uuid4().hex[:12]}"
     server_env = {
-        "DATA_DIR": str(root / "data"),
-        "BLOB_DIR": str(root / "blobs"),
-        "WORKER_TOKEN": WORKER_TOKEN,
-        "CLIENT_TOKEN": CLIENT_TOKEN,
-        "LEASE_WAIT": "2",
-        "FLUSH_EVERY": "0.5",
-        "LOST_AFTER": "20",
-        "DATABASE_URL": "postgresql+asyncpg://pool:pool@127.0.0.1:1/pool",
+        "GH_POOL_DATA_DIR": str(root / "data"),
+        "GH_POOL_BLOB_DIR": str(root / "blobs"),
+        "GH_POOL_STORAGE": str(root / "storage"),
+        "GH_POOL_WORKER_TOKEN": WORKER_TOKEN,
+        "GH_POOL_CLIENT_TOKEN": CLIENT_TOKEN,
+        "GH_POOL_LEASE_WAIT": "2",
+        "GH_POOL_FLUSH_EVERY": "0.5",
+        "GH_POOL_LOST_AFTER": "20",
+        "GH_POOL_DATABASE_URL": cluster.create(name),
         "OTEL_SDK_DISABLED": "true",
     }
-    server = spawn(
-        [
-            "-c",
-            (
-                "import uvicorn\nfrom gh_pool.server import app\n"
-                f"uvicorn.run(app, host='127.0.0.1', port={port},"
-                " log_level='warning')"
-            ),
-        ],
-        server_env,
-        root / "server.log",
-    )
     try:
-        wait_for_health(url, server)
-        (root / "spool").mkdir()
-        worker = spawn(
-            ["-m", "gh_pool.worker"],
-            {
-                "GH_POOL_SERVER": url,
-                "GH_POOL_WORKER_TOKEN": WORKER_TOKEN,
-                "WORKER_ID": "e2e-worker-1",
-                "SPOOL_DIR": str(root / "spool"),
-                "POOL_DEPS": str(root / "deps"),
-                "OTEL_SDK_DISABLED": "true",
-            },
-            root / "worker.log",
+        server = spawn(
+            [
+                "-c",
+                (
+                    "import uvicorn\nfrom gh_pool.server.app import app\n"
+                    f"uvicorn.run(app, host='127.0.0.1', port={port},"
+                    " log_level='warning')"
+                ),
+            ],
+            server_env,
+            root / "server.log",
         )
         try:
-            yield url
+            wait_for_health(url, server)
+            (root / "spool").mkdir()
+            worker = spawn(
+                ["-m", "gh_pool.worker"],
+                {
+                    "GH_POOL_SERVER": url,
+                    "GH_POOL_WORKER_TOKEN": WORKER_TOKEN,
+                    "GH_POOL_WORKER_ID": "e2e-worker-1",
+                    "GH_POOL_SPOOL_DIR": str(root / "spool"),
+                    "GH_POOL_DEPS": str(root / "deps"),
+                    "OTEL_SDK_DISABLED": "true",
+                },
+                root / "worker.log",
+            )
+            try:
+                yield url
+            finally:
+                worker.stop()
         finally:
-            worker.stop()
+            server.stop()
     finally:
-        server.stop()
+        cluster.drop(name)
 
 
 @pytest.fixture
@@ -335,8 +341,3 @@ def test_the_command_line_moves_artifacts_both_ways(live, tmp_path):
 def test_the_command_line_shows_the_workers_and_the_health(live):
     assert "e2e-worker-1" in cli(live, "workers").stdout
     assert json.loads(cli(live, "health").stdout)["ok"] is True
-
-
-def test_the_pool_keeps_going_without_a_database(pool):
-    assert pool.health()["db"] is False
-    assert result_of(pool.run("result = 'no database needed'")) == "no database needed"

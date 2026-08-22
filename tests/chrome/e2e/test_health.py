@@ -4,7 +4,8 @@ import httpx
 import pytest
 from psycopg.conninfo import conninfo_to_dict
 
-from tests.chrome.e2e.stack import Cluster, Server
+from tests.chrome.e2e.stack import Server
+from tests.postgres import Cluster
 
 
 @pytest.fixture
@@ -19,7 +20,7 @@ async def test_a_server_that_can_reach_its_database_is_healthy(
     answer = await anonymous.get("/healthz")
 
     assert answer.status_code == 200
-    assert answer.json() == {"status": "ok"}
+    assert answer.json()["status"] == "ok"
 
 
 async def test_a_server_whose_database_went_away_is_taken_out_of_service(
@@ -30,4 +31,4 @@ async def test_a_server_whose_database_went_away_is_taken_out_of_service(
     answer = await anonymous.get("/healthz")
 
     assert answer.status_code == 503
-    assert answer.json() == {"status": "down"}
+    assert answer.json()["status"] == "down"

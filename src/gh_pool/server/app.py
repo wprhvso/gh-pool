@@ -145,7 +145,7 @@ def create_app() -> FastAPI:
     app.include_router(api_client.profiles_router)
     app.include_router(api_runner.router)
     app.include_router(api_player.router)
-    app.include_router(tasks.app.router)
+    app.include_router(tasks.router)
     return app
 
 

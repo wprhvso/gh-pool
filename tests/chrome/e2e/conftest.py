@@ -9,19 +9,7 @@ import pytest
 
 from gh_pool.client import Session
 from tests.chrome.e2e.site import Site
-from tests.chrome.e2e.stack import (
-    TOKEN,
-    Cluster,
-    Server,
-    Stack,
-    missing_desktop_tool,
-    start_cluster,
-)
-
-NO_DATABASE = (
-    "no postgres to test against: install one, or point "
-    "GH_POOL_TEST_DATABASE_URL at a cluster"
-)
+from tests.chrome.e2e.stack import TOKEN, Server, Stack, missing_desktop_tool
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -32,17 +20,6 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers", "patient_watchdog: wants a server that does not hurry a session"
     )
-
-
-@pytest.fixture(scope="session")
-def cluster(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Cluster]:
-    started = start_cluster(tmp_path_factory.mktemp("postgres"))
-    if started is None:
-        pytest.skip(NO_DATABASE)
-    try:
-        yield started
-    finally:
-        started.stop()
 
 
 @pytest.fixture(scope="session")
@@ -60,16 +37,6 @@ def fresh_site(site: Site) -> Iterator[None]:
     site.reset()
     yield
     site.reset()
-
-
-@pytest.fixture
-def database(cluster: Cluster) -> Iterator[str]:
-    name = f"gh_chrome_e2e_{uuid.uuid4().hex[:12]}"
-    url = cluster.create(name)
-    try:
-        yield url
-    finally:
-        cluster.drop(name)
 
 
 @pytest.fixture

@@ -1,14 +1,17 @@
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Literal
 
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, FastAPI, status
+from fastapi.responses import Response
+from pydantic import BaseModel
 
 from gh_pool.relay import vnc
 from gh_pool.relay.tunnel import Tunnels
 from gh_pool.server.config import settings
 from gh_pool.server.db import Database
+from gh_pool.server.deps import Db, Tn
 from gh_pool.server.events import Events
 from gh_pool.server.sessions import Sessions
 
@@ -35,24 +38,28 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await db.close()
 
 
+class Health(BaseModel):
+    status: Literal["ok", "down"]
+    tunnels: int
+
+
+health = APIRouter(tags=["health"])
+
+
+@health.get("/healthz")
+async def healthz(db: Db, tunnels: Tn, response: Response) -> Health:
+    try:
+        await db.probe()
+    except Exception:
+        log.warning("the database did not answer", exc_info=True)
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return Health(status="down", tunnels=tunnels.count())
+    return Health(status="ok", tunnels=tunnels.count())
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="gh-pool-relay", lifespan=lifespan)
-
-    @app.get("/healthz")
-    async def healthz() -> JSONResponse:
-        """Готовность не зависит от наличия туннелей.
-
-        Пустой relay полностью работоспособен — он просто ещё никому не
-        понадобился. Число туннелей отдаётся рядом, оно нужно для драйна:
-        по нему видно, можно ли гасить процесс, не оборвав живую сессию.
-        """
-        try:
-            await app.state.db.probe()
-        except Exception:
-            log.exception("healthz: база не отвечает")
-            return JSONResponse({"status": "down"}, status_code=503)
-        return JSONResponse({"status": "ok", "tunnels": app.state.tunnels.count()})
-
+    app.include_router(health)
     app.include_router(vnc.router)
     return app
 

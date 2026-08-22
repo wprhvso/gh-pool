@@ -6,10 +6,10 @@ from sqlalchemy import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy.pool import NullPool
 
-from gh_pool.db import base
+from gh_pool.db import base, sessions, tasks
 from gh_pool.db import engine as engine_mod
-from gh_pool.db import sessions as _sessions  # noqa: F401
-from gh_pool.db import tasks as _tasks  # noqa: F401
+
+REGISTERED = (sessions, tasks)
 
 config = context.config
 

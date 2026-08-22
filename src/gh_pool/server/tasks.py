@@ -9,11 +9,11 @@ from contextlib import asynccontextmanager
 from importlib import metadata
 from io import BufferedWriter
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, TypedDict
 
 import structlog
 from anyio import to_thread
-from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi import APIRouter, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from opentelemetry import metrics
 from opentelemetry.metrics import CallbackOptions, Observation
@@ -324,10 +324,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await flush()
 
 
-app = FastAPI(lifespan=lifespan)
+router = APIRouter()
+health = APIRouter()
 
 
-@app.post("/v1/lease")
+@router.post("/v1/lease")
 async def lease(
     request: Request, authorization: Annotated[str | None, Header()] = None
 ) -> Any:
@@ -352,7 +353,7 @@ async def lease(
             return Response(status_code=204)
 
 
-@app.post("/v1/tasks/{tid}/heartbeat")
+@router.post("/v1/tasks/{tid}/heartbeat")
 async def heartbeat(
     tid: str,
     x_lease_token: Annotated[str | None, Header()] = None,
@@ -368,7 +369,7 @@ async def heartbeat(
     return {"cancel": bool(t.get("cancel_requested"))}
 
 
-@app.post("/v1/tasks/{tid}/events")
+@router.post("/v1/tasks/{tid}/events")
 async def append_events(
     tid: str,
     request: Request,
@@ -399,7 +400,7 @@ async def append_events(
         return {"offset": size, "accepting": size < EVENT_CAP}
 
 
-@app.post("/v1/tasks/{tid}/complete")
+@router.post("/v1/tasks/{tid}/complete")
 async def complete(
     tid: str,
     request: Request,
@@ -437,7 +438,7 @@ async def complete(
     return {"ok": True, "status": status}
 
 
-@app.post("/v1/tasks")
+@router.post("/v1/tasks")
 async def create_task(
     request: Request, authorization: Annotated[str | None, Header()] = None
 ) -> dict[str, str]:
@@ -466,7 +467,7 @@ async def create_task(
     return {"task_id": tid}
 
 
-@app.get("/v1/tasks")
+@router.get("/v1/tasks")
 async def list_tasks(
     status: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query()] = 100,
@@ -481,7 +482,7 @@ async def list_tasks(
     return [public(t) for t in rows[:limit]]
 
 
-@app.get("/v1/tasks/{tid}")
+@router.get("/v1/tasks/{tid}")
 async def task_status(
     tid: str, authorization: Annotated[str | None, Header()] = None
 ) -> dict[str, Any]:
@@ -489,7 +490,7 @@ async def task_status(
     return public(await find(tid))
 
 
-@app.get("/v1/tasks/{tid}/events")
+@router.get("/v1/tasks/{tid}/events")
 async def read_events(
     tid: str,
     offset: Annotated[int, Query()] = 0,
@@ -519,7 +520,7 @@ async def read_events(
     )
 
 
-@app.post("/v1/tasks/{tid}/cancel")
+@router.post("/v1/tasks/{tid}/cancel")
 async def cancel(
     tid: str, authorization: Annotated[str | None, Header()] = None
 ) -> dict[str, Any]:
@@ -539,7 +540,7 @@ async def cancel(
     return {"status": t["status"], "note": "already terminal"}
 
 
-@app.post("/v1/tasks/{tid}/retry")
+@router.post("/v1/tasks/{tid}/retry")
 async def retry(
     tid: str, authorization: Annotated[str | None, Header()] = None
 ) -> dict[str, str]:
@@ -569,7 +570,7 @@ def _write(f: BufferedWriter, digest: "hashlib._Hash", chunk: bytes) -> None:
     f.write(chunk)
 
 
-@app.put("/v1/artifacts/{key:path}")
+@router.put("/v1/artifacts/{key:path}")
 async def put_artifact(
     key: str,
     request: Request,
@@ -612,7 +613,7 @@ async def put_artifact(
     return row
 
 
-@app.get("/v1/artifacts")
+@router.get("/v1/artifacts")
 async def list_artifacts(
     prefix: Annotated[str, Query()] = "",
     limit: Annotated[int, Query()] = 100,
@@ -626,7 +627,7 @@ async def list_artifacts(
     return sorted(live + stored, key=lambda b: b["created_at"], reverse=True)[:limit]
 
 
-@app.get("/v1/artifacts/{key:path}")
+@router.get("/v1/artifacts/{key:path}")
 async def get_artifact(
     key: str, authorization: Annotated[str | None, Header()] = None
 ) -> FileResponse:
@@ -637,7 +638,7 @@ async def get_artifact(
     return FileResponse(p, filename=Path(key).name or "artifact")
 
 
-@app.delete("/v1/artifacts/{key:path}")
+@router.delete("/v1/artifacts/{key:path}")
 async def del_artifact(
     key: str, authorization: Annotated[str | None, Header()] = None
 ) -> dict[str, bool]:
@@ -650,7 +651,7 @@ async def del_artifact(
     return {"ok": True}
 
 
-@app.get("/v1/workers")
+@router.get("/v1/workers")
 async def workers(
     authorization: Annotated[str | None, Header()] = None,
 ) -> list[dict[str, Any]]:
@@ -667,21 +668,41 @@ async def workers(
     ]
 
 
-@app.get("/healthz")
-async def healthz() -> dict[str, Any]:
-    counts = {}
+class Report(TypedDict):
+    ok: bool
+    tasks: dict[str, int]
+    queue: int
+    workers: int
+    started_at: float
+    uptime: float
+    pending_writes: int
+    db: bool
+
+
+def report() -> Report:
+    counts: dict[str, int] = {}
     for t in TASKS.values():
         counts[t["status"]] = counts.get(t["status"], 0) + 1
-    return {
-        "ok": True,
-        "tasks": counts,
-        "queue": len(QUEUE),
-        "workers": len(WORKERS),
-        "started_at": STARTED,
-        "uptime": round(time.time() - STARTED, 1),
-        "pending_writes": len(DIRTY) + len(DIRTY_BLOBS),
-        "db": state["db"],
-    }
+    return Report(
+        ok=True,
+        tasks=counts,
+        queue=len(QUEUE),
+        workers=len(WORKERS),
+        started_at=STARTED,
+        uptime=round(time.time() - STARTED, 1),
+        pending_writes=len(DIRTY) + len(DIRTY_BLOBS),
+        db=state["db"],
+    )
+
+
+@health.get("/healthz")
+async def healthz() -> Report:
+    return report()
+
+
+app = FastAPI(lifespan=lifespan)
+app.include_router(router)
+app.include_router(health)
 
 
 def version() -> str:
@@ -707,7 +728,7 @@ def main() -> None:
     setup(observability("pool-server", version()))
     instrument_fastapi(app)
     instrument_asyncpg()
-    instrument_sqlalchemy(db.engine)
+    instrument_sqlalchemy(db.engine())
     instrument_runtime()
     log.info("starting_pool_server", version=version())
     try:

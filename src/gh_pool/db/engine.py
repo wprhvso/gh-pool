@@ -2,7 +2,12 @@ import logging
 import os
 from functools import cache
 
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 log = logging.getLogger(__name__)
 
@@ -43,7 +48,7 @@ def engine() -> AsyncEngine:
 
 
 @cache
-def session() -> async_sessionmaker:
+def session() -> async_sessionmaker[AsyncSession]:
     return async_sessionmaker(engine(), expire_on_commit=False)
 
 
