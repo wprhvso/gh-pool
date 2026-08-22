@@ -28,7 +28,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: uv sync --frozen
-      - run: echo "$PWD/.venv/bin" >>"$GITHUB_PATH"
       - run: pytest --ignore=tests/chrome/e2e --ignore=tests/test_e2e.py
 
   e2e:
@@ -36,5 +35,4 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: uv sync --frozen
-      - run: echo "$PWD/.venv/bin" >>"$GITHUB_PATH"
       - run: pytest tests/chrome/e2e tests/test_e2e.py
