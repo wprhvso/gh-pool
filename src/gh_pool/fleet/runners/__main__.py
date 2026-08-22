@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib.metadata
 import logging
 import sys
 import threading
@@ -26,7 +25,7 @@ from gh_pool.fleet.runners.config import (
 from gh_pool.fleet.runners.controller import install_stop_handler, run
 from gh_pool.fleet.runners.errors import RunnerError
 from gh_pool.fleet.runners.gh import preflight, release_version
-from gh_pool.obs import version
+from gh_pool.obs import version as package_version
 from gh_pool.fleet.runners.http import backoff
 from gh_pool.fleet.runners.pool import Pool
 
@@ -42,7 +41,7 @@ _EXIT_ERROR = 1
 
 
 def _observe() -> None:
-    config = from_env("pool-runners", service_version=version())
+    config = from_env("pool-runners", service_version=package_version())
     if debug():
         config = replace(config, log_level="DEBUG")
     setup(config)
@@ -119,7 +118,7 @@ def _check(targets: list[Target], server: Server) -> int:
     for target in targets:
         try:
             info = preflight(target)
-            version = target.version or releaseversion()
+            version = target.version or release_version()
             log.info(
                 "%s: доступ есть, %s, метка %r, раннеров до %s, версия %s",
                 target.slug,

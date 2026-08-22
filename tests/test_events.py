@@ -1,3 +1,4 @@
+from gh_pool.core.config import settings
 from gh_pool.server import tasks as server
 from tests.conftest import as_client, as_worker, submit, take
 
@@ -49,7 +50,7 @@ async def test_a_resent_chunk_does_not_duplicate_the_stream(client):
 
 
 async def test_the_stream_stops_accepting_once_it_is_full(client, monkeypatch):
-    monkeypatch.setattr(server, "EVENT_CAP", 4)
+    monkeypatch.setattr(settings, "event_cap", 4)
     tid = await submit(client)
     leased = await take(client)
     token = leased["lease_token"]

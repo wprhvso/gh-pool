@@ -1,11 +1,21 @@
-import email.message
 import json
 import time
-import urllib.error
 
 import pytest
 
 from gh_pool.fleet import workers as keeper
+from gh_pool.fleet.runners import pool as pool_client
+from gh_pool.fleet.runners.errors import HttpError, RunnerError
+from gh_pool.fleet.runners.http import Reply
+from tests.fleet.conftest import headers
+
+
+def answer(body):
+    return Reply(200, json.dumps(body).encode(), headers())
+
+
+def wire(monkeypatch, handler):
+    monkeypatch.setattr(pool_client, "fetch", lambda method, url, **kw: handler(url))
 
 
 class FakeRepo(keeper.Repo):
@@ -49,9 +59,13 @@ def test_durations_are_read_with_their_unit(text, seconds):
     assert keeper.secs(text) == seconds
 
 
-def test_a_duration_string_without_a_unit_is_not_understood():
-    with pytest.raises(KeyError):
-        keeper.secs("45")
+def test_a_duration_without_a_unit_is_read_as_seconds():
+    assert keeper.secs("45") == 45
+
+
+def test_a_duration_that_is_not_a_duration_is_not_understood():
+    with pytest.raises(RunnerError):
+        keeper.secs("завтра")
 
 
 def test_surplus_is_taken_from_the_youngest_runs(monkeypatch):
@@ -210,28 +224,13 @@ def test_a_queued_run_holds_a_place_but_does_not_count_as_serving():
     assert repo.cancelled == []
 
 
-class FakeAnswer:
-    def __init__(self, body):
-        self.body = json.dumps(body).encode()
-
-    def read(self):
-        return self.body
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_):
-        return False
-
-
 def fake_pool(monkeypatch, listing, up=9999):
-    def urlopen(req, **_):
-        url = req if isinstance(req, str) else req.full_url
+    def handler(url):
         if url.endswith("/healthz"):
-            return FakeAnswer({"started_at": time.time() - up})
-        return FakeAnswer(listing)
+            return answer({"started_at": time.time() - up})
+        return answer(listing)
 
-    monkeypatch.setattr(keeper.urllib.request, "urlopen", urlopen)
+    wire(monkeypatch, handler)
 
 
 POOL = {"GH_POOL_SERVER": "http://pool"}
@@ -262,10 +261,10 @@ def test_a_pool_that_has_just_started_is_not_believed(monkeypatch):
 
 
 def test_a_pool_that_does_not_answer_is_not_believed(monkeypatch):
-    def refuse(*_, **__):
-        raise urllib.error.URLError("down")
+    def refuse(_url):
+        raise OSError("down")
 
-    monkeypatch.setattr(keeper.urllib.request, "urlopen", refuse)
+    wire(monkeypatch, refuse)
 
     assert keeper.pool_workers(POOL, "client") is None
 
@@ -284,12 +283,10 @@ def test_the_idle_backlog_is_drained_in_bites(monkeypatch):
 
 
 def test_a_refused_request_is_not_mistaken_for_a_dead_pool(monkeypatch):
-    def refuse(req, **_):
-        raise urllib.error.HTTPError(
-            req.full_url, 401, "no", email.message.Message(), None
-        )
+    def refuse(url):
+        raise HttpError(401, url, "no")
 
-    monkeypatch.setattr(keeper.urllib.request, "urlopen", refuse)
+    wire(monkeypatch, refuse)
     said = []
     monkeypatch.setattr(keeper, "log", said.append)
 
@@ -298,9 +295,7 @@ def test_a_refused_request_is_not_mistaken_for_a_dead_pool(monkeypatch):
 
 
 def test_without_a_client_token_the_workers_are_not_asked_for(monkeypatch):
-    monkeypatch.setattr(
-        keeper.urllib.request, "urlopen", lambda *a, **k: pytest.fail("не спрашивать")
-    )
+    wire(monkeypatch, lambda _url: pytest.fail("не спрашивать"))
 
     assert keeper.pool_workers(POOL, "") is None
 
