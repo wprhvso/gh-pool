@@ -5,17 +5,17 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from tests.e2e.stack import Stack, Watch, expression_of
+from tests.chrome.e2e.stack import Stack, Watch, expression_of
 
-from gh_chrome_client import EventType
-from gh_chrome_protocol import (
+from pool.client import EventType
+from pool.protocol import (
     CloseReason,
     CommandEnvelope,
     Method,
     SessionClosed,
     TabOpened,
 )
-from gh_chrome_protocol.sse import SseMessage, parse_sse
+from pool.protocol.sse import SseMessage, parse_sse
 
 
 async def _frames(

@@ -5,10 +5,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from pool_runners import __main__ as cli_mod
-from pool_runners.config import Server, Target
-from pool_runners.errors import RunnerError
-from tests.fake import FakePool
+from pool.keeper import __main__ as cli_mod
+from pool.keeper.config import Server, Target
+from pool.keeper.errors import RunnerError
+from tests.keeper.fake import FakePool
 
 CONFIG = """
 label = "pool"

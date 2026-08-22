@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from gh_chrome_protocol.trace import (
+from pool.protocol.trace import (
     NO_TRACE,
     TraceContext,
     TraceIdFilter,

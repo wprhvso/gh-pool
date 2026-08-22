@@ -6,12 +6,12 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from tests.e2e.stack import Stack, Watch, file_id_of
+from tests.chrome.e2e.stack import Stack, Watch, file_id_of
 
-from gh_chrome_client import EventType, GhChromeError
-from gh_chrome_protocol import CommandEnvelope, Download, Method
-from gh_chrome_server import storage
-from gh_chrome_server.storage import BadName
+from pool.client import EventType, GhChromeError
+from pool.protocol import CommandEnvelope, Download, Method
+from pool.server import storage
+from pool.server.storage import BadName
 
 PAYLOAD = os.urandom(1 << 18)
 MAX_UPLOAD = 1 << 20

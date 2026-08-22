@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator
 import httpx
 import pytest
 from psycopg.conninfo import conninfo_to_dict
-from tests.e2e.stack import Cluster, Server
+from tests.chrome.e2e.stack import Cluster, Server
 
 
 @pytest.fixture

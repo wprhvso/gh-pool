@@ -8,8 +8,8 @@ from uuid import UUID
 
 import httpx
 
-from gh_chrome_protocol import CommandError, EventData, RunnerConfig
-from gh_chrome_runner.config import settings
+from pool.protocol import CommandError, EventData, RunnerConfig
+from pool.runner.config import settings
 
 CHUNK = 1 << 20
 TRANSFER_TIMEOUT = httpx.Timeout(600.0)

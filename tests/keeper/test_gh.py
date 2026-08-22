@@ -3,12 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from pool_runners import gh as gh_mod
-from pool_runners.config import Target
-from pool_runners.errors import RateLimited, RunnerError
-from pool_runners.http import Reply
-from tests.conftest import headers
-from tests.fake import refused
+from pool.keeper import gh as gh_mod
+from pool.keeper.config import Target
+from pool.keeper.errors import RateLimited, RunnerError
+from pool.keeper.http import Reply
+from tests.keeper.conftest import headers
+from tests.keeper.fake import refused
 
 
 class Wire:

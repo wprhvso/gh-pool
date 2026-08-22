@@ -1,15 +1,15 @@
 import pytest
-from tests.e2e.site import Site
-from tests.e2e.stack import TOKEN, Stack
+from tests.chrome.e2e.site import Site
+from tests.chrome.e2e.stack import TOKEN, Stack
 
-import gh_chrome_client
-from gh_chrome_client import ProfileInfo
+import pool.client
+from pool.client import ProfileInfo
 
 pytestmark = pytest.mark.browser
 
 
 async def _profiles(stack: Stack) -> list[ProfileInfo]:
-    return await gh_chrome_client.profiles(server=stack.server.url, token=TOKEN)
+    return await pool.client.profiles(server=stack.server.url, token=TOKEN)
 
 
 async def test_a_profile_carries_the_browser_into_the_next_session(

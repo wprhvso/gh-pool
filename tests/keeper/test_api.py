@@ -6,12 +6,12 @@ import time
 from typing import Any
 
 import pytest
-from pool_runners import api as api_mod
-from pool_runners.api import ScaleSet
-from pool_runners.config import Target
-from pool_runners.errors import HttpError, RunnerError
-from pool_runners.models import Session
-from tests.fake import refused
+from pool.keeper import api as api_mod
+from pool.keeper.api import ScaleSet
+from pool.keeper.config import Target
+from pool.keeper.errors import HttpError, RunnerError
+from pool.keeper.models import Session
+from tests.keeper.fake import refused
 
 PIPELINE = "https://x.pipelines.actions.githubusercontent.com/OPAQUE"
 QUEUE = "https://q.example/queue?sessionId=abc"

@@ -4,10 +4,10 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, Response
 
-from gh_chrome_server import manifest, storage
-from gh_chrome_server.auth import Basic, hand_out_ticket
-from gh_chrome_server.config import settings
-from gh_chrome_server.deps import Ss
+from pool.server import manifest, storage
+from pool.server.auth import Basic, hand_out_ticket
+from pool.server.config import settings
+from pool.server.deps import Ss
 
 router = APIRouter(prefix="/s", tags=["player"])
 

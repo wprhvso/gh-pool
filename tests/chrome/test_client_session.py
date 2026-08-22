@@ -6,14 +6,14 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from gh_chrome_client.errors import (
+from pool.client.errors import (
     ElementNotFound,
     Rejected,
     SessionDead,
     SessionNotReady,
 )
-from gh_chrome_client.session import Session
-from gh_chrome_protocol import (
+from pool.client.session import Session
+from pool.protocol import (
     CommandAccepted,
     CommandArgs,
     CommandError,

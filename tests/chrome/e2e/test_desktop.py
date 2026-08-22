@@ -7,14 +7,14 @@ from uuid import UUID
 import httpx
 import pytest
 import websockets
-from tests.e2e.stack import Stack
+from tests.chrome.e2e.stack import Stack
 from tests.test_tunnel import BODY, _desktop
 from websockets.exceptions import InvalidStatus
 from websockets.typing import Subprotocol
 
-from gh_chrome_client import Session
-from gh_chrome_runner.tunnel import Tunnel
-from gh_chrome_server import auth
+from pool.client import Session
+from pool.runner.tunnel import Tunnel
+from pool.server import auth
 
 
 async def _wait_connected(

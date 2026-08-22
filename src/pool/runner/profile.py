@@ -2,8 +2,8 @@ import asyncio
 import logging
 import shutil
 
-from gh_chrome_runner.config import settings
-from gh_chrome_runner.http import ServerClient
+from pool.runner.config import settings
+from pool.runner.http import ServerClient
 
 log = logging.getLogger(__name__)
 

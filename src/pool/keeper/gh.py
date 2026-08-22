@@ -5,8 +5,8 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 
-from pool_runners.budget import REST
-from pool_runners.config import (
+from pool.keeper.budget import REST
+from pool.keeper.config import (
     PREFLIGHT_TTL,
     RELEASE_TTL,
     REST_VERSION,
@@ -14,11 +14,11 @@ from pool_runners.config import (
     RUNNER_RELEASES,
     api_base,
 )
-from pool_runners.errors import HttpError, RateLimited, RunnerError
-from pool_runners.http import fetch, request
+from pool.keeper.errors import HttpError, RateLimited, RunnerError
+from pool.keeper.http import fetch, request
 
 if TYPE_CHECKING:
-    from pool_runners.config import Target
+    from pool.keeper.config import Target
 
 log = logging.getLogger("runners")
 

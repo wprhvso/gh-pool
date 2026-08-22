@@ -3,10 +3,10 @@ from typing import Any
 
 import pytest
 
-from gh_chrome_protocol import Goto, WaitUntil
-from gh_chrome_runner import navigation
-from gh_chrome_runner.cdp import CdpError
-from gh_chrome_runner.navigation import NavigationFailed
+from pool.protocol import Goto, WaitUntil
+from pool.runner import navigation
+from pool.runner.cdp import CdpError
+from pool.runner.navigation import NavigationFailed
 
 
 class FakeTabs:

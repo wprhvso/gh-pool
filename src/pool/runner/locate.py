@@ -2,7 +2,7 @@ import asyncio
 import json
 from dataclasses import dataclass
 
-from gh_chrome_runner.tabs import Tabs
+from pool.runner.tabs import Tabs
 
 STABLE_INTERVAL = 0.1
 STABLE_EPSILON = 1.0

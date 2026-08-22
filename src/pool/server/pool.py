@@ -3,7 +3,7 @@ from uuid import UUID
 
 import httpx
 
-from gh_chrome_server.config import settings
+from pool.server.config import settings
 
 CODE = """
 import os

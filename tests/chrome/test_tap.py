@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from gh_chrome_client.errors import TapError, TapRejected, TapTimeout
-from gh_chrome_client.tap import SCRIPT, Captured, Rule, Tap
+from pool.client.errors import TapError, TapRejected, TapTimeout
+from pool.client.tap import SCRIPT, Captured, Rule, Tap
 
 CAPTURE = {
     "name": "generate",

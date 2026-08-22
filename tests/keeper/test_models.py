@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from pool_runners.models import Session, Stats, to_int
+from pool.keeper.models import Session, Stats, to_int
 
 
 @pytest.mark.parametrize(

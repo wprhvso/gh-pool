@@ -4,9 +4,9 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from gh_chrome_server import storage
-from gh_chrome_server.cleaner import DAY, Cleaner
-from gh_chrome_server.config import settings
+from pool.server import storage
+from pool.server.cleaner import DAY, Cleaner
+from pool.server.config import settings
 
 KIB = 1 << 10
 HOUR = 3600.0

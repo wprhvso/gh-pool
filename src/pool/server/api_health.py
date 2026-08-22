@@ -5,7 +5,7 @@ from fastapi import APIRouter, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from gh_chrome_server.deps import Db
+from pool.server.deps import Db
 
 log = logging.getLogger(__name__)
 

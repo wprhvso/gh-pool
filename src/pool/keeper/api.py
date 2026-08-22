@@ -7,8 +7,8 @@ import urllib.parse
 import uuid
 from typing import TYPE_CHECKING, Any
 
-from pool_runners.budget import REST
-from pool_runners.config import (
+from pool.keeper.budget import REST
+from pool.keeper.config import (
     API_VERSION,
     CAPACITY_HEADER,
     POLL_TIMEOUT,
@@ -19,13 +19,13 @@ from pool_runners.config import (
     api_base,
     server_url,
 )
-from pool_runners.errors import HttpError, RunnerError
-from pool_runners.gh import registration_token
-from pool_runners.http import jwt_expiry, pause, request
-from pool_runners.models import Session, Stats
+from pool.keeper.errors import HttpError, RunnerError
+from pool.keeper.gh import registration_token
+from pool.keeper.http import jwt_expiry, pause, request
+from pool.keeper.models import Session, Stats
 
 if TYPE_CHECKING:
-    from pool_runners.config import Target
+    from pool.keeper.config import Target
 
 log = logging.getLogger("runners")
 

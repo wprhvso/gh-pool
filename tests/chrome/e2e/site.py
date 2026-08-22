@@ -12,7 +12,7 @@ from starlette.responses import (
     StreamingResponse,
 )
 from starlette.routing import Route
-from tests.e2e.stack import Background
+from tests.chrome.e2e.stack import Background
 
 ASSET = b"a byte or two to download" * 40
 

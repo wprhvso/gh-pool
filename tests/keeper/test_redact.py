@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pool_runners.errors import HttpError, RateLimited
-from pool_runners.redact import redact
+from pool.keeper.errors import HttpError, RateLimited
+from pool.keeper.redact import redact
 
 
 def test_plain_text_is_left_alone() -> None:

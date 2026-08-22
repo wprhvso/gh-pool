@@ -6,8 +6,8 @@ from fastapi.responses import JSONResponse, Response
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from gh_chrome_protocol import trace
-from gh_chrome_server import (
+from pool.protocol import trace
+from pool.server import (
     api_client,
     api_health,
     api_player,
@@ -16,18 +16,18 @@ from gh_chrome_server import (
     pool,
     storage,
 )
-from gh_chrome_server.cleaner import Cleaner
-from gh_chrome_server.config import settings
-from gh_chrome_server.db import Database
-from gh_chrome_server.events import Events
-from gh_chrome_server.sessions import (
+from pool.server.cleaner import Cleaner
+from pool.server.config import settings
+from pool.server.db import Database
+from pool.server.events import Events
+from pool.server.sessions import (
     SessionNotFound,
     Sessions,
     SessionUnavailable,
     TooManySessions,
 )
-from gh_chrome_server.tunnel import TunnelDown, Tunnels
-from gh_chrome_server.watchdog import Watchdog
+from pool.server.tunnel import TunnelDown, Tunnels
+from pool.server.watchdog import Watchdog
 
 STATUS_CODES: dict[type[Exception], int] = {
     SessionNotFound: status.HTTP_404_NOT_FOUND,

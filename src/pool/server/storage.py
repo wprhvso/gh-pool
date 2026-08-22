@@ -9,8 +9,8 @@ from tempfile import NamedTemporaryFile
 from typing import IO
 from uuid import UUID
 
-from gh_chrome_protocol import PROFILE_NAME
-from gh_chrome_server.config import settings
+from pool.protocol import PROFILE_NAME
+from pool.server.config import settings
 
 CHUNK = 1 << 20
 

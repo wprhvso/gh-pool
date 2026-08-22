@@ -8,13 +8,13 @@ from uuid import UUID
 
 import httpx
 
-from gh_chrome_client.errors import (
+from pool.client.errors import (
     GhChromeError,
     Rejected,
     SessionUnavailable,
     TooManySessions,
 )
-from gh_chrome_protocol import (
+from pool.protocol import (
     CommandAccepted,
     CommandArgs,
     CommandRequest,

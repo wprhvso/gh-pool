@@ -5,9 +5,9 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from gh_chrome_protocol import EventData, TabActivated, TabClosed, TabOpened
-from gh_chrome_runner.cdp import Cdp, CdpError
-from gh_chrome_runner.config import settings
+from pool.protocol import EventData, TabActivated, TabClosed, TabOpened
+from pool.runner.cdp import Cdp, CdpError
+from pool.runner.config import settings
 
 log = logging.getLogger(__name__)
 

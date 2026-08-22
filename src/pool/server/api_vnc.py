@@ -8,10 +8,10 @@ from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from pydantic import BaseModel
 from starlette.websockets import WebSocketDisconnect
 
-from gh_chrome_protocol import tunnel
-from gh_chrome_server.auth import Basic, SocketTicket, hand_out_ticket, ticket
-from gh_chrome_server.deps import Tn
-from gh_chrome_server.tunnel import Stream, TunnelDown
+from pool.protocol import tunnel
+from pool.server.auth import Basic, SocketTicket, hand_out_ticket, ticket
+from pool.server.deps import Tn
+from pool.server.tunnel import Stream, TunnelDown
 
 router = APIRouter(prefix="/s", tags=["vnc"])
 

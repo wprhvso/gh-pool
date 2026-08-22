@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from gh_chrome_protocol import (
+from pool.protocol import (
     MAX_TIMEOUT,
     Bare,
     CommandEnvelope,

@@ -1,10 +1,10 @@
 import asyncio
 
-import gh_chrome_client
+import pool.client
 
 
 async def main() -> None:
-    session = await gh_chrome_client.new(width=1280, height=800, fps=10)
+    session = await pool.client.new(width=1280, height=800, fps=10)
     print(f"session {session.id}, player at {session.player_url}")
     async with session as s:
         await s.ready(timeout=300)

@@ -5,8 +5,8 @@ from uuid import UUID
 
 from psycopg.types.json import Jsonb
 
-from gh_chrome_protocol import Event, EventData, EventType
-from gh_chrome_server.db import Database, Tx
+from pool.protocol import Event, EventData, EventType
+from pool.server.db import Database, Tx
 
 QUEUE_SIZE = 1000
 LIVE = ("pending", "active")

@@ -4,10 +4,10 @@ import os
 from pathlib import Path
 from typing import Any
 
-from gh_chrome_protocol import SessionParams
-from gh_chrome_runner.cdp import Cdp
-from gh_chrome_runner.config import settings
-from gh_chrome_runner.display import Display
+from pool.protocol import SessionParams
+from pool.runner.cdp import Cdp
+from pool.runner.config import settings
+from pool.runner.display import Display
 
 READY_TIMEOUT = 60.0
 CLOSE_TIMEOUT = 5.0

@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING
 
 from yaol import from_env, instrument_runtime, setup, shutdown
 
-from pool_runners.budget import REST
-from pool_runners.config import (
+from pool.keeper.budget import REST
+from pool.keeper.config import (
     RATE_WAIT_CAP,
     RESTART_CAP,
     RESTART_HEALTHY,
@@ -23,16 +23,16 @@ from pool_runners.config import (
     env_target,
     load,
 )
-from pool_runners.controller import install_stop_handler, run
-from pool_runners.errors import RunnerError
-from pool_runners.gh import preflight, release_version
-from pool_runners.http import backoff
-from pool_runners.pool import Pool
+from pool.keeper.controller import install_stop_handler, run
+from pool.keeper.errors import RunnerError
+from pool.keeper.gh import preflight, release_version
+from pool.keeper.http import backoff
+from pool.keeper.pool import Pool
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from pool_runners.config import Target
+    from pool.keeper.config import Target
 
 log = logging.getLogger("runners")
 

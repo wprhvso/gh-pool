@@ -15,9 +15,9 @@ from typing import TYPE_CHECKING, Any
 from opentelemetry.metrics import get_meter
 from yaol import attached, capture, fail, record_exception, span
 
-from pool_runners.api import ScaleSet
-from pool_runners.budget import REST
-from pool_runners.config import (
+from pool.keeper.api import ScaleSet
+from pool.keeper.budget import REST
+from pool.keeper.config import (
     ALIVE,
     DRAIN_POLL,
     FLEET_INTERVAL,
@@ -33,18 +33,18 @@ from pool_runners.config import (
     TOKEN_SKEW,
     WORKER_STALE,
 )
-from pool_runners.errors import HttpError, RateLimited, RunnerError
-from pool_runners.fleet import Fleet
-from pool_runners.gh import delete_runner, preflight, release_version, runners
-from pool_runners.http import STOP, backoff
-from pool_runners.models import Stats, to_int
-from pool_runners.pool import Pool
+from pool.keeper.errors import HttpError, RateLimited, RunnerError
+from pool.keeper.fleet import Fleet
+from pool.keeper.gh import delete_runner, preflight, release_version, runners
+from pool.keeper.http import STOP, backoff
+from pool.keeper.models import Stats, to_int
+from pool.keeper.pool import Pool
 
 if TYPE_CHECKING:
     from types import FrameType
 
-    from pool_runners.config import Server, Target
-    from pool_runners.models import Session
+    from pool.keeper.config import Server, Target
+    from pool.keeper.models import Session
 
 log = logging.getLogger("runners")
 
@@ -56,24 +56,24 @@ _TIMEOUT_GRACE = 480.0
 CODE = (Path(__file__).resolve().parent / "agent.py").read_text(encoding="utf-8")
 FORCE = threading.Event()
 
-_meter = get_meter("pool_runners")
+_meter = get_meter("pool.keeper")
 JOBS_ACQUIRED = _meter.create_counter(
-    "pool_runners.jobs_acquired",
+    "pool.keeper.jobs_acquired",
     unit="{job}",
     description="job'ы, забранные из очереди GitHub",
 )
 RUNNERS_LAUNCHED = _meter.create_counter(
-    "pool_runners.runners_launched",
+    "pool.keeper.runners_launched",
     unit="{runner}",
     description="попытки отправить раннера в пул",
 )
 FLEET_SIZE = _meter.create_gauge(
-    "pool_runners.fleet_size",
+    "pool.keeper.fleet_size",
     unit="{runner}",
     description="раннеры, которые контроллер считает своими",
 )
 LAUNCH_DURATION = _meter.create_histogram(
-    "pool_runners.launch_duration",
+    "pool.keeper.launch_duration",
     unit="s",
     description="время раскидывания партии раннеров по пулу",
 )

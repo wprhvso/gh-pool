@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from pool_runners.budget import Budget
-from pool_runners.config import RATE_BLIND_WAIT, RATE_WINDOW
-from tests.conftest import Clock, headers
+from pool.keeper.budget import Budget
+from pool.keeper.config import RATE_BLIND_WAIT, RATE_WINDOW
+from tests.keeper.conftest import Clock, headers
 
 
 def _fresh(clock: Clock, left: float, window: float = 3600.0) -> Budget:

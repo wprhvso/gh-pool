@@ -1,11 +1,11 @@
 from pathlib import Path
 
 import pytest
-from tests.e2e.site import ASSET, Site
-from tests.e2e.stack import Stack, Watch
+from tests.chrome.e2e.site import ASSET, Site
+from tests.chrome.e2e.stack import Stack, Watch
 
-from gh_chrome_client import EventType, RunnerError, Session, Topic
-from gh_chrome_protocol import Download
+from pool.client import EventType, RunnerError, Session, Topic
+from pool.protocol import Download
 
 pytestmark = pytest.mark.browser
 

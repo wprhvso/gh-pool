@@ -13,7 +13,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from pool_runners.config import (
+from pool.keeper.config import (
     BACKOFF_BASE,
     BACKOFF_CAP,
     MAX_ATTEMPTS,
@@ -21,13 +21,13 @@ from pool_runners.config import (
     RETRY_STATUSES,
     USER_AGENT,
 )
-from pool_runners.errors import HttpError, RateLimited, RunnerError
-from pool_runners.redact import redact
+from pool.keeper.errors import HttpError, RateLimited, RunnerError
+from pool.keeper.redact import redact
 
 if TYPE_CHECKING:
     from email.message import Message
 
-    from pool_runners.budget import Budget
+    from pool.keeper.budget import Budget
 
 log = logging.getLogger("runners")
 

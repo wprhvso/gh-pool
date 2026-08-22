@@ -3,10 +3,10 @@ from uuid import uuid4
 
 import pytest
 
-from gh_chrome_protocol import RunnerConfig, SessionParams
-from gh_chrome_runner import capture
-from gh_chrome_runner.capture import Capture
-from gh_chrome_runner.config import settings
+from pool.protocol import RunnerConfig, SessionParams
+from pool.runner import capture
+from pool.runner.capture import Capture
+from pool.runner.config import settings
 
 
 class FakeDisplay:

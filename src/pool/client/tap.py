@@ -7,10 +7,10 @@ from typing import Any, Final, Literal
 
 from pydantic import BaseModel, Field
 
-from gh_chrome_client.errors import GhChromeError, TapError, TapRejected, TapTimeout
-from gh_chrome_client.session import Session
+from pool.client.errors import GhChromeError, TapError, TapRejected, TapTimeout
+from pool.client.session import Session
 
-SCRIPT: Final = files("gh_chrome_client").joinpath("tap.js").read_text(encoding="utf-8")
+SCRIPT: Final = files("pool.client").joinpath("tap.js").read_text(encoding="utf-8")
 
 DEFAULT_WINDOW: Final = 20.0
 COMMAND_MARGIN: Final = 15.0

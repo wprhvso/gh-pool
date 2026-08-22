@@ -1,10 +1,10 @@
 from typing import Any
 
 import pytest
-from tests.e2e.site import Site
-from tests.e2e.stack import Stack
+from tests.chrome.e2e.site import Site
+from tests.chrome.e2e.stack import Stack
 
-from gh_chrome_client import (
+from pool.client import (
     ElementIntercepted,
     ElementNotFound,
     GhChromeError,

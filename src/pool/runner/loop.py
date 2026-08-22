@@ -7,18 +7,18 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Any, Protocol
 from uuid import UUID
 
-from gh_chrome_protocol import CommandEnvelope, CommandError, ErrorCode, RunnerConfig
-from gh_chrome_protocol.sse import parse_sse
-from gh_chrome_protocol.trace import TraceContext, bound
-from gh_chrome_runner import profile
-from gh_chrome_runner.actions import Actions
-from gh_chrome_runner.browser import Browser
-from gh_chrome_runner.capture import Capture
-from gh_chrome_runner.config import settings
-from gh_chrome_runner.display import Display
-from gh_chrome_runner.http import ServerClient
-from gh_chrome_runner.tunnel import Tunnel
-from gh_chrome_runner.xtest import Xtest
+from pool.protocol import CommandEnvelope, CommandError, ErrorCode, RunnerConfig
+from pool.protocol.sse import parse_sse
+from pool.protocol.trace import TraceContext, bound
+from pool.runner import profile
+from pool.runner.actions import Actions
+from pool.runner.browser import Browser
+from pool.runner.capture import Capture
+from pool.runner.config import settings
+from pool.runner.display import Display
+from pool.runner.http import ServerClient
+from pool.runner.tunnel import Tunnel
+from pool.runner.xtest import Xtest
 
 log = logging.getLogger(__name__)
 

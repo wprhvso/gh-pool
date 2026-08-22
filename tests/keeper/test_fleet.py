@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pool_runners.fleet import Fleet
+from pool.keeper.fleet import Fleet
 
 
 def test_an_empty_fleet_has_nothing_to_check() -> None:

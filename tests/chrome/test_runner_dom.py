@@ -3,9 +3,9 @@ from typing import Any
 
 import pytest
 
-from gh_chrome_protocol import ElementState, WaitUntil
-from gh_chrome_runner import dom
-from gh_chrome_runner.locate import ElementMissing
+from pool.protocol import ElementState, WaitUntil
+from pool.runner import dom
+from pool.runner.locate import ElementMissing
 
 
 class FakeTabs:

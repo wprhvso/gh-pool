@@ -5,12 +5,12 @@ import urllib.parse
 from typing import Any
 
 import pytest
-from pool_runners import pool as pool_mod
-from pool_runners.config import Server
-from pool_runners.errors import RunnerError
-from pool_runners.http import Reply
-from pool_runners.pool import Pool
-from tests.conftest import headers
+from pool.keeper import pool as pool_mod
+from pool.keeper.config import Server
+from pool.keeper.errors import RunnerError
+from pool.keeper.http import Reply
+from pool.keeper.pool import Pool
+from tests.keeper.conftest import headers
 
 
 def _reply(body: object = None, **head: str) -> Reply:

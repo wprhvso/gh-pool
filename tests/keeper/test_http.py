@@ -4,10 +4,10 @@ import urllib.request
 from typing import Any
 
 import pytest
-from pool_runners import http as http_mod
-from pool_runners.budget import Budget
-from pool_runners.errors import HttpError, RateLimited, RunnerError
-from tests.conftest import Clock, Response, headers, http_error
+from pool.keeper import http as http_mod
+from pool.keeper.budget import Budget
+from pool.keeper.errors import HttpError, RateLimited, RunnerError
+from tests.keeper.conftest import Clock, Response, headers, http_error
 
 
 class Calls:

@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING, Any
 
 from yaol import inject_headers
 
-from pool_runners.config import ADOPT_LIMIT, ALIVE, POOL_TIMEOUT
-from pool_runners.errors import RunnerError
-from pool_runners.http import Reply, fetch
+from pool.keeper.config import ADOPT_LIMIT, ALIVE, POOL_TIMEOUT
+from pool.keeper.errors import RunnerError
+from pool.keeper.http import Reply, fetch
 
 if TYPE_CHECKING:
-    from pool_runners.config import Server
+    from pool.keeper.config import Server
 
 log = logging.getLogger("runners")
 

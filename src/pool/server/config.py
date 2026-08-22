@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="GH_CHROME_", extra="ignore")
 
     token: str = ""
-    database_url: str = "postgresql:///gh_chrome_client"
+    database_url: str = "postgresql:///pool.client"
     storage: Path = Path("/var/lib/gh-chrome")
     host: str = "127.0.0.1"
     port: int = 8000

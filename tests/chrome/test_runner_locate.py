@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from gh_chrome_runner.locate import (
+from pool.runner.locate import (
     Box,
     ElementMissing,
     Locator,

@@ -2,9 +2,9 @@ import asyncio
 import contextlib
 import logging
 
-from gh_chrome_protocol import CloseReason, CommandError, ErrorCode
-from gh_chrome_server.config import settings
-from gh_chrome_server.sessions import Sessions
+from pool.protocol import CloseReason, CommandError, ErrorCode
+from pool.server.config import settings
+from pool.server.sessions import Sessions
 
 log = logging.getLogger(__name__)
 

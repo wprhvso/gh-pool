@@ -7,8 +7,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from pool_runners.errors import HttpError
-from pool_runners.models import Session, Stats
+from pool.keeper.errors import HttpError
+from pool.keeper.models import Session, Stats
 
 QUEUE_TYPE = "RunnerScaleSetJobMessages"
 

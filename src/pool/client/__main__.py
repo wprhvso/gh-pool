@@ -2,7 +2,7 @@ import argparse
 import asyncio
 import json
 
-from gh_chrome_client import profiles
+from pool.client import profiles
 
 
 def main() -> None:

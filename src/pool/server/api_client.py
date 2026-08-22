@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-from gh_chrome_protocol import (
+from pool.protocol import (
     CloseReason,
     CommandAccepted,
     CommandRequest,
@@ -13,12 +13,12 @@ from gh_chrome_protocol import (
     SessionCreate,
     SessionState,
 )
-from gh_chrome_protocol.trace import TraceContext
-from gh_chrome_server import pool, storage
-from gh_chrome_server.auth import Token
-from gh_chrome_server.config import settings
-from gh_chrome_server.deps import Db, Ev, Ss
-from gh_chrome_server.sse import Frame, resume_from, sse_response
+from pool.protocol.trace import TraceContext
+from pool.server import pool, storage
+from pool.server.auth import Token
+from pool.server.config import settings
+from pool.server.deps import Db, Ev, Ss
+from pool.server.sse import Frame, resume_from, sse_response
 
 router = APIRouter(prefix="/sessions", tags=["client"])
 profiles_router = APIRouter(prefix="/profiles", tags=["client"])

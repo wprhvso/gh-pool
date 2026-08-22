@@ -4,9 +4,9 @@ import logging
 import sys
 from uuid import UUID
 
-from gh_chrome_protocol import trace
-from gh_chrome_runner.config import settings
-from gh_chrome_runner.loop import Runner
+from pool.protocol import trace
+from pool.runner.config import settings
+from pool.runner.loop import Runner
 
 
 def main() -> None:

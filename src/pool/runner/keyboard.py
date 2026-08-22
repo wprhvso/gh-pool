@@ -1,8 +1,8 @@
 import asyncio
 import random
 
-from gh_chrome_protocol import Speed
-from gh_chrome_runner.xtest import SPECIAL_KEYS, Xtest
+from pool.protocol import Speed
+from pool.runner.xtest import SPECIAL_KEYS, Xtest
 
 MEDIANS: dict[Speed, float] = {
     Speed.INSTANT: 0.0,

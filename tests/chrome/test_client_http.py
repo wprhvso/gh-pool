@@ -9,16 +9,16 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
-from tests.e2e.stack import Background
+from tests.chrome.e2e.stack import Background
 
-from gh_chrome_client.errors import (
+from pool.client.errors import (
     GhChromeError,
     Rejected,
     SessionUnavailable,
     TooManySessions,
 )
-from gh_chrome_client.http import Http, _check
-from gh_chrome_protocol import (
+from pool.client.http import Http, _check
+from pool.protocol import (
     Bare,
     Method,
     SessionCreate,

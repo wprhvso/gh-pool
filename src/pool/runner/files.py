@@ -9,12 +9,12 @@ from urllib.parse import quote
 
 import httpx
 
-from gh_chrome_protocol import Upload
-from gh_chrome_runner.cdp import Cdp
-from gh_chrome_runner.config import settings
-from gh_chrome_runner.http import ServerClient
-from gh_chrome_runner.locate import ElementMissing
-from gh_chrome_runner.tabs import Tabs
+from pool.protocol import Upload
+from pool.runner.cdp import Cdp
+from pool.runner.config import settings
+from pool.runner.http import ServerClient
+from pool.runner.locate import ElementMissing
+from pool.runner.tabs import Tabs
 
 log = logging.getLogger(__name__)
 

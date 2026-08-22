@@ -4,7 +4,7 @@ import threading
 import time
 from typing import TYPE_CHECKING
 
-from pool_runners.config import RATE_BLIND_WAIT, RATE_STATUSES, RATE_WINDOW
+from pool.keeper.config import RATE_BLIND_WAIT, RATE_STATUSES, RATE_WINDOW
 
 if TYPE_CHECKING:
     from email.message import Message

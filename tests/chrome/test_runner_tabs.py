@@ -4,9 +4,9 @@ from typing import Any
 
 import pytest
 
-from gh_chrome_protocol import EventData, TabActivated, TabClosed, TabOpened
-from gh_chrome_runner import tabs as tabs_module
-from gh_chrome_runner.tabs import NoActiveTab, Tabs
+from pool.protocol import EventData, TabActivated, TabClosed, TabOpened
+from pool.runner import tabs as tabs_module
+from pool.runner.tabs import NoActiveTab, Tabs
 
 
 class FakeCdp:

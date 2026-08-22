@@ -2,11 +2,11 @@ import asyncio
 import re
 from typing import Any
 
-from gh_chrome_protocol import ElementState, WaitUntil
-from gh_chrome_runner.locate import ElementMissing, Locator
-from gh_chrome_runner.locate import js_string as js
-from gh_chrome_runner.navigation import settle
-from gh_chrome_runner.tabs import Tabs
+from pool.protocol import ElementState, WaitUntil
+from pool.runner.locate import ElementMissing, Locator
+from pool.runner.locate import js_string as js
+from pool.runner.navigation import settle
+from pool.runner.tabs import Tabs
 
 POLL = 0.1
 MISSING = "__gh_chrome_missing__"

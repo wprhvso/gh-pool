@@ -1,8 +1,8 @@
 import asyncio
 import random
 
-from gh_chrome_protocol import Speed
-from gh_chrome_runner.xtest import Xtest
+from pool.protocol import Speed
+from pool.runner.xtest import Xtest
 
 TICK_PIXELS = 120
 

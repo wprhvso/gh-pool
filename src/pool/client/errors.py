@@ -1,4 +1,4 @@
-from gh_chrome_protocol import CommandError, ErrorCode
+from pool.protocol import CommandError, ErrorCode
 
 
 class GhChromeError(Exception):

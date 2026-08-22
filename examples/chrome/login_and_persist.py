@@ -1,15 +1,15 @@
 import asyncio
 import os
 
-import gh_chrome_client
-from gh_chrome_client import Topic
+import pool.client
+from pool.client import Topic
 
 USERNAME = os.environ["DEMO_USERNAME"]
 PASSWORD = os.environ["DEMO_PASSWORD"]
 
 
 async def main() -> None:
-    session = await gh_chrome_client.new(
+    session = await pool.client.new(
         profile="demo",
         subscribe=[Topic.TABS, Topic.DOWNLOADS],
         timeout=45.0,
@@ -31,7 +31,7 @@ async def main() -> None:
 
         try:
             await s.wait_for_url(r"github\.com/?$", timeout=60)
-        except gh_chrome_client.CommandTimeout:
+        except pool.client.CommandTimeout:
             print("two-factor or a captcha is in the way, watch the recording")
             return
 

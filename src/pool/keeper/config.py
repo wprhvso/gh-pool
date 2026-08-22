@@ -6,7 +6,7 @@ import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from pool_runners.errors import RunnerError
+from pool.keeper.errors import RunnerError
 
 VERSION = "0.1.0"
 USER_AGENT = f"pool-runners/{VERSION}"

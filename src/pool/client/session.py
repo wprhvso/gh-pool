@@ -13,15 +13,15 @@ from uuid import UUID
 
 from pydantic import ValidationError
 
-from gh_chrome_client.errors import (
+from pool.client.errors import (
     GhChromeError,
     Rejected,
     SessionDead,
     SessionNotReady,
     to_exception,
 )
-from gh_chrome_client.http import Http
-from gh_chrome_protocol import (
+from pool.client.http import Http
+from pool.protocol import (
     Attr,
     Bare,
     CommandArgs,
@@ -56,7 +56,7 @@ from gh_chrome_protocol import (
     WaitForUrl,
     WaitUntil,
 )
-from gh_chrome_protocol.sse import SseMessage, parse_sse
+from pool.protocol.sse import SseMessage, parse_sse
 
 log = logging.getLogger(__name__)
 

@@ -2,7 +2,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from gh_chrome_protocol import (
+from pool.protocol import (
     CommandArgs,
     CommandError,
     ErrorCode,
@@ -10,14 +10,14 @@ from gh_chrome_protocol import (
     SessionParams,
     Topic,
 )
-from gh_chrome_runner import dom, navigation
-from gh_chrome_runner.cdp import Cdp, CdpError
-from gh_chrome_runner.files import Files
-from gh_chrome_runner.http import ServerClient
-from gh_chrome_runner.input import Input
-from gh_chrome_runner.locate import ElementIntercepted, ElementMissing
-from gh_chrome_runner.tabs import Tabs
-from gh_chrome_runner.xtest import Xtest
+from pool.runner import dom, navigation
+from pool.runner.cdp import Cdp, CdpError
+from pool.runner.files import Files
+from pool.runner.http import ServerClient
+from pool.runner.input import Input
+from pool.runner.locate import ElementIntercepted, ElementMissing
+from pool.runner.tabs import Tabs
+from pool.runner.xtest import Xtest
 
 log = logging.getLogger(__name__)
 

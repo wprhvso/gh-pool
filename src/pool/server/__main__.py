@@ -2,8 +2,8 @@ import logging
 
 import uvicorn
 
-from gh_chrome_protocol import trace
-from gh_chrome_server.config import settings
+from pool.protocol import trace
+from pool.server.config import settings
 
 
 def main() -> None:
@@ -12,7 +12,7 @@ def main() -> None:
     if not settings.token:
         raise SystemExit("GH_CHROME_TOKEN is not set")
     uvicorn.run(
-        "gh_chrome_server.app:app",
+        "pool.server.app:app",
         host=settings.host,
         port=settings.port,
         log_config=None,

@@ -1,6 +1,6 @@
 from typing import Any
 
-from gh_chrome_client.errors import (
+from pool.client.errors import (
     Cancelled,
     CommandTimeout,
     ElementIntercepted,
@@ -17,10 +17,10 @@ from gh_chrome_client.errors import (
     TapTimeout,
     TooManySessions,
 )
-from gh_chrome_client.http import Http
-from gh_chrome_client.session import Command, Session
-from gh_chrome_client.tap import Captured, Rule, Tap
-from gh_chrome_protocol import (
+from pool.client.http import Http
+from pool.client.session import Command, Session
+from pool.client.tap import Captured, Rule, Tap
+from pool.protocol import (
     ElementState,
     Event,
     EventType,

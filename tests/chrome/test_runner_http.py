@@ -9,11 +9,11 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Route
-from tests.e2e.stack import Background
+from tests.chrome.e2e.stack import Background
 
-from gh_chrome_protocol import CommandError, ErrorCode, SessionParams, TabOpened
-from gh_chrome_runner.config import settings
-from gh_chrome_runner.http import ServerClient
+from pool.protocol import CommandError, ErrorCode, SessionParams, TabOpened
+from pool.runner.config import settings
+from pool.runner.http import ServerClient
 
 SESSION = uuid4()
 TOKEN = "the-token-this-session-was-given"

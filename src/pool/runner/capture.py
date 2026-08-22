@@ -4,10 +4,10 @@ import logging
 import re
 from pathlib import Path
 
-from gh_chrome_protocol import RunnerConfig
-from gh_chrome_runner.config import settings
-from gh_chrome_runner.display import Display
-from gh_chrome_runner.http import ServerClient
+from pool.protocol import RunnerConfig
+from pool.runner.config import settings
+from pool.runner.display import Display
+from pool.runner.http import ServerClient
 
 log = logging.getLogger(__name__)
 

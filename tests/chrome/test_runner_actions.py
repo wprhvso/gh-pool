@@ -2,18 +2,18 @@ from typing import Any
 
 import pytest
 
-from gh_chrome_protocol import (
+from pool.protocol import (
     CommandError,
     ErrorCode,
     Method,
     SessionParams,
     Topic,
 )
-from gh_chrome_runner.actions import Actions
-from gh_chrome_runner.cdp import CdpError
-from gh_chrome_runner.locate import ElementIntercepted, ElementMissing
-from gh_chrome_runner.navigation import NavigationFailed
-from gh_chrome_runner.tabs import NoActiveTab
+from pool.runner.actions import Actions
+from pool.runner.cdp import CdpError
+from pool.runner.locate import ElementIntercepted, ElementMissing
+from pool.runner.navigation import NavigationFailed
+from pool.runner.tabs import NoActiveTab
 
 
 class FakeCdp:

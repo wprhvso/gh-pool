@@ -3,18 +3,18 @@ from typing import Any
 
 import httpx
 import pytest
-from tests.e2e.site import Site
-from tests.e2e.stack import HEARTBEAT_INTERVAL, TOKEN, Stack, Watch, until
+from tests.chrome.e2e.site import Site
+from tests.chrome.e2e.stack import HEARTBEAT_INTERVAL, TOKEN, Stack, Watch, until
 
-import gh_chrome_client
-from gh_chrome_client import (
+import pool.client
+from pool.client import (
     Cancelled,
     CommandTimeout,
     EventType,
     SessionDead,
     SessionStatus,
 )
-from gh_chrome_protocol import CloseReason, SessionClosed
+from pool.protocol import CloseReason, SessionClosed
 
 pytestmark = pytest.mark.browser
 
@@ -85,7 +85,7 @@ async def test_a_runner_that_is_killed_leaves_the_session_dead(
     assert isinstance(ended, SessionClosed)
     assert ended.reason is CloseReason.DEAD
 
-    profiles = await gh_chrome_client.profiles(server=stack.server.url, token=TOKEN)
+    profiles = await pool.client.profiles(server=stack.server.url, token=TOKEN)
     assert [(item.name, item.stale, item.size) for item in profiles] == [
         ("cut-short", True, None)
     ]

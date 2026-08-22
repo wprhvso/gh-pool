@@ -8,10 +8,10 @@ from websockets.datastructures import Headers
 from websockets.http11 import Response
 from websockets.typing import Subprotocol
 
-from gh_chrome_protocol import tunnel
-from gh_chrome_runner.tunnel import Link
-from gh_chrome_server.tunnel import Tunnel as ServerTunnel
-from gh_chrome_server.tunnel import TunnelDown, Tunnels
+from pool.protocol import tunnel
+from pool.runner.tunnel import Link
+from pool.server.tunnel import Tunnel as ServerTunnel
+from pool.server.tunnel import TunnelDown, Tunnels
 
 BODY = b"a live desktop" * 500
 

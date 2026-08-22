@@ -9,10 +9,10 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
-from tests.e2e.stack import Background
+from tests.chrome.e2e.stack import Background
 from websockets.asyncio.server import ServerConnection, serve
 
-from gh_chrome_runner.cdp import Cdp, CdpError
+from pool.runner.cdp import Cdp, CdpError
 
 
 async def _serve(connection: ServerConnection) -> None:

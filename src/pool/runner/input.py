@@ -1,20 +1,20 @@
 import asyncio
 import random
 
-from gh_chrome_protocol import SessionParams
-from gh_chrome_runner.keyboard import Keyboard
-from gh_chrome_runner.locate import (
+from pool.protocol import SessionParams
+from pool.runner.keyboard import Keyboard
+from pool.runner.locate import (
     Box,
     ElementIntercepted,
     ElementMissing,
     Locator,
     Viewport,
 )
-from gh_chrome_runner.locate import js_string as js
-from gh_chrome_runner.mouse import TUNINGS, wind_mouse
-from gh_chrome_runner.scroll import Scroller
-from gh_chrome_runner.tabs import Tabs
-from gh_chrome_runner.xtest import BUTTONS, Xtest
+from pool.runner.locate import js_string as js
+from pool.runner.mouse import TUNINGS, wind_mouse
+from pool.runner.scroll import Scroller
+from pool.runner.tabs import Tabs
+from pool.runner.xtest import BUTTONS, Xtest
 
 DRIFT_TOLERANCE = 2.0
 MAX_ATTEMPTS = 40

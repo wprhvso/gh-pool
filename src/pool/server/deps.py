@@ -4,10 +4,10 @@ from typing import Annotated, Any
 from fastapi import Depends
 from starlette.requests import HTTPConnection
 
-from gh_chrome_server.db import Database
-from gh_chrome_server.events import Events
-from gh_chrome_server.sessions import Sessions
-from gh_chrome_server.tunnel import Tunnels
+from pool.server.db import Database
+from pool.server.events import Events
+from pool.server.sessions import Sessions
+from pool.server.tunnel import Tunnels
 
 
 def _from_state(name: str) -> Callable[[HTTPConnection], Any]:

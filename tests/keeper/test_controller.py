@@ -6,12 +6,12 @@ import time
 from dataclasses import replace
 
 import pytest
-from pool_runners import controller as ctrl
-from pool_runners.config import Server, Target
-from pool_runners.errors import RunnerError
-from pool_runners.fleet import Fleet
-from pool_runners.models import Stats
-from tests.fake import FakePool, FakeScaleSet, job, message, refused
+from pool.keeper import controller as ctrl
+from pool.keeper.config import Server, Target
+from pool.keeper.errors import RunnerError
+from pool.keeper.fleet import Fleet
+from pool.keeper.models import Stats
+from tests.keeper.fake import FakePool, FakeScaleSet, job, message, refused
 
 
 def _ctx(
@@ -303,7 +303,7 @@ def test_a_runner_is_unregistered_when_the_pool_refuses_it() -> None:
 def test_the_shipped_code_is_the_agent_module() -> None:
     assert "def agent(" in ctrl.CODE
     assert "ACTIONS_RUNNER_INPUT_JITCONFIG" in ctrl.CODE
-    assert "pool_runners" not in ctrl.CODE
+    assert "pool.keeper" not in ctrl.CODE
 
 
 def test_a_restart_picks_up_the_previous_life(monkeypatch: pytest.MonkeyPatch) -> None:

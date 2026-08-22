@@ -3,9 +3,9 @@ import contextlib
 import logging
 from uuid import UUID
 
-from gh_chrome_server import storage
-from gh_chrome_server.config import settings
-from gh_chrome_server.sessions import Sessions
+from pool.server import storage
+from pool.server.config import settings
+from pool.server.sessions import Sessions
 
 log = logging.getLogger(__name__)
 

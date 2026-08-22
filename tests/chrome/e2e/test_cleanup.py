@@ -4,15 +4,15 @@ from uuid import UUID
 import httpx
 import psycopg
 import pytest
-from tests.e2e.stack import Server, Stack
+from tests.chrome.e2e.stack import Server, Stack
 
-from gh_chrome_protocol import Method
-from gh_chrome_server import storage
-from gh_chrome_server.cleaner import Cleaner
-from gh_chrome_server.config import settings
-from gh_chrome_server.db import Database
-from gh_chrome_server.events import Events
-from gh_chrome_server.sessions import Sessions
+from pool.protocol import Method
+from pool.server import storage
+from pool.server.cleaner import Cleaner
+from pool.server.config import settings
+from pool.server.db import Database
+from pool.server.events import Events
+from pool.server.sessions import Sessions
 
 KIB = 1 << 10
 

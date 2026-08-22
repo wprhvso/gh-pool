@@ -3,7 +3,7 @@ import random
 from collections.abc import Iterator
 from dataclasses import dataclass
 
-from gh_chrome_protocol import Speed
+from pool.protocol import Speed
 
 SQRT3 = math.sqrt(3)
 SQRT5 = math.sqrt(5)

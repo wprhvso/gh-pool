@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from gh_chrome_runner import profile
-from gh_chrome_runner.config import settings
+from pool.runner import profile
+from pool.runner.config import settings
 
 
 class FakeServer:

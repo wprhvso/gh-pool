@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Request, WebSocket, status
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-from gh_chrome_protocol import (
+from pool.protocol import (
     CloseReason,
     CommandEnvelope,
     CommandError,
@@ -15,12 +15,12 @@ from gh_chrome_protocol import (
     RunnerConfig,
     RunnerEvent,
 )
-from gh_chrome_server import storage
-from gh_chrome_server.auth import Runner, SocketRunner
-from gh_chrome_server.config import settings
-from gh_chrome_server.deps import Db, Ss, Tn
-from gh_chrome_server.sessions import SessionUnavailable
-from gh_chrome_server.sse import Frame, sse_response
+from pool.server import storage
+from pool.server.auth import Runner, SocketRunner
+from pool.server.config import settings
+from pool.server.deps import Db, Ss, Tn
+from pool.server.sessions import SessionUnavailable
+from pool.server.sse import Frame, sse_response
 
 router = APIRouter(prefix="/runner", tags=["runner"])
 

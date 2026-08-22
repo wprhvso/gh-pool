@@ -3,11 +3,11 @@ from typing import Any
 
 import pytest
 
-from gh_chrome_protocol import SessionParams, Speed
-from gh_chrome_runner import input as input_module
-from gh_chrome_runner.input import Input
-from gh_chrome_runner.locate import ElementIntercepted, ElementMissing
-from gh_chrome_runner.xtest import BUTTONS, Point
+from pool.protocol import SessionParams, Speed
+from pool.runner import input as input_module
+from pool.runner.input import Input
+from pool.runner.locate import ElementIntercepted, ElementMissing
+from pool.runner.xtest import BUTTONS, Point
 
 VIEWPORT = {
     "screenX": 0,

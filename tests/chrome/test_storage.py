@@ -4,8 +4,8 @@ from uuid import uuid4
 
 import pytest
 
-from gh_chrome_server import storage
-from gh_chrome_server.config import settings
+from pool.server import storage
+from pool.server.config import settings
 
 
 async def _chunks(*pieces: bytes) -> AsyncIterator[bytes]:

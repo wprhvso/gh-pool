@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import override
 
-from pool_runners.redact import redact
+from pool.keeper.redact import redact
 
 
 class RunnerError(Exception):

@@ -25,9 +25,9 @@ from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 from starlette.types import ASGIApp
 
-import gh_chrome_client
-from gh_chrome_client import Session
-from gh_chrome_protocol import (
+import pool.client
+from pool.client import Session
+from pool.protocol import (
     CommandEnvelope,
     CommandError,
     ErrorCode,
@@ -39,12 +39,12 @@ from gh_chrome_protocol import (
     RunnerConfig,
     Upload,
 )
-from gh_chrome_protocol.sse import parse_sse
-from gh_chrome_runner.config import settings as runner_settings
-from gh_chrome_runner.http import ServerClient
-from gh_chrome_server import pool
-from gh_chrome_server.app import create_app
-from gh_chrome_server.config import settings as server_settings
+from pool.protocol.sse import parse_sse
+from pool.runner.config import settings as runner_settings
+from pool.runner.http import ServerClient
+from pool.server import pool
+from pool.server.app import create_app
+from pool.server.config import settings as server_settings
 
 log = logging.getLogger(__name__)
 
@@ -506,7 +506,7 @@ class LiveRunner:
             [
                 sys.executable,
                 "-m",
-                "gh_chrome_runner",
+                "pool.runner",
                 "--session",
                 str(self._id),
                 "--verbose",
@@ -605,7 +605,7 @@ class Stack:
         await self.aclose()
 
     async def session(self, *, close_timeout: float = 30.0, **params: Any) -> Session:
-        session = await gh_chrome_client.new(
+        session = await pool.client.new(
             server=self.server.url,
             token=TOKEN,
             close_timeout=close_timeout,

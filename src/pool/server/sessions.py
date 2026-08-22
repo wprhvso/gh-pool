@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 from psycopg.rows import DictRow
 from psycopg.types.json import Jsonb
 
-from gh_chrome_protocol import (
+from pool.protocol import (
     CloseReason,
     CommandError,
     CommandFailed,
@@ -23,10 +23,10 @@ from gh_chrome_protocol import (
     SessionState,
     SessionStatus,
 )
-from gh_chrome_protocol.trace import TraceContext
-from gh_chrome_server.config import settings
-from gh_chrome_server.db import Database, Tx
-from gh_chrome_server.events import Events
+from pool.protocol.trace import TraceContext
+from pool.server.config import settings
+from pool.server.db import Database, Tx
+from pool.server.events import Events
 
 LIVE = ("pending", "active")
 _LIMIT_LOCK = 0x6768_6301

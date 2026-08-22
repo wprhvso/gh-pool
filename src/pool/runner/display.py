@@ -5,7 +5,7 @@ import os
 import shutil
 from collections.abc import Callable
 
-from gh_chrome_runner.config import settings
+from pool.runner.config import settings
 
 log = logging.getLogger(__name__)
 

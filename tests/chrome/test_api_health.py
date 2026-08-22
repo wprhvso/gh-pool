@@ -2,7 +2,7 @@ import pytest
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 
-from gh_chrome_server import api_health
+from pool.server import api_health
 
 
 class FakeDatabase:

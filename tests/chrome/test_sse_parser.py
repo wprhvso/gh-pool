@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from gh_chrome_protocol.sse import SseMessage, parse_sse
+from pool.protocol.sse import SseMessage, parse_sse
 
 
 async def _chunks(*pieces: bytes) -> AsyncIterator[bytes]:

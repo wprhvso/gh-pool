@@ -2,9 +2,9 @@ import asyncio
 
 import httpx
 import pytest
-from tests.e2e.stack import Stack, expression_of, until
+from tests.chrome.e2e.stack import Stack, expression_of, until
 
-from gh_chrome_client import (
+from pool.client import (
     ElementNotFound,
     GhChromeError,
     SessionDead,
@@ -12,7 +12,7 @@ from gh_chrome_client import (
     Speed,
     TooManySessions,
 )
-from gh_chrome_protocol import ErrorCode, Method
+from pool.protocol import ErrorCode, Method
 
 
 async def _status(api: httpx.AsyncClient, session_id: object) -> str:

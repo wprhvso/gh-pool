@@ -2,10 +2,10 @@ import asyncio
 
 import pytest
 
-from gh_chrome_protocol import Speed
-from gh_chrome_runner.keyboard import MEDIANS, Keyboard, keysym_name
-from gh_chrome_runner.scroll import PROFILES, TICK_PIXELS, Scroller
-from gh_chrome_runner.xtest import SPECIAL_KEYS, XtestError, keysym_of
+from pool.protocol import Speed
+from pool.runner.keyboard import MEDIANS, Keyboard, keysym_name
+from pool.runner.scroll import PROFILES, TICK_PIXELS, Scroller
+from pool.runner.xtest import SPECIAL_KEYS, XtestError, keysym_of
 
 
 class FakeXtest:

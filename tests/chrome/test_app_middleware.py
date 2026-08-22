@@ -4,15 +4,15 @@ import pytest
 from fastapi import FastAPI, Request, UploadFile
 from starlette.testclient import TestClient
 
-from gh_chrome_protocol import trace
-from gh_chrome_server import pool, storage
-from gh_chrome_server.app import BindTrace, LimitBody, install_errors
-from gh_chrome_server.sessions import (
+from pool.protocol import trace
+from pool.server import pool, storage
+from pool.server.app import BindTrace, LimitBody, install_errors
+from pool.server.sessions import (
     SessionNotFound,
     SessionUnavailable,
     TooManySessions,
 )
-from gh_chrome_server.tunnel import TunnelDown
+from pool.server.tunnel import TunnelDown
 
 LIMIT = 4096
 BOUNDARY = "a-boundary-nobody-else-uses"

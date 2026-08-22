@@ -3,9 +3,9 @@ from contextlib import asynccontextmanager
 from typing import cast
 from uuid import uuid4
 
-from gh_chrome_protocol import Bare, CommandEnvelope, CommandError, ErrorCode, Method
-from gh_chrome_runner.http import ServerClient
-from gh_chrome_runner.loop import Runner
+from pool.protocol import Bare, CommandEnvelope, CommandError, ErrorCode, Method
+from pool.runner.http import ServerClient
+from pool.runner.loop import Runner
 
 CLOSE = b"event: close\ndata: {}\n\n"
 

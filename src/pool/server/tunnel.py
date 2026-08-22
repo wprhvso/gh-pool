@@ -8,7 +8,7 @@ from fastapi import WebSocket
 from pydantic import BaseModel
 from starlette.websockets import WebSocketDisconnect
 
-from gh_chrome_protocol import tunnel
+from pool.protocol import tunnel
 
 log = logging.getLogger(__name__)
 

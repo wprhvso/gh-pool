@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Self
 
 import pytest
-from pool_runners import agent as agent_mod
+from pool.keeper import agent as agent_mod
 
 RUNNER = """#!/bin/sh
 echo "2026-08-18 02:00:00Z: Listening for Jobs"
