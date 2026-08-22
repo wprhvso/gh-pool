@@ -1,7 +1,13 @@
 import logging
 
 import uvicorn
-from yaol import instrument_fastapi, instrument_runtime, instrument_sqlalchemy, setup, shutdown
+from yaol import (
+    instrument_fastapi,
+    instrument_runtime,
+    instrument_sqlalchemy,
+    setup,
+    shutdown,
+)
 
 from gh_pool.core.config import settings
 from gh_pool.db.engine import engine

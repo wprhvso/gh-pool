@@ -4,22 +4,19 @@ import os
 import time
 import uuid
 from collections import deque
-from collections.abc import AsyncGenerator, Coroutine, Iterable
-from contextlib import asynccontextmanager
-from importlib import metadata
+from collections.abc import Coroutine, Iterable
 from io import BufferedWriter
 from pathlib import Path
 from typing import Annotated, Any, TypedDict
 
 import structlog
 from anyio import to_thread
-from fastapi import APIRouter, FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from opentelemetry import metrics
 from opentelemetry.metrics import CallbackOptions, Observation
 
 from gh_pool.db import tasks as db
-from gh_pool.db.engine import engine
 
 log = structlog.get_logger()
 
