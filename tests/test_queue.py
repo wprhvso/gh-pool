@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 
+from gh_pool.core.config import settings
 from gh_pool.server import tasks as server
 from tests.conftest import as_client, as_worker, submit, take
 
@@ -28,7 +29,7 @@ async def test_tasks_are_handed_out_in_the_order_they_arrived(client):
 async def test_an_empty_queue_answers_no_content_once_the_wait_is_over(
     client, monkeypatch
 ):
-    monkeypatch.setattr(server, "LEASE_WAIT", 0.05)
+    monkeypatch.setattr(settings, "lease_wait", 0.05)
 
     answer = await client.post(
         "/v1/lease", json={"worker_id": "w1"}, headers=as_worker()
@@ -38,7 +39,7 @@ async def test_an_empty_queue_answers_no_content_once_the_wait_is_over(
 
 
 async def test_a_waiting_worker_is_woken_by_a_new_task(client, monkeypatch):
-    monkeypatch.setattr(server, "LEASE_WAIT", 5.0)
+    monkeypatch.setattr(settings, "lease_wait", 5.0)
     waiting = asyncio.ensure_future(take(client))
     await asyncio.sleep(0.05)
 
@@ -145,7 +146,7 @@ async def test_cancelling_a_running_task_only_asks_its_worker_to_stop(client):
 async def test_a_cancelled_task_is_skipped_when_a_worker_asks_for_work(
     client, monkeypatch
 ):
-    monkeypatch.setattr(server, "LEASE_WAIT", 0.05)
+    monkeypatch.setattr(settings, "lease_wait", 0.05)
     skipped = await submit(client)
     wanted = await submit(client)
     await client.post(f"/v1/tasks/{skipped}/cancel", headers=as_client())

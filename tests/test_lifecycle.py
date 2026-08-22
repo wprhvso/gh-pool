@@ -15,10 +15,10 @@ async def until(condition, timeout=2.0):
     return False
 
 
-async def reaping(monkeypatch, **settings):
-    for name, value in settings.items():
-        monkeypatch.setattr(server, name, value)
-    monkeypatch.setattr(server, "FLUSH_EVERY", 0.01)
+async def reaping(monkeypatch, **overrides):
+    for name, value in overrides.items():
+        monkeypatch.setattr(settings, name, value)
+    monkeypatch.setattr(settings, "flush_every", 0.01)
     return asyncio.ensure_future(server.keeper())
 
 
@@ -28,7 +28,7 @@ async def test_a_task_whose_worker_went_quiet_is_declared_lost(
     tid = await submit(client)
     await take(client)
     server.TASKS[tid]["heartbeat_at"] = time.time() - 100
-    reaper = await reaping(monkeypatch, LOST_AFTER=1.0)
+    reaper = await reaping(monkeypatch, lost_after=1.0)
 
     try:
         assert await until(lambda: any(r["id"] == tid for r in blank.saved))
@@ -43,7 +43,7 @@ async def test_a_task_whose_worker_went_quiet_is_declared_lost(
 async def test_a_task_that_keeps_beating_is_left_alone(client, monkeypatch):
     tid = await submit(client)
     await take(client)
-    reaper = await reaping(monkeypatch, LOST_AFTER=60.0)
+    reaper = await reaping(monkeypatch, lost_after=60.0)
 
     try:
         await asyncio.sleep(0.1)
@@ -60,7 +60,7 @@ async def test_a_worker_that_stopped_asking_drops_off_the_listing(client, monkey
         headers={"Authorization": "Bearer dev-worker"},
     )
     server.WORKERS["w1"]["seen_at"] = time.time() - 100
-    reaper = await reaping(monkeypatch, WORKER_STALE=1.0)
+    reaper = await reaping(monkeypatch, worker_stale=1.0)
 
     try:
         assert await until(lambda: "w1" not in server.WORKERS)
@@ -295,7 +295,7 @@ async def test_a_recovered_task_whose_worker_never_returns_is_declared_lost(
     await server.recover()
     server.TASKS["busy"]["heartbeat_at"] = time.time() - 1000
 
-    task = await reaping(monkeypatch, LOST_AFTER=1)
+    task = await reaping(monkeypatch, lost_after=1)
     ok = await until(
         lambda: any(r["id"] == "busy" and r["status"] == "lost" for r in blank.saved)
     )
