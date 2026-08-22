@@ -1,9 +1,8 @@
 import asyncio
 import time
 
+from gh_pool.server import tasks as server
 from tests.conftest import as_client, as_worker, submit, take
-
-from gh_pool import server
 
 
 async def until(condition, timeout=2.0):

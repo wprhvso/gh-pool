@@ -23,6 +23,7 @@ API = "https://api.github.com"
 KEYS = ("token", "workflow", "jobs", "ttl", "ref")
 UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 SECRETS = ("GH_POOL_SERVER", "GH_POOL_WORKER_TOKEN")
+ENV_KEYS = {"server": "GH_POOL_SERVER", "token": "GH_POOL_WORKER_TOKEN"}
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 GRACE = 30
 BOOT_GRACE = 2400
@@ -128,7 +129,9 @@ def load(path: Path) -> tuple[list[Repo], float, dict[str, str], str]:
     repos = raw.pop("repos", {})
     table = raw.pop("pool", {})
     client = str(table.pop("client_token", ""))
-    pool = {f"POOL_{k.upper()}": str(v) for k, v in table.items()}
+    # Отображение явное: слепой GH_POOL_{КЛЮЧ} дал бы для token имя
+    # GH_POOL_TOKEN, а оно занято токеном API браузерных сессий.
+    pool = {ENV_KEYS.get(k, f"GH_POOL_{k.upper()}"): str(v) for k, v in table.items()}
     out = []
     for slug, value in repos.items():
         cfg: dict[str, Any] = {

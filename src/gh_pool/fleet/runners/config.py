@@ -169,8 +169,8 @@ def load(path: Path) -> tuple[list[Target], Server]:
 
 def env_server() -> Server:
     return Server(
-        url=os.environ.get("POOL_SERVER", "http://localhost:8000").rstrip("/"),
-        token=os.environ.get("POOL_CLIENT_TOKEN", "dev-client"),
+        url=os.environ.get("GH_POOL_SERVER", "http://localhost:8000").rstrip("/"),
+        token=os.environ.get("GH_POOL_CLIENT_TOKEN", "dev-client"),
     )
 
 

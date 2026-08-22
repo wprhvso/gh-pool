@@ -2,9 +2,8 @@ import asyncio
 import contextlib
 import hashlib
 
+from gh_pool.server import tasks as server
 from tests.conftest import as_client, as_worker
-
-from gh_pool import server
 
 
 async def test_an_artifact_comes_back_byte_for_byte(client):

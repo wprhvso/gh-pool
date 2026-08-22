@@ -1,6 +1,5 @@
+from gh_pool.server import tasks as server
 from tests.conftest import as_client, as_worker, submit, take
-
-from gh_pool import server
 
 
 async def append(client, tid, token, data, offset):

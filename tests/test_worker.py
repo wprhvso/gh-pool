@@ -4,9 +4,10 @@ import sys
 
 import httpx
 import pytest
-from tests.conftest import as_client, submit, take
 
-from gh_pool import server, worker
+from gh_pool import worker
+from gh_pool.server import tasks as server
+from tests.conftest import as_client, submit, take
 
 
 @pytest.fixture

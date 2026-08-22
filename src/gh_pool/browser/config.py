@@ -1,6 +1,7 @@
 import shutil
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from gh_pool.config import adopt
@@ -19,7 +20,7 @@ def _first_binary(*names: str) -> str:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="GH_POOL_", extra="ignore")
 
-    url: str = "http://127.0.0.1:8000"
+    url: str = Field(default="http://127.0.0.1:8000", validation_alias="GH_POOL_SERVER")
     token: str = ""
     display: int = 99
     workdir: Path = Path("/tmp/gh-chrome")
