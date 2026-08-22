@@ -3,11 +3,11 @@ import hashlib
 import os
 import time
 import uuid
-from secrets import compare_digest
 from collections import deque
 from collections.abc import Coroutine, Iterable
 from io import BufferedWriter
 from pathlib import Path
+from secrets import compare_digest
 from typing import Annotated, Any, TypedDict
 
 import structlog

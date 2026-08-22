@@ -26,6 +26,7 @@ from gh_pool.fleet.runners.config import (
 from gh_pool.fleet.runners.controller import install_stop_handler, run
 from gh_pool.fleet.runners.errors import RunnerError
 from gh_pool.fleet.runners.gh import preflight, release_version
+from gh_pool.obs import version
 from gh_pool.fleet.runners.http import backoff
 from gh_pool.fleet.runners.pool import Pool
 
@@ -40,15 +41,8 @@ _EXIT_USAGE = 2
 _EXIT_ERROR = 1
 
 
-def _version() -> str:
-    try:
-        return importlib.metadata.version("gh-pool")
-    except importlib.metadata.PackageNotFoundError:
-        return "0.0.0"
-
-
 def _observe() -> None:
-    config = from_env("pool-runners", service_version=_version())
+    config = from_env("pool-runners", service_version=version())
     if debug():
         config = replace(config, log_level="DEBUG")
     setup(config)
@@ -125,7 +119,7 @@ def _check(targets: list[Target], server: Server) -> int:
     for target in targets:
         try:
             info = preflight(target)
-            version = target.version or release_version()
+            version = target.version or releaseversion()
             log.info(
                 "%s: доступ есть, %s, метка %r, раннеров до %s, версия %s",
                 target.slug,

@@ -1,15 +1,11 @@
 import argparse
 import base64
-import json
 import sys
 import time
 import tomllib
-import urllib.error
-import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from importlib import metadata
 from pathlib import Path
 from typing import Any, Final
 
@@ -17,11 +13,13 @@ import structlog
 from opentelemetry.metrics import get_meter
 from yaol import setup, shutdown, span
 
-from gh_pool.obs import observability
+from gh_pool.fleet.runners import gh as rest_api
+from gh_pool.fleet.runners.config import Server, secs
+from gh_pool.fleet.runners.errors import HttpError, RunnerError
+from gh_pool.fleet.runners.pool import Pool
+from gh_pool.obs import observability, version
 
-API = "https://api.github.com"
 KEYS = ("token", "workflow", "jobs", "ttl", "ref")
-UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 SECRETS = ("GH_POOL_SERVER", "GH_POOL_WORKER_TOKEN")
 ENV_KEYS = {"server": "GH_POOL_SERVER", "token": "GH_POOL_WORKER_TOKEN"}
 WORKFLOWS = Path(__file__).resolve().parents[3] / ".github" / "workflows"
@@ -32,40 +30,14 @@ IDLE_BUDGET = 25
 MAX_LAUNCH = 5
 POOL_WARMUP = 240
 STATUSES = ("in_progress", "queued", "waiting")
-
-
-class ApiError(RuntimeError):
-    def __init__(self, code: int, text: str) -> None:
-        super().__init__(text)
-        self.code = code
+_NOT_FOUND = 404
 
 
 def gh(
     token: str, path: str, method: str = "GET", body: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    req = urllib.request.Request(  # noqa: S310
-        API + path,
-        data=json.dumps(body).encode() if body else None,
-        method=method,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {token}",
-            "User-Agent": "pool-keeper",
-            "X-GitHub-Api-Version": "2022-11-28",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:  # noqa: S310
-            data = r.read()
-    except urllib.error.HTTPError as e:
-        raise ApiError(
-            e.code, f"{method} {path} -> {e.code} {e.read()[:200].decode()}"
-        ) from None
-    return json.loads(data) if data else {}
-
-
-def secs(v: str | float) -> float:
-    return float(v) if isinstance(v, (int, float)) else float(v[:-1]) * UNITS[v[-1]]
+    answer = rest_api.rest(token, method, path, body=body)
+    return answer if isinstance(answer, dict) else {}
 
 
 _log: Final = structlog.get_logger("pool.fleet.runners")
@@ -118,8 +90,8 @@ class Repo:
     def get(self, path: str) -> dict[str, Any] | None:
         try:
             return self.api(path)
-        except ApiError as e:
-            if e.code == 404:
+        except HttpError as e:
+            if e.status == _NOT_FOUND:
                 return None
             raise
 
@@ -147,15 +119,7 @@ def load(path: Path) -> tuple[list[Repo], float, dict[str, str], str]:
 
 
 def ask(base: str, path: str, token: str) -> Any:
-    req = urllib.request.Request(  # noqa: S310
-        f"{base.rstrip('/')}{path}",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        raise ApiError(e.code, f"GET {path} -> {e.code}") from None
+    return Pool(Server(url=base, token=token)).call("GET", path)
 
 
 def pool_workers(pool: dict[str, str], token: str) -> dict[int, float] | None:
@@ -171,7 +135,7 @@ def pool_workers(pool: dict[str, str], token: str) -> dict[int, float] | None:
             log(f"pool поднялся {up:.0f}с назад, список воркеров ещё не наполнился")
             return None
         listing = ask(base, "/v1/workers", token)
-    except ApiError as e:
+    except (HttpError, RunnerError) as e:
         log(f"pool отказал: {e} — проверь pool.client_token")
         return None
     except (OSError, ValueError) as e:
@@ -335,13 +299,6 @@ def each(repos: list[Repo], fn: Callable[[Repo], None]) -> None:
             fn(r)
         except Exception as e:
             log(f"{r.slug} {type(e).__name__}: {e}")
-
-
-def version() -> str:
-    try:
-        return metadata.version("gh-pool")
-    except metadata.PackageNotFoundError:
-        return "0.0.0"
 
 
 def main() -> None:

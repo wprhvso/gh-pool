@@ -6,12 +6,13 @@ import os
 import sys
 import time
 from dataclasses import replace
-from importlib import metadata
 from pathlib import Path
 from typing import Any, NoReturn
 
 import httpx
 from yaol import SpanKind, from_env, inject_headers, setup, shutdown, span
+
+from gh_pool.obs import version
 
 SERVER = os.getenv("GH_POOL_SERVER", "http://localhost:8000").rstrip("/")
 TOKEN = os.getenv("GH_POOL_CLIENT_TOKEN", "dev-client")
@@ -213,13 +214,6 @@ def cmd_workers(args: argparse.Namespace) -> None:
 
 def cmd_health(args: argparse.Namespace) -> None:
     print(json.dumps(call("GET", "/healthz").json(), indent=2))
-
-
-def version() -> str:
-    try:
-        return metadata.version("gh-pool")
-    except metadata.PackageNotFoundError:
-        return "0.0.0"
 
 
 def observe() -> None:

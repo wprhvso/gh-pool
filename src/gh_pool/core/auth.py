@@ -76,6 +76,12 @@ def hand_out_ticket(response: Response, request: Request, session_id: UUID) -> N
     )
 
 
+async def require_socket_token(websocket: WebSocket) -> None:
+    scheme, _, value = websocket.headers.get("authorization", "").partition(" ")
+    if scheme.lower() != "bearer" or not same_secret(value, settings.token):
+        raise WebSocketException(status.WS_1008_POLICY_VIOLATION, "invalid token")
+
+
 async def require_socket_ticket(websocket: WebSocket, session_id: UUID) -> None:
     expected = ticket(session_id)
     offered = (
@@ -112,5 +118,6 @@ async def require_socket_runner(websocket: WebSocket, session_id: UUID) -> None:
 Token = Annotated[None, Depends(require_token)]
 Runner = Annotated[None, Depends(require_runner)]
 Basic = Annotated[None, Depends(require_basic)]
+SocketToken = Annotated[None, Depends(require_socket_token)]
 SocketRunner = Annotated[None, Depends(require_socket_runner)]
 SocketTicket = Annotated[None, Depends(require_socket_ticket)]

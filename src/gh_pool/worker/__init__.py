@@ -10,7 +10,6 @@ import time
 import traceback
 import uuid
 from collections.abc import Callable, Mapping
-from importlib import metadata
 from pathlib import Path
 from typing import Any, Final, NoReturn
 
@@ -28,7 +27,7 @@ from yaol import (
     span,
 )
 
-from gh_pool.obs import observability
+from gh_pool.obs import observability, version
 
 SERVER = os.getenv("GH_POOL_SERVER", "http://localhost:8000").rstrip("/")
 TOKEN = os.getenv("GH_POOL_WORKER_TOKEN", "dev-worker")
@@ -415,13 +414,6 @@ def run_exec(ttype: str, payload_file: str) -> NoReturn:
         traceback.print_exc()
         sys.exit(1)
     sys.exit(0)
-
-
-def version() -> str:
-    try:
-        return metadata.version("gh-pool")
-    except metadata.PackageNotFoundError:
-        return "0.0.0"
 
 
 def logs_off_stdout() -> None:
