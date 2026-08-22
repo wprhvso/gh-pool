@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from opentelemetry import metrics
 from opentelemetry.metrics import CallbackOptions, Observation
 
-from pool import db
+from pool.db import tasks as db
 
 log = structlog.get_logger()
 

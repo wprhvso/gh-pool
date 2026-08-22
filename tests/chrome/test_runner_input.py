@@ -4,10 +4,10 @@ from typing import Any
 import pytest
 
 from pool.protocol import SessionParams, Speed
-from pool.runner import input as input_module
-from pool.runner.input import Input
-from pool.runner.locate import ElementIntercepted, ElementMissing
-from pool.runner.xtest import BUTTONS, Point
+from pool.browser import input as input_module
+from pool.browser.input import Input
+from pool.browser.locate import ElementIntercepted, ElementMissing
+from pool.browser.xtest import BUTTONS, Point
 
 VIEWPORT = {
     "screenX": 0,

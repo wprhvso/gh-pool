@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from pool.runner import profile
-from pool.runner.config import settings
+from pool.browser import profile
+from pool.browser.config import settings
 
 
 class FakeServer:

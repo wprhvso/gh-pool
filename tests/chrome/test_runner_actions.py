@@ -9,11 +9,11 @@ from pool.protocol import (
     SessionParams,
     Topic,
 )
-from pool.runner.actions import Actions
-from pool.runner.cdp import CdpError
-from pool.runner.locate import ElementIntercepted, ElementMissing
-from pool.runner.navigation import NavigationFailed
-from pool.runner.tabs import NoActiveTab
+from pool.browser.actions import Actions
+from pool.browser.cdp import CdpError
+from pool.browser.locate import ElementIntercepted, ElementMissing
+from pool.browser.navigation import NavigationFailed
+from pool.browser.tabs import NoActiveTab
 
 
 class FakeCdp:

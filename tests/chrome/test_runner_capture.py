@@ -4,9 +4,9 @@ from uuid import uuid4
 import pytest
 
 from pool.protocol import RunnerConfig, SessionParams
-from pool.runner import capture
-from pool.runner.capture import Capture
-from pool.runner.config import settings
+from pool.browser import capture
+from pool.browser.capture import Capture
+from pool.browser.config import settings
 
 
 class FakeDisplay:

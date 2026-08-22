@@ -7,7 +7,7 @@ from starlette.requests import HTTPConnection
 from pool.server.db import Database
 from pool.server.events import Events
 from pool.server.sessions import Sessions
-from pool.server.tunnel import Tunnels
+from pool.relay.tunnel import Tunnels
 
 
 def _from_state(name: str) -> Callable[[HTTPConnection], Any]:

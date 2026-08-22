@@ -40,8 +40,8 @@ from pool.protocol import (
     Upload,
 )
 from pool.protocol.sse import parse_sse
-from pool.runner.config import settings as runner_settings
-from pool.runner.http import ServerClient
+from pool.browser.config import settings as runner_settings
+from pool.browser.http import ServerClient
 from pool.server import pool
 from pool.server.app import create_app
 from pool.server.config import settings as server_settings
@@ -506,7 +506,7 @@ class LiveRunner:
             [
                 sys.executable,
                 "-m",
-                "pool.runner",
+                "pool.browser",
                 "--session",
                 str(self._id),
                 "--verbose",

@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from pool.runner.config import settings
-from pool.runner.display import Display, _kasmvnc_command, _xvfb_command
+from pool.browser.config import settings
+from pool.browser.display import Display, _kasmvnc_command, _xvfb_command
 
 
 class FakeProcess:

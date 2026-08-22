@@ -3,9 +3,9 @@ import asyncio
 import pytest
 
 from pool.protocol import Speed
-from pool.runner.keyboard import MEDIANS, Keyboard, keysym_name
-from pool.runner.scroll import PROFILES, TICK_PIXELS, Scroller
-from pool.runner.xtest import SPECIAL_KEYS, XtestError, keysym_of
+from pool.browser.keyboard import MEDIANS, Keyboard, keysym_name
+from pool.browser.scroll import PROFILES, TICK_PIXELS, Scroller
+from pool.browser.xtest import SPECIAL_KEYS, XtestError, keysym_of
 
 
 class FakeXtest:

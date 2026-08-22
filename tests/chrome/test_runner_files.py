@@ -11,8 +11,8 @@ from starlette.routing import Route
 from tests.chrome.e2e.stack import Background
 
 from pool.protocol import Upload
-from pool.runner.config import settings
-from pool.runner.files import Files, _one_segment, _reachable
+from pool.browser.config import settings
+from pool.browser.files import Files, _one_segment, _reachable
 
 PAYLOAD = b"a file the page asked for" * 20
 

@@ -12,7 +12,7 @@ from starlette.routing import Route
 from tests.chrome.e2e.stack import Background
 from websockets.asyncio.server import ServerConnection, serve
 
-from pool.runner.cdp import Cdp, CdpError
+from pool.browser.cdp import Cdp, CdpError
 
 
 async def _serve(connection: ServerConnection) -> None:

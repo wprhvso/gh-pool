@@ -9,9 +9,9 @@ from websockets.http11 import Response
 from websockets.typing import Subprotocol
 
 from pool.protocol import tunnel
-from pool.runner.tunnel import Link
-from pool.server.tunnel import Tunnel as ServerTunnel
-from pool.server.tunnel import TunnelDown, Tunnels
+from pool.browser.tunnel import Link
+from pool.relay.tunnel import Tunnel as ServerTunnel
+from pool.relay.tunnel import TunnelDown, Tunnels
 
 BODY = b"a live desktop" * 500
 

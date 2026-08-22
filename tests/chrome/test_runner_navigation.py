@@ -4,9 +4,9 @@ from typing import Any
 import pytest
 
 from pool.protocol import Goto, WaitUntil
-from pool.runner import navigation
-from pool.runner.cdp import CdpError
-from pool.runner.navigation import NavigationFailed
+from pool.browser import navigation
+from pool.browser.cdp import CdpError
+from pool.browser.navigation import NavigationFailed
 
 
 class FakeTabs:

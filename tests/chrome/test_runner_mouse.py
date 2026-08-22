@@ -5,7 +5,7 @@ from itertools import pairwise
 import pytest
 
 from pool.protocol import Speed
-from pool.runner.mouse import STEP_LIMIT, TUNINGS, Tuning, wind_mouse
+from pool.browser.mouse import STEP_LIMIT, TUNINGS, Tuning, wind_mouse
 
 MOVING = [speed for speed in Speed if speed is not Speed.INSTANT]
 

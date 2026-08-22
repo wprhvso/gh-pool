@@ -13,7 +13,7 @@ from websockets.exceptions import InvalidStatus
 from websockets.typing import Subprotocol
 
 from pool.client import Session
-from pool.runner.tunnel import Tunnel
+from pool.browser.tunnel import Tunnel
 from pool.server import auth
 
 

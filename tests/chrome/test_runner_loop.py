@@ -4,8 +4,8 @@ from typing import cast
 from uuid import uuid4
 
 from pool.protocol import Bare, CommandEnvelope, CommandError, ErrorCode, Method
-from pool.runner.http import ServerClient
-from pool.runner.loop import Runner
+from pool.browser.http import ServerClient
+from pool.browser.loop import Runner
 
 CLOSE = b"event: close\ndata: {}\n\n"
 

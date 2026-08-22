@@ -12,8 +12,8 @@ from starlette.routing import Route
 from tests.chrome.e2e.stack import Background
 
 from pool.protocol import CommandError, ErrorCode, SessionParams, TabOpened
-from pool.runner.config import settings
-from pool.runner.http import ServerClient
+from pool.browser.config import settings
+from pool.browser.http import ServerClient
 
 SESSION = uuid4()
 TOKEN = "the-token-this-session-was-given"

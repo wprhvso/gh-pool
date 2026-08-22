@@ -12,7 +12,7 @@ from pool.server.sessions import (
     SessionUnavailable,
     TooManySessions,
 )
-from pool.server.tunnel import TunnelDown
+from pool.relay.tunnel import TunnelDown
 
 LIMIT = 4096
 BOUNDARY = "a-boundary-nobody-else-uses"

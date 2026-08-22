@@ -26,7 +26,7 @@ from pool.server.sessions import (
     SessionUnavailable,
     TooManySessions,
 )
-from pool.server.tunnel import TunnelDown, Tunnels
+from pool.relay.tunnel import TunnelDown, Tunnels
 from pool.server.watchdog import Watchdog
 
 STATUS_CODES: dict[type[Exception], int] = {

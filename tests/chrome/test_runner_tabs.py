@@ -5,8 +5,8 @@ from typing import Any
 import pytest
 
 from pool.protocol import EventData, TabActivated, TabClosed, TabOpened
-from pool.runner import tabs as tabs_module
-from pool.runner.tabs import NoActiveTab, Tabs
+from pool.browser import tabs as tabs_module
+from pool.browser.tabs import NoActiveTab, Tabs
 
 
 class FakeCdp:

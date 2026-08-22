@@ -4,8 +4,8 @@ from typing import Any
 import pytest
 
 from pool.protocol import ElementState, WaitUntil
-from pool.runner import dom
-from pool.runner.locate import ElementMissing
+from pool.browser import dom
+from pool.browser.locate import ElementMissing
 
 
 class FakeTabs:
