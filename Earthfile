@@ -12,12 +12,12 @@ deps:
     ENV UV_PYTHON_DOWNLOADS=never
     WORKDIR /app
     COPY pyproject.toml uv.lock README.md ./
-    RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --extra server --extra relay --no-dev --no-install-project
+    RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --extra server --extra relay --extra fleet --no-dev --no-install-project
 
 build:
     FROM +deps
     COPY src src
-    RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --extra server --extra relay --no-dev --no-editable
+    RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --extra server --extra relay --extra fleet --no-dev --no-editable
     SAVE ARTIFACT /app/.venv venv
 
 docker:
