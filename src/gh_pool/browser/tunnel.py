@@ -11,8 +11,8 @@ from websockets.asyncio.client import ClientConnection
 from websockets.exceptions import InvalidStatus
 from websockets.typing import Origin, Subprotocol
 
-from gh_pool.protocol import tunnel
 from gh_pool.browser.config import settings
+from gh_pool.protocol import tunnel
 
 log = logging.getLogger(__name__)
 

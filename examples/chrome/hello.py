@@ -4,7 +4,7 @@ import gh_pool.client
 
 
 async def main() -> None:
-    session = await pool.client.new(width=1280, height=800, fps=10)
+    session = await gh_pool.client.new(width=1280, height=800, fps=10)
     print(f"session {session.id}, player at {session.player_url}")
     async with session as s:
         await s.ready(timeout=300)

@@ -4,10 +4,10 @@ import logging
 import re
 from pathlib import Path
 
-from gh_pool.protocol import RunnerConfig
 from gh_pool.browser.config import settings
 from gh_pool.browser.display import Display
 from gh_pool.browser.http import ServerClient
+from gh_pool.protocol import RunnerConfig
 
 log = logging.getLogger(__name__)
 

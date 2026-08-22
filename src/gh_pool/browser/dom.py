@@ -2,11 +2,11 @@ import asyncio
 import re
 from typing import Any
 
-from gh_pool.protocol import ElementState, WaitUntil
 from gh_pool.browser.locate import ElementMissing, Locator
 from gh_pool.browser.locate import js_string as js
 from gh_pool.browser.navigation import settle
 from gh_pool.browser.tabs import Tabs
+from gh_pool.protocol import ElementState, WaitUntil
 
 POLL = 0.1
 MISSING = "__gh_chrome_missing__"

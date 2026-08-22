@@ -3,10 +3,10 @@ from typing import Any
 
 import pytest
 
-from gh_pool.protocol import Goto, WaitUntil
 from gh_pool.browser import navigation
 from gh_pool.browser.cdp import CdpError
 from gh_pool.browser.navigation import NavigationFailed
+from gh_pool.protocol import Goto, WaitUntil
 
 
 class FakeTabs:

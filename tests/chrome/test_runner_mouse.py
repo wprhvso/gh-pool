@@ -4,8 +4,8 @@ from itertools import pairwise
 
 import pytest
 
-from gh_pool.protocol import Speed
 from gh_pool.browser.mouse import STEP_LIMIT, TUNINGS, Tuning, wind_mouse
+from gh_pool.protocol import Speed
 
 MOVING = [speed for speed in Speed if speed is not Speed.INSTANT]
 

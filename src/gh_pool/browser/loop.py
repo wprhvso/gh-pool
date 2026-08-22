@@ -7,9 +7,6 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Any, Protocol
 from uuid import UUID
 
-from gh_pool.protocol import CommandEnvelope, CommandError, ErrorCode, RunnerConfig
-from gh_pool.protocol.sse import parse_sse
-from gh_pool.protocol.trace import TraceContext, bound
 from gh_pool.browser import profile
 from gh_pool.browser.actions import Actions
 from gh_pool.browser.browser import Browser
@@ -19,6 +16,9 @@ from gh_pool.browser.display import Display
 from gh_pool.browser.http import ServerClient
 from gh_pool.browser.tunnel import Tunnel
 from gh_pool.browser.xtest import Xtest
+from gh_pool.protocol import CommandEnvelope, CommandError, ErrorCode, RunnerConfig
+from gh_pool.protocol.sse import parse_sse
+from gh_pool.protocol.trace import TraceContext, bound
 
 log = logging.getLogger(__name__)
 

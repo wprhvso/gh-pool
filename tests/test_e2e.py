@@ -8,7 +8,6 @@ from pathlib import Path
 
 import httpx
 import pytest
-
 from gh_pool.sdk import Failed, Pool, Remote
 
 WORKER_TOKEN = "e2e-worker"
@@ -84,7 +83,7 @@ def live(tmp_path_factory):
         [
             "-c",
             (
-                "import uvicorn\nfrom pool.server import app\n"
+                "import uvicorn\nfrom gh_pool.server import app\n"
                 f"uvicorn.run(app, host='127.0.0.1', port={port},"
                 " log_level='warning')"
             ),

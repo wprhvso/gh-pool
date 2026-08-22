@@ -1,7 +1,6 @@
 import asyncio
 import random
 
-from gh_pool.protocol import SessionParams
 from gh_pool.browser.keyboard import Keyboard
 from gh_pool.browser.locate import (
     Box,
@@ -15,6 +14,7 @@ from gh_pool.browser.mouse import TUNINGS, wind_mouse
 from gh_pool.browser.scroll import Scroller
 from gh_pool.browser.tabs import Tabs
 from gh_pool.browser.xtest import BUTTONS, Xtest
+from gh_pool.protocol import SessionParams
 
 DRIFT_TOLERANCE = 2.0
 MAX_ATTEMPTS = 40

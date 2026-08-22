@@ -2,14 +2,6 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from gh_pool.protocol import (
-    CommandArgs,
-    CommandError,
-    ErrorCode,
-    Method,
-    SessionParams,
-    Topic,
-)
 from gh_pool.browser import dom, navigation
 from gh_pool.browser.cdp import Cdp, CdpError
 from gh_pool.browser.files import Files
@@ -18,6 +10,14 @@ from gh_pool.browser.input import Input
 from gh_pool.browser.locate import ElementIntercepted, ElementMissing
 from gh_pool.browser.tabs import Tabs
 from gh_pool.browser.xtest import Xtest
+from gh_pool.protocol import (
+    CommandArgs,
+    CommandError,
+    ErrorCode,
+    Method,
+    SessionParams,
+    Topic,
+)
 
 log = logging.getLogger(__name__)
 

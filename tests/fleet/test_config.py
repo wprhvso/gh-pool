@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
 from gh_pool.fleet.runners.config import Target, env_target, load, secs
 from gh_pool.fleet.runners.errors import RunnerError
 

@@ -11,9 +11,9 @@ from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Route
 from tests.chrome.e2e.stack import Background
 
-from gh_pool.protocol import CommandError, ErrorCode, SessionParams, TabOpened
 from gh_pool.browser.config import settings
 from gh_pool.browser.http import ServerClient
+from gh_pool.protocol import CommandError, ErrorCode, SessionParams, TabOpened
 
 SESSION = uuid4()
 TOKEN = "the-token-this-session-was-given"

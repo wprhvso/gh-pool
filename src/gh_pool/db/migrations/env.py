@@ -2,10 +2,12 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
+from sqlalchemy import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy.pool import NullPool
 
-from gh_pool.db import base, engine as engine_mod
+from gh_pool.db import base
+from gh_pool.db import engine as engine_mod
 from gh_pool.db import sessions as _sessions  # noqa: F401
 from gh_pool.db import tasks as _tasks  # noqa: F401
 
@@ -30,7 +32,7 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def _run(connection) -> None:
+def _run(connection: Connection) -> None:
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()

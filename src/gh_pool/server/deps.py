@@ -4,10 +4,10 @@ from typing import Annotated, Any
 from fastapi import Depends
 from starlette.requests import HTTPConnection
 
+from gh_pool.relay.tunnel import Tunnels
 from gh_pool.server.db import Database
 from gh_pool.server.events import Events
 from gh_pool.server.sessions import Sessions
-from gh_pool.relay.tunnel import Tunnels
 
 
 def _from_state(name: str) -> Callable[[HTTPConnection], Any]:

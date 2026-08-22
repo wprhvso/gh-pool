@@ -3,9 +3,9 @@ from typing import Any
 
 import pytest
 
-from gh_pool.protocol import ElementState, WaitUntil
 from gh_pool.browser import dom
 from gh_pool.browser.locate import ElementMissing
+from gh_pool.protocol import ElementState, WaitUntil
 
 
 class FakeTabs:

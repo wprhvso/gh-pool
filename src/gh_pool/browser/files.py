@@ -9,12 +9,12 @@ from urllib.parse import quote
 
 import httpx
 
-from gh_pool.protocol import Upload
 from gh_pool.browser.cdp import Cdp
 from gh_pool.browser.config import settings
 from gh_pool.browser.http import ServerClient
 from gh_pool.browser.locate import ElementMissing
 from gh_pool.browser.tabs import Tabs
+from gh_pool.protocol import Upload
 
 log = logging.getLogger(__name__)
 

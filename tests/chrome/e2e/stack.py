@@ -26,6 +26,8 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo
 from starlette.types import ASGIApp
 
 import gh_pool.client
+from gh_pool.browser.config import settings as runner_settings
+from gh_pool.browser.http import ServerClient
 from gh_pool.client import Session
 from gh_pool.protocol import (
     CommandEnvelope,
@@ -40,8 +42,6 @@ from gh_pool.protocol import (
     Upload,
 )
 from gh_pool.protocol.sse import parse_sse
-from gh_pool.browser.config import settings as runner_settings
-from gh_pool.browser.http import ServerClient
 from gh_pool.server import pool
 from gh_pool.server.app import create_app
 from gh_pool.server.config import settings as server_settings
@@ -605,7 +605,7 @@ class Stack:
         await self.aclose()
 
     async def session(self, *, close_timeout: float = 30.0, **params: Any) -> Session:
-        session = await pool.client.new(
+        session = await gh_pool.client.new(
             server=self.server.url,
             token=TOKEN,
             close_timeout=close_timeout,

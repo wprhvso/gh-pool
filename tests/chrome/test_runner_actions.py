@@ -2,6 +2,11 @@ from typing import Any
 
 import pytest
 
+from gh_pool.browser.actions import Actions
+from gh_pool.browser.cdp import CdpError
+from gh_pool.browser.locate import ElementIntercepted, ElementMissing
+from gh_pool.browser.navigation import NavigationFailed
+from gh_pool.browser.tabs import NoActiveTab
 from gh_pool.protocol import (
     CommandError,
     ErrorCode,
@@ -9,11 +14,6 @@ from gh_pool.protocol import (
     SessionParams,
     Topic,
 )
-from gh_pool.browser.actions import Actions
-from gh_pool.browser.cdp import CdpError
-from gh_pool.browser.locate import ElementIntercepted, ElementMissing
-from gh_pool.browser.navigation import NavigationFailed
-from gh_pool.browser.tabs import NoActiveTab
 
 
 class FakeCdp:

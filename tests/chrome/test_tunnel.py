@@ -8,8 +8,8 @@ from websockets.datastructures import Headers
 from websockets.http11 import Response
 from websockets.typing import Subprotocol
 
-from gh_pool.protocol import tunnel
 from gh_pool.browser.tunnel import Link
+from gh_pool.protocol import tunnel
 from gh_pool.relay.tunnel import Tunnel as ServerTunnel
 from gh_pool.relay.tunnel import TunnelDown, Tunnels
 

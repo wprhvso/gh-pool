@@ -59,7 +59,7 @@ async def save(model: type[Base], rows: list[dict[str, Any]]) -> None:
     stmt = stmt.on_conflict_do_update(
         index_elements=[key], set_={c: stmt.excluded[c] for c in rows[0] if c != key}
     )
-    async with Session.begin() as session:
+    async with session().begin() as db:
         await db.execute(stmt)
 
 
@@ -70,10 +70,8 @@ async def fetch(model: type[Base], value: Any) -> dict[str, Any] | None:
 
 
 async def drop(model: type[Base], value: Any) -> None:
-    async with Session.begin() as session:
-        await db.execute(
-            delete(model).where(getattr(model, key_of(model)) == value)
-        )
+    async with session().begin() as db:
+        await db.execute(delete(model).where(getattr(model, key_of(model)) == value))
 
 
 async def rows(model: type[Base], query: Select[Any]) -> list[dict[str, Any]]:

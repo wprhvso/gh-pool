@@ -85,7 +85,7 @@ async def test_a_runner_that_is_killed_leaves_the_session_dead(
     assert isinstance(ended, SessionClosed)
     assert ended.reason is CloseReason.DEAD
 
-    profiles = await pool.client.profiles(server=stack.server.url, token=TOKEN)
+    profiles = await gh_pool.client.profiles(server=stack.server.url, token=TOKEN)
     assert [(item.name, item.stale, item.size) for item in profiles] == [
         ("cut-short", True, None)
     ]

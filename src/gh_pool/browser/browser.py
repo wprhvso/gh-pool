@@ -4,10 +4,10 @@ import os
 from pathlib import Path
 from typing import Any
 
-from gh_pool.protocol import SessionParams
 from gh_pool.browser.cdp import Cdp
 from gh_pool.browser.config import settings
 from gh_pool.browser.display import Display
+from gh_pool.protocol import SessionParams
 
 READY_TIMEOUT = 60.0
 CLOSE_TIMEOUT = 5.0

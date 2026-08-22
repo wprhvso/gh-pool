@@ -1,8 +1,8 @@
 import asyncio
 import random
 
-from gh_pool.protocol import Speed
 from gh_pool.browser.xtest import SPECIAL_KEYS, Xtest
+from gh_pool.protocol import Speed
 
 MEDIANS: dict[Speed, float] = {
     Speed.INSTANT: 0.0,

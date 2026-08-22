@@ -1,8 +1,8 @@
 import asyncio
 import random
 
-from gh_pool.protocol import Speed
 from gh_pool.browser.xtest import Xtest
+from gh_pool.protocol import Speed
 
 TICK_PIXELS = 120
 

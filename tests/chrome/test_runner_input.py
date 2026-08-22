@@ -3,11 +3,11 @@ from typing import Any
 
 import pytest
 
-from gh_pool.protocol import SessionParams, Speed
 from gh_pool.browser import input as input_module
 from gh_pool.browser.input import Input
 from gh_pool.browser.locate import ElementIntercepted, ElementMissing
 from gh_pool.browser.xtest import BUTTONS, Point
+from gh_pool.protocol import SessionParams, Speed
 
 VIEWPORT = {
     "screenX": 0,

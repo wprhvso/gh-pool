@@ -7,6 +7,7 @@ from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from gh_pool.protocol import trace
+from gh_pool.relay.tunnel import TunnelDown, Tunnels
 from gh_pool.server import (
     api_client,
     api_health,
@@ -26,7 +27,6 @@ from gh_pool.server.sessions import (
     SessionUnavailable,
     TooManySessions,
 )
-from gh_pool.relay.tunnel import TunnelDown, Tunnels
 from gh_pool.server.watchdog import Watchdog
 
 STATUS_CODES: dict[type[Exception], int] = {

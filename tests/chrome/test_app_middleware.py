@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request, UploadFile
 from starlette.testclient import TestClient
 
 from gh_pool.protocol import trace
+from gh_pool.relay.tunnel import TunnelDown
 from gh_pool.server import pool, storage
 from gh_pool.server.app import BindTrace, LimitBody, install_errors
 from gh_pool.server.sessions import (
@@ -12,7 +13,6 @@ from gh_pool.server.sessions import (
     SessionUnavailable,
     TooManySessions,
 )
-from gh_pool.relay.tunnel import TunnelDown
 
 LIMIT = 4096
 BOUNDARY = "a-boundary-nobody-else-uses"

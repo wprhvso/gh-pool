@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Self
 
 import pytest
+
 from gh_pool.fleet.runners import agent as agent_mod
 
 RUNNER = """#!/bin/sh

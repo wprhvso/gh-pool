@@ -141,9 +141,7 @@ def upgrade() -> None:
                 server_default=sa.text("0"),
             ),
             sa.Column("heartbeat_at", ts),
-            sa.Column(
-                "created_at", ts, nullable=False, server_default=sa.func.now()
-            ),
+            sa.Column("created_at", ts, nullable=False, server_default=sa.func.now()),
             sa.Column("ready_at", ts),
             sa.Column("closed_at", ts),
             sa.Column("runner_token", sa.Text()),

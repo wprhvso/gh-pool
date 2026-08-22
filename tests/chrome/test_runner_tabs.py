@@ -4,9 +4,9 @@ from typing import Any
 
 import pytest
 
-from gh_pool.protocol import EventData, TabActivated, TabClosed, TabOpened
 from gh_pool.browser import tabs as tabs_module
 from gh_pool.browser.tabs import NoActiveTab, Tabs
+from gh_pool.protocol import EventData, TabActivated, TabClosed, TabOpened
 
 
 class FakeCdp:

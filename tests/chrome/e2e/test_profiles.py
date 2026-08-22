@@ -9,7 +9,7 @@ pytestmark = pytest.mark.browser
 
 
 async def _profiles(stack: Stack) -> list[ProfileInfo]:
-    return await pool.client.profiles(server=stack.server.url, token=TOKEN)
+    return await gh_pool.client.profiles(server=stack.server.url, token=TOKEN)
 
 
 async def test_a_profile_carries_the_browser_into_the_next_session(

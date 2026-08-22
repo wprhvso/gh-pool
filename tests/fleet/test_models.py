@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+
 from gh_pool.fleet.runners.models import Session, Stats, to_int
 
 

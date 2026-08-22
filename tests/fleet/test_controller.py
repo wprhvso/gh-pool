@@ -6,12 +6,13 @@ import time
 from dataclasses import replace
 
 import pytest
+from tests.fleet.fake import FakePool, FakeScaleSet, job, message, refused
+
 from gh_pool.fleet.runners import controller as ctrl
 from gh_pool.fleet.runners.config import Server, Target
 from gh_pool.fleet.runners.errors import RunnerError
 from gh_pool.fleet.runners.fleet import Fleet
 from gh_pool.fleet.runners.models import Stats
-from tests.fleet.fake import FakePool, FakeScaleSet, job, message, refused
 
 
 def _ctx(
@@ -303,7 +304,7 @@ def test_a_runner_is_unregistered_when_the_pool_refuses_it() -> None:
 def test_the_shipped_code_is_the_agent_module() -> None:
     assert "def agent(" in ctrl.CODE
     assert "ACTIONS_RUNNER_INPUT_JITCONFIG" in ctrl.CODE
-    assert "pool.fleet.runners" not in ctrl.CODE
+    assert "gh_pool.fleet.runners" not in ctrl.CODE
 
 
 def test_a_restart_picks_up_the_previous_life(monkeypatch: pytest.MonkeyPatch) -> None:

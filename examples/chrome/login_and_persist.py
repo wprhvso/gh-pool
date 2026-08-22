@@ -9,7 +9,7 @@ PASSWORD = os.environ["DEMO_PASSWORD"]
 
 
 async def main() -> None:
-    session = await pool.client.new(
+    session = await gh_pool.client.new(
         profile="demo",
         subscribe=[Topic.TABS, Topic.DOWNLOADS],
         timeout=45.0,
@@ -31,7 +31,7 @@ async def main() -> None:
 
         try:
             await s.wait_for_url(r"github\.com/?$", timeout=60)
-        except pool.client.CommandTimeout:
+        except gh_pool.client.CommandTimeout:
             print("two-factor or a captcha is in the way, watch the recording")
             return
 

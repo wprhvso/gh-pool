@@ -5,9 +5,9 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from gh_pool.protocol import EventData, TabActivated, TabClosed, TabOpened
 from gh_pool.browser.cdp import Cdp, CdpError
 from gh_pool.browser.config import settings
+from gh_pool.protocol import EventData, TabActivated, TabClosed, TabOpened
 
 log = logging.getLogger(__name__)
 

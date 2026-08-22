@@ -4,9 +4,9 @@ import logging
 import sys
 from uuid import UUID
 
-from gh_pool.protocol import trace
 from gh_pool.browser.config import settings
 from gh_pool.browser.loop import Runner
+from gh_pool.protocol import trace
 
 
 def main() -> None:

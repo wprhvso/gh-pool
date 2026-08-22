@@ -2,10 +2,10 @@ import asyncio
 
 import pytest
 
-from gh_pool.protocol import Speed
 from gh_pool.browser.keyboard import MEDIANS, Keyboard, keysym_name
 from gh_pool.browser.scroll import PROFILES, TICK_PIXELS, Scroller
 from gh_pool.browser.xtest import SPECIAL_KEYS, XtestError, keysym_of
+from gh_pool.protocol import Speed
 
 
 class FakeXtest:

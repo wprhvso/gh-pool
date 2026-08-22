@@ -2,9 +2,9 @@ import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from gh_pool.protocol import Goto, WaitUntil
 from gh_pool.browser.cdp import CdpError
 from gh_pool.browser.tabs import Tabs
+from gh_pool.protocol import Goto, WaitUntil
 
 READY_STATES = {
     WaitUntil.DOMCONTENTLOADED: ("interactive", "complete"),
