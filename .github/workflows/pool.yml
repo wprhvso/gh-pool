@@ -222,6 +222,7 @@ jobs:
           rustup toolchain install nightly --profile minimal \
             --component rustfmt --component clippy
           rustup default nightly
+          echo "$HOME/.cargo/bin" >>"$GITHUB_PATH"
 
       - uses: wprhvso/github-runner-node-exporter/.github/actions/runner-metrics-mark@main
         with:
