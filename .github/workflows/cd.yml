@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
   version:
@@ -15,50 +14,34 @@ jobs:
       release: ${{ steps.read.outputs.release }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
       - id: read
         run: |
-          set -euo pipefail
-          declared=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
-          echo "version=$declared" >> "$GITHUB_OUTPUT"
-          case "$declared" in
+          version=$(python3 -c 'import tomllib;print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          case "$version" in
             *[!0-9.]*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
             *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
           esac
-          curl -fsS https://pypi.org/pypi/gh-pool/json -o pypi.json || echo '{}' > pypi.json
-          release=$(uv run --no-project --with packaging python - "$declared" <<'PY'
-          import json, sys
-          from packaging.version import InvalidVersion, Version
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
 
-          declared = Version(sys.argv[1])
-          published = []
-          for raw in json.load(open("pypi.json")).get("releases", {}):
-              try:
-                  published.append(Version(raw))
-              except InvalidVersion:
-                  pass
-          highest = max(published, default=None)
-          print("true" if highest is None or declared > highest else "false")
-          print(f"{declared} vs pypi {highest}", file=sys.stderr)
-          PY
-          )
-          echo "release=$release" >> "$GITHUB_OUTPUT"
-
-  release:
-    runs-on: pool
-    needs: [version]
+  image:
+    needs: version
     if: needs.version.outputs.release == 'true'
-
+    runs-on: pool
     permissions:
       contents: read
       packages: write
-
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-      - uses: earthly/actions-setup@v1
-        with:
-          version: ^0.8.0
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -70,35 +53,26 @@ jobs:
             --LATEST="${{ needs.version.outputs.prerelease == 'false' }}"
 
   pypi:
-    runs-on: pool
-    needs: [version, release]
+    needs: [version, image]
     if: needs.version.outputs.release == 'true'
-
+    runs-on: pool
     environment: pypi
-
     permissions:
       contents: read
       id-token: write
-
     steps:
       - uses: actions/checkout@v7
-        with:
-          enable-cache: true
       - run: uv build --out-dir dist
       - run: uv publish
 
   tag:
-    runs-on: pool
-    needs: [version, release, pypi]
+    needs: [version, image, pypi]
     if: needs.version.outputs.release == 'true'
-
+    runs-on: pool
     permissions:
       contents: write
-
     steps:
       - uses: actions/checkout@v7
       - run: |
-          set -euo pipefail
-          tag="v${{ needs.version.outputs.version }}"
-          git tag "$tag" "$GITHUB_SHA"
-          git push origin "$tag"
+          git tag "v${{ needs.version.outputs.version }}"
+          git push origin "v${{ needs.version.outputs.version }}"
