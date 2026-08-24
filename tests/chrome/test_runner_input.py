@@ -17,6 +17,7 @@ VIEWPORT = {
     "height": 800,
 }
 BOX = {"x": 100.0, "y": 200.0, "width": 80.0, "height": 40.0}
+TYPED = 0
 
 
 class FakeXtest:
@@ -82,6 +83,10 @@ class FakeTabs:
             return self._hit.pop(0) if len(self._hit) > 1 else self._hit[0]
         if "el.options" in expression:
             return self._select
+        if "requestAnimationFrame" in expression:
+            return True
+        if "document.activeElement" in expression:
+            return TYPED
         if expression == "window.scrollY":
             return self._scroll.pop(0) if len(self._scroll) > 1 else self._scroll[0]
         raise AssertionError(expression)
