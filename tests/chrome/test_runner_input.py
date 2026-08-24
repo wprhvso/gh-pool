@@ -193,6 +193,25 @@ async def test_typing_over_a_field_clears_it_first():
     assert ("tap", "Delete") in names
 
 
+class StuckTabs(FakeTabs):
+    async def evaluate(self, expression: str, _tab: object = None) -> Any:
+        if "requestAnimationFrame" in expression:
+            await asyncio.Event().wait()
+        return await super().evaluate(expression, _tab)
+
+
+async def test_a_page_that_never_settles_does_not_hold_the_click(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(input_module, "SETTLE_TIMEOUT", 0.1)
+    pointer, xtest = _input(StuckTabs())
+
+    async with asyncio.timeout(5):
+        await pointer.click("#save")
+
+    assert len(xtest.clicks) == 2
+
+
 async def test_an_option_the_page_has_is_chosen():
     tabs = FakeTabs()
     pointer, _ = _input(tabs)
