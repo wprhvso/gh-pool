@@ -17,6 +17,7 @@ VIEWPORT = {
     "height": 800,
 }
 BOX = {"x": 100.0, "y": 200.0, "width": 80.0, "height": 40.0}
+TYPED = 0
 
 
 class FakeXtest:
@@ -82,6 +83,10 @@ class FakeTabs:
             return self._hit.pop(0) if len(self._hit) > 1 else self._hit[0]
         if "el.options" in expression:
             return self._select
+        if "requestAnimationFrame" in expression:
+            return True
+        if "document.activeElement" in expression:
+            return TYPED
         if expression == "window.scrollY":
             return self._scroll.pop(0) if len(self._scroll) > 1 else self._scroll[0]
         raise AssertionError(expression)
@@ -186,6 +191,25 @@ async def test_typing_over_a_field_clears_it_first():
     names = [call for call in xtest.calls if call[0] in {"key", "tap"}]
     assert ("key", "Control_L", True) in names
     assert ("tap", "Delete") in names
+
+
+class StuckTabs(FakeTabs):
+    async def evaluate(self, expression: str, _tab: object = None) -> Any:
+        if "requestAnimationFrame" in expression:
+            await asyncio.Event().wait()
+        return await super().evaluate(expression, _tab)
+
+
+async def test_a_page_that_never_settles_does_not_hold_the_click(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(input_module, "SETTLE_TIMEOUT", 0.1)
+    pointer, xtest = _input(StuckTabs())
+
+    async with asyncio.timeout(5):
+        await pointer.click("#save")
+
+    assert len(xtest.clicks) == 2
 
 
 async def test_an_option_the_page_has_is_chosen():

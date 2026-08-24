@@ -24,6 +24,7 @@ SETTLE_DELAY = 0.05
 CLICK_BUDGET = 10.0
 MIN_ATTEMPTS = 5
 SETTLE_BUDGET = 1.0
+SETTLE_TIMEOUT = 2.0
 TYPING_BUDGET = 5.0
 
 SETTLE_JS = f"""
@@ -143,8 +144,9 @@ class Input:
         await self._settle()
 
     async def _settle(self) -> None:
-        with contextlib.suppress(CdpError):
-            await self._tabs.evaluate(SETTLE_JS)
+        with contextlib.suppress(CdpError, TimeoutError):
+            async with asyncio.timeout(SETTLE_TIMEOUT):
+                await self._tabs.evaluate(SETTLE_JS)
 
     async def _landed(self) -> None:
         loop = asyncio.get_running_loop()
@@ -152,8 +154,9 @@ class Input:
         seen = -2
         while loop.time() < deadline:
             await self._settle()
-            with contextlib.suppress(CdpError):
-                length = await self._tabs.evaluate(TYPED_JS)
+            with contextlib.suppress(CdpError, TimeoutError):
+                async with asyncio.timeout(SETTLE_TIMEOUT):
+                    length = await self._tabs.evaluate(TYPED_JS)
                 if length == seen:
                     return
                 seen = length
