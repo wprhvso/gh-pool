@@ -4,5 +4,14 @@ __pycache__/
 data/
 .env
 keeper.toml
+runners.toml
 result
 result-*
+dist/
+build/
+*.egg-info/
+.ruff_cache/
+.pytest_cache/
+.direnv/
+.pgdata/
+.pgsock/
