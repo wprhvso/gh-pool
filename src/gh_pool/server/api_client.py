@@ -18,7 +18,7 @@ from gh_pool.protocol import (
     SessionState,
 )
 from gh_pool.protocol.trace import TraceContext
-from gh_pool.server import pool, storage
+from gh_pool.server import dispatch, storage
 from gh_pool.server.sse import Frame, resume_from, sse_response
 
 router = APIRouter(prefix="/sessions", tags=["client"])
@@ -37,8 +37,8 @@ async def create_session(
     token = await sessions.runner_token(state.id)
     try:
         if token is None:
-            raise pool.DispatchError("session vanished before dispatch")
-        await pool.dispatch(state.id, token)
+            raise dispatch.DispatchError("session vanished before dispatch")
+        await dispatch.dispatch(state.id, token)
     except Exception:
         await sessions.finish(state.id, CloseReason.DEAD)
         raise

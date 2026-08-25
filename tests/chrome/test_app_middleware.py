@@ -11,7 +11,7 @@ from gh_pool.core.sessions import (
     TooManySessions,
 )
 from gh_pool.protocol import trace
-from gh_pool.server import pool, storage
+from gh_pool.server import dispatch, storage
 from gh_pool.server.app import STATUS_CODES, BindTrace, LimitBody
 
 LIMIT = 4096
@@ -68,7 +68,7 @@ def harness():
             "too_many": TooManySessions("one at a time"),
             "bad_name": storage.BadName(".."),
             "too_large": storage.TooLarge("more than that"),
-            "dispatch": pool.DispatchError("the pool is unreachable"),
+            "dispatch": dispatch.DispatchError("the pool is unreachable"),
         }[name]
 
     app.add_api_route("/files", files, methods=["POST"])

@@ -26,7 +26,7 @@ from gh_pool.server import (
     api_health,
     api_player,
     api_runner,
-    pool,
+    dispatch,
     shell,
     storage,
     tasks,
@@ -40,7 +40,7 @@ STATUS_CODES: Codes = {
     TooManySessions: status.HTTP_429_TOO_MANY_REQUESTS,
     storage.BadName: status.HTTP_400_BAD_REQUEST,
     storage.TooLarge: status.HTTP_413_CONTENT_TOO_LARGE,
-    pool.DispatchError: status.HTTP_502_BAD_GATEWAY,
+    dispatch.DispatchError: status.HTTP_502_BAD_GATEWAY,
 }
 
 

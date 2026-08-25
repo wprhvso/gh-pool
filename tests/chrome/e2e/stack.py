@@ -40,7 +40,7 @@ from gh_pool.protocol import (
 )
 from gh_pool.protocol.sse import parse_sse
 from gh_pool.relay.app import create_app as create_relay
-from gh_pool.server import pool
+from gh_pool.server import dispatch
 from gh_pool.server.app import create_app as create_server
 from tests.chrome.e2e.gateway import Gateway
 
@@ -172,7 +172,7 @@ class Server:
         self._patch.setattr(server_settings, "watchdog_interval", watchdog_interval)
         self._patch.setattr(server_settings, "segment_seconds", segment_seconds)
         self._patch.setattr(server_settings, "max_upload", max_upload)
-        self._patch.setattr(pool, "dispatch", self._dispatch)
+        self._patch.setattr(dispatch, "dispatch", self._dispatch)
         try:
             self._background = Background(_behind_gateway())
             self._background.start()
@@ -215,7 +215,7 @@ class Server:
         self.runner_tokens[session_id] = runner_token
         runner_settings.token = runner_token
         if self.dispatch_error is not None:
-            raise pool.DispatchError(self.dispatch_error)
+            raise dispatch.DispatchError(self.dispatch_error)
         if self.launcher is not None:
             await asyncio.to_thread(self.launcher, session_id)
 

@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from gh_pool.core.config import settings
-from gh_pool.server import pool
+from gh_pool.server import dispatch
 
 SESSION = uuid4()
 RUNNER_TOKEN = "the-token-the-runner-comes-back-with"
@@ -50,7 +50,7 @@ def configured(monkeypatch: pytest.MonkeyPatch):
 
 def _answers(monkeypatch: pytest.MonkeyPatch, answer: httpx.Response | Exception):
     monkeypatch.setattr(
-        pool.httpx, "AsyncClient", lambda **kwargs: FakeClient(answer, **kwargs)
+        dispatch.httpx, "AsyncClient", lambda **kwargs: FakeClient(answer, **kwargs)
     )
 
 
@@ -59,7 +59,7 @@ async def test_a_task_is_submitted_with_everything_the_runner_needs(
 ):
     _answers(configured, httpx.Response(201, json={"task_id": "t-1"}))
 
-    await pool.dispatch(SESSION, RUNNER_TOKEN)
+    await dispatch.dispatch(SESSION, RUNNER_TOKEN)
 
     sent = FakeClient.sent[-1]
     assert sent["url"] == "https://pool.example.com/v1/tasks"
@@ -79,8 +79,8 @@ async def test_a_pool_that_was_never_configured_is_not_asked(
     monkeypatch.setattr(settings, "pool_token", "")
     FakeClient.sent = []
 
-    with pytest.raises(pool.DispatchError, match="not configured"):
-        await pool.dispatch(SESSION, RUNNER_TOKEN)
+    with pytest.raises(dispatch.DispatchError, match="not configured"):
+        await dispatch.dispatch(SESSION, RUNNER_TOKEN)
 
     assert FakeClient.sent == []
 
@@ -90,8 +90,8 @@ async def test_a_pool_that_cannot_be_reached_is_a_dispatch_failure(
 ):
     _answers(configured, httpx.ConnectError("connection refused"))
 
-    with pytest.raises(pool.DispatchError, match="unreachable"):
-        await pool.dispatch(SESSION, RUNNER_TOKEN)
+    with pytest.raises(dispatch.DispatchError, match="unreachable"):
+        await dispatch.dispatch(SESSION, RUNNER_TOKEN)
 
 
 async def test_a_pool_that_takes_too_long_is_a_dispatch_failure(
@@ -99,8 +99,8 @@ async def test_a_pool_that_takes_too_long_is_a_dispatch_failure(
 ):
     _answers(configured, httpx.ReadTimeout("took too long"))
 
-    with pytest.raises(pool.DispatchError):
-        await pool.dispatch(SESSION, RUNNER_TOKEN)
+    with pytest.raises(dispatch.DispatchError):
+        await dispatch.dispatch(SESSION, RUNNER_TOKEN)
 
 
 @pytest.mark.parametrize("code", [400, 401, 429, 500, 503])
@@ -109,8 +109,8 @@ async def test_a_pool_that_says_no_is_a_dispatch_failure(
 ):
     _answers(configured, httpx.Response(code, text="not today"))
 
-    with pytest.raises(pool.DispatchError, match=str(code)):
-        await pool.dispatch(SESSION, RUNNER_TOKEN)
+    with pytest.raises(dispatch.DispatchError, match=str(code)):
+        await dispatch.dispatch(SESSION, RUNNER_TOKEN)
 
 
 @pytest.mark.parametrize(
@@ -125,8 +125,8 @@ async def test_an_answer_that_is_not_json_is_a_dispatch_failure(
 ):
     _answers(configured, answer)
 
-    with pytest.raises(pool.DispatchError, match="json"):
-        await pool.dispatch(SESSION, RUNNER_TOKEN)
+    with pytest.raises(dispatch.DispatchError, match="json"):
+        await dispatch.dispatch(SESSION, RUNNER_TOKEN)
 
 
 @pytest.mark.parametrize("payload", [{"nothing": "useful"}, {}, [1, 2], "a string"])
@@ -135,8 +135,8 @@ async def test_an_answer_without_a_task_id_is_a_dispatch_failure(
 ):
     _answers(configured, httpx.Response(200, json=payload))
 
-    with pytest.raises(pool.DispatchError, match="task_id"):
-        await pool.dispatch(SESSION, RUNNER_TOKEN)
+    with pytest.raises(dispatch.DispatchError, match="task_id"):
+        await dispatch.dispatch(SESSION, RUNNER_TOKEN)
 
 
 def test_the_runner_spec_is_the_one_the_operator_pinned(
@@ -144,13 +144,13 @@ def test_the_runner_spec_is_the_one_the_operator_pinned(
 ):
     monkeypatch.setattr(settings, "runner_spec", "gh-pool[browser] @ git+ssh://x")
 
-    assert pool.runner_spec() == "gh-pool[browser] @ git+ssh://x"
+    assert dispatch.runner_spec() == "gh-pool[browser] @ git+ssh://x"
 
 
 def test_without_a_pin_the_runner_matches_the_server_that_dispatched_it(
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setattr(settings, "runner_spec", "")
-    monkeypatch.setattr(pool, "version", lambda _name: "1.2.3")
+    monkeypatch.setattr(dispatch, "version", lambda _name: "1.2.3")
 
-    assert pool.runner_spec() == "gh-pool[browser]==1.2.3"
+    assert dispatch.runner_spec() == "gh-pool[browser]==1.2.3"
