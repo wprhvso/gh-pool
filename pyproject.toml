@@ -1,29 +1,47 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
 name = "gh-pool"
 version = "0.1.5"
-description = "Пул задач на раннерах GitHub Actions, браузерные сессии и флот раннеров"
+description = "A task pool on GitHub Actions runners, plus browser sessions and a runner fleet"
 readme = "README.md"
 requires-python = ">=3.14"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "wprhvso", email = "wprhvso@gmail.com" }]
+keywords = ["github-actions", "task-queue", "runners", "chrome", "automation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: System :: Distributed Computing",
+    "Typing :: Typed",
+]
 
-# База намеренно пуста. Голый gh-pool ставится внутрь кода задачи ради
-# `from gh_pool import emit`, а rpc.py и tasks.py написаны на одной стандартной
-# библиотеке. Каждая лишняя зависимость здесь — секунды на старте каждой джобы.
+# The base is empty on purpose. Bare gh-pool is installed into the task's own
+# code just for `from gh_pool import emit`, and rpc.py and tasks.py are written
+# against the standard library alone. Every extra dependency here is seconds off
+# the start of every job.
 dependencies = []
 
+[project.urls]
+Repository = "https://github.com/wprhvso/gh-pool"
+Issues = "https://github.com/wprhvso/gh-pool/issues"
+
 [project.optional-dependencies]
-# Клиент: SDK задач и клиент браузерных сессий.
+# Client: the task SDK and the browser session client.
 client = [
     "httpx>=0.28",
     "pydantic>=2.10",
     "yaol>=0.3",
 ]
 
-# То, что ставится в джобе рядом с Chrome. Держать узким: ставится через
-# uv run --with на каждый запуск сессии.
+# What gets installed in the job next to Chrome. Keep it narrow: it is installed
+# through uv run --with on every session start.
 browser = [
     "httpx>=0.28",
     "pydantic>=2.10",
@@ -32,7 +50,7 @@ browser = [
     "websockets>=14.1",
 ]
 
-# Исполнитель задач: крутится на раннере, тянет задачи и пасёт подпроцессы.
+# The task executor: runs on the runner, pulls tasks and herds subprocesses.
 worker = [
     "httpx>=0.28",
     "opentelemetry-api>=1.29",
@@ -40,7 +58,7 @@ worker = [
     "yaol>=0.3",
 ]
 
-# gh-pool-server: API задач и сессий, диспатч, фоновые задачи, миграции.
+# gh-pool-server: the task and session API, dispatch, background chores, migrations.
 server = [
     "alembic>=1.14",
     "anyio>=4.4",
@@ -68,7 +86,7 @@ relay = [
     "uvicorn[standard]>=0.34",
 ]
 
-# Кипер и флот раннеров: ходят в GitHub, шифруют секреты репозиториев.
+# The keeper and the runner fleet: they talk to GitHub and seal repository secrets.
 fleet = [
     "opentelemetry-api>=1.29",
     "pynacl>=1.5",
@@ -103,7 +121,7 @@ pythonpath = ["."]
 addopts = "-ra --strict-markers"
 xfail_strict = true
 markers = [
-    "browser: водит настоящий Chrome на настоящем X-дисплее",
-    "recording: нужен ffmpeg, чтобы писать экран",
-    "patient_watchdog: сторож не должен торопить сессию",
+    "browser: drives a real Chrome on a real X display",
+    "recording: needs ffmpeg to record the screen",
+    "patient_watchdog: the watchdog must not hurry the session",
 ]
