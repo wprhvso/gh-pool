@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from yaol import from_env, instrument_runtime, setup, shutdown
 
+from gh_pool.core.obs import version as package_version
 from gh_pool.fleet.runners.budget import REST
 from gh_pool.fleet.runners.config import (
     RATE_WAIT_CAP,
@@ -27,7 +28,6 @@ from gh_pool.fleet.runners.errors import RunnerError
 from gh_pool.fleet.runners.gh import preflight, release_version
 from gh_pool.fleet.runners.http import backoff
 from gh_pool.fleet.runners.pool import Pool
-from gh_pool.obs import version as package_version
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

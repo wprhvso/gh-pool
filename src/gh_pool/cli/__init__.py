@@ -13,7 +13,7 @@ import httpx
 from yaol import SpanKind, from_env, inject_headers, setup, shutdown, span
 
 from gh_pool.cli import shell
-from gh_pool.obs import version
+from gh_pool.core.obs import version
 
 SERVER = os.getenv("GH_POOL_SERVER", "http://localhost:8000").rstrip("/")
 TOKEN = os.getenv("GH_POOL_CLIENT_TOKEN", "dev-client")

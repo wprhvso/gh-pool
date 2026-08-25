@@ -27,7 +27,7 @@ from yaol import (
     span,
 )
 
-from gh_pool.obs import observability, version
+from gh_pool.core.obs import observability, version
 
 SERVER = os.getenv("GH_POOL_SERVER", "http://localhost:8000").rstrip("/")
 TOKEN = os.getenv("GH_POOL_WORKER_TOKEN", "dev-worker")

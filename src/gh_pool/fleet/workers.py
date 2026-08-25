@@ -13,11 +13,11 @@ import structlog
 from opentelemetry.metrics import get_meter
 from yaol import setup, shutdown, span
 
+from gh_pool.core.obs import observability, version
 from gh_pool.fleet.runners import gh as rest_api
 from gh_pool.fleet.runners.config import Server, secs
 from gh_pool.fleet.runners.errors import HttpError, RunnerError
 from gh_pool.fleet.runners.pool import Pool
-from gh_pool.obs import observability, version
 
 KEYS = ("token", "workflow", "jobs", "ttl", "ref")
 SECRETS = ("GH_POOL_SERVER", "GH_POOL_WORKER_TOKEN")

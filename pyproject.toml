@@ -75,15 +75,16 @@ server = [
     "yaol>=0.3",
 ]
 
-# gh-pool-relay: только долгие сокеты. Ни httpx (некому диспатчить), ни
-# python-multipart (аплоады идут сырым потоком), ни alembic (миграции гоняет
-# server), ни pynacl.
+# gh-pool-relay: long sockets only. No httpx (nothing to dispatch), no
+# python-multipart (uploads stream raw), no alembic (server runs the
+# migrations), no pynacl.
 relay = [
     "fastapi>=0.115",
     "psycopg[binary,pool]>=3.2",
     "pydantic>=2.10",
     "pydantic-settings>=2.7",
     "uvicorn[standard]>=0.34",
+    "yaol>=0.3",
 ]
 
 # The keeper and the runner fleet: they talk to GitHub and seal repository secrets.

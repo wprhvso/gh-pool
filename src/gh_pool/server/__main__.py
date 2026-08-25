@@ -10,8 +10,8 @@ from yaol import (
 )
 
 from gh_pool.core.config import settings
+from gh_pool.core.obs import observability, version
 from gh_pool.db.engine import engine
-from gh_pool.obs import observability, version
 from gh_pool.protocol import trace
 from gh_pool.server.app import app
 
