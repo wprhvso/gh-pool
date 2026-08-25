@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     storage.ensure_dirs()
     tasks.boot()
     await migrate.upgrade()
-    db = Database(settings.database_url)
+    db = Database(settings.database_url, settings.db_pool_min, settings.db_pool_max)
     await db.open()
     app.state.db = db
     app.state.events = Events(db)

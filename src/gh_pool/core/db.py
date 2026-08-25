@@ -36,10 +36,12 @@ class Tx:
 
 
 class Database:
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, min_size: int = 4, max_size: int = 20) -> None:
         self._pool: AsyncConnectionPool[AsyncConnection[DictRow]] = AsyncConnectionPool(
             dsn.libpq(url),
             open=False,
+            min_size=min_size,
+            max_size=max(min_size, max_size),
             connection_class=AsyncConnection[DictRow],
             kwargs={"row_factory": dict_row},
         )

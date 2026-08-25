@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     worker_token: str = "dev-worker"
     client_token: str = "dev-client"
     database_url: str = "postgresql:///pool"
+    db_pool_min: int = 4
+    db_pool_max: int = 20
     data_dir: Path = Path("./data")
     blob_dir: Path | None = None
     event_cap: int = 100 * 1024 * 1024
