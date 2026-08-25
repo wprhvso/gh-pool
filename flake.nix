@@ -1,5 +1,5 @@
 {
-  description = "Пул задач на раннерах GitHub Actions, браузерные сессии и флот раннеров";
+  description = "A task pool on GitHub Actions runners, plus browser sessions and a runner fleet";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

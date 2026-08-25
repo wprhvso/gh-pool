@@ -17,8 +17,8 @@ def libpq(raw: str) -> str:
             continue
         if scheme == "postgresql+asyncpg://":
             log.warning(
-                "адрес базы записан под asyncpg — драйвер давно psycopg; "
-                "поправьте переменную окружения"
+                "the database url names asyncpg, but the driver is psycopg; "
+                "fix the environment variable"
             )
         return f"postgresql://{raw[len(scheme) :]}"
     return raw

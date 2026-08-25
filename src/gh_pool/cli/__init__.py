@@ -123,7 +123,7 @@ def leased(tid: str) -> dict[str, Any]:
             return task
         if not waiting:
             waiting = True
-            print("--- жду свободного раннера", file=sys.stderr)
+            print("--- waiting for a free runner", file=sys.stderr)
         time.sleep(POLL)
 
 
@@ -134,13 +134,13 @@ def cmd_sh(args: argparse.Namespace) -> None:
         tid = call("POST", "/v1/tasks", json=body).json()["task_id"]
     task = leased(tid)
     if task["status"] != "running":
-        die(f"задача {task['status']}, шелла не будет", CODES.get(task["status"], 1))
+        die(f"task {task['status']}, no shell for it", CODES.get(task["status"], 1))
     print(
-        f"--- {tid} на {task.get('worker_id') or '?'}, отцепиться ~.", file=sys.stderr
+        f"--- {tid} on {task.get('worker_id') or '?'}, detach with ~.", file=sys.stderr
     )
     status = shell.run(tid, SERVER, TOKEN)
     if status == "detached":
-        print(f"--- отцепился, вернуться: pool sh {tid}", file=sys.stderr)
+        print(f"--- detached, come back with: gh-pool sh {tid}", file=sys.stderr)
         return
     if status == "gone":
         status = call("GET", f"/v1/tasks/{tid}").json()["status"]
