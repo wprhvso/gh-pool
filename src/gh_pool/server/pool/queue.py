@@ -44,7 +44,7 @@ def owned(tid: str, lease_token: str | None) -> dict[str, Any]:
         raise HTTPException(409, "stale lease")
     if t.get("lease_token") is None and t["status"] == TaskStatus.RUNNING:
         t["lease_token"] = lease_token
-    if t["lease_token"] != lease_token:
+    if t.get("lease_token") != lease_token:
         raise HTTPException(409, "stale lease")
     return t
 
