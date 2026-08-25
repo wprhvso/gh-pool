@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator, AsyncIterator
 from uuid import UUID, uuid4
 
@@ -122,7 +123,7 @@ async def delete_session(session_id: UUID, sessions: Ss, db: Db, _: Token) -> No
     state = await sessions.get(session_id)
     if state.status.live:
         raise HTTPException(status.HTTP_409_CONFLICT, "session is still running")
-    storage.remove_session(session_id)
+    await asyncio.to_thread(storage.remove_session, session_id)
     async with db.tx() as tx:
         await tx.run("delete from sessions where id = %s", (session_id,))
 

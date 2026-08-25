@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from uuid import UUID
 
@@ -27,7 +28,9 @@ async def player_page(
 @router.get("/{session_id}/manifest.mpd")
 async def player_manifest(session_id: UUID, sessions: Ss, _: Basic) -> Response:
     state = await sessions.get(session_id)
-    segments = manifest.count_segments(storage.segments_dir(session_id))
+    segments = await asyncio.to_thread(
+        manifest.count_segments, storage.segments_dir(session_id)
+    )
     if segments == 0:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no segments yet")
     xml = manifest.build(

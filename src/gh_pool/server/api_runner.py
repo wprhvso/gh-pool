@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator
 from urllib.parse import quote
 from uuid import UUID
@@ -24,7 +25,7 @@ from gh_pool.server.sse import Frame, sse_response
 
 router = APIRouter(prefix="/runner", tags=["runner"])
 
-POLL_INTERVAL = 0.2
+POLL_INTERVAL = 5.0
 
 
 class Cancel(BaseModel):
@@ -159,9 +160,9 @@ async def put_profile(
     incoming = path.with_name(f"{path.name}.incoming")
     size = await storage.write_atomic(incoming, request.stream(), settings.max_upload)
     if size == 0:
-        incoming.unlink(missing_ok=True)
+        await asyncio.to_thread(incoming.unlink, missing_ok=True)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "an empty profile archive")
-    incoming.replace(path)
+    await asyncio.to_thread(incoming.replace, path)
     async with db.tx() as tx:
         await tx.run(
             "update profiles set size = %s, stale = false, updated_at = now() where name = %s",
