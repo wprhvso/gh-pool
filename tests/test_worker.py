@@ -7,8 +7,9 @@ import pytest
 
 from gh_pool import worker
 from gh_pool.server import storage
-from gh_pool.server import tasks as server
 from gh_pool.server.app import create_app
+from gh_pool.server.pool import state as pool_state
+from gh_pool.status import FINISHED
 from tests.conftest import FakeDatabase, as_client, submit, take
 
 
@@ -198,10 +199,10 @@ async def test_a_cancelled_task_is_stopped_and_says_so(wired):
 async def test_a_lease_the_server_forgot_ends_the_task_as_lost(wired):
     tid = await submit(wired, code="import time\ntime.sleep(60)")
     lease = await take(wired)
-    server.TASKS[tid]["lease_token"] = "someone else"
+    pool_state.TASKS[tid]["lease_token"] = "someone else"
 
     assert await worker._run(wired, lease) == "lost"
-    assert server.TASKS[tid]["status"] == "running"
+    assert pool_state.TASKS[tid]["status"] == "running"
 
 
 async def test_the_worker_leaves_no_spool_behind(wired, tmp_path):
@@ -235,7 +236,7 @@ async def test_the_loop_runs_the_task_the_server_hands_it(wired, monkeypatch):
     monkeypatch.setattr(worker.httpx, "AsyncClient", lambda **kw: _Handed(wired))
 
     async def stop_after_one():
-        while server.TASKS.get(tid, {}).get("status") not in server.FINISHED:
+        while pool_state.TASKS.get(tid, {}).get("status") not in FINISHED:
             await asyncio.sleep(0.05)
 
     runner = asyncio.create_task(worker.loop())

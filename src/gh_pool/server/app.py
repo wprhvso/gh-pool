@@ -32,6 +32,9 @@ from gh_pool.server import (
     tasks,
 )
 from gh_pool.server.cleaner import Cleaner
+from gh_pool.server.pool import state as pool_state
+from gh_pool.server.pool.keeper import keeper
+from gh_pool.server.pool.store import flush
 from gh_pool.server.watchdog import Watchdog
 
 STATUS_CODES: Codes = {
@@ -47,7 +50,7 @@ STATUS_CODES: Codes = {
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     storage.ensure_dirs()
-    tasks.boot()
+    pool_state.boot()
     await migrate.upgrade()
     db = Database(settings.database_url, settings.db_pool_min, settings.db_pool_max)
     await db.open()
@@ -58,12 +61,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await watchdog.start()
     cleaner = Cleaner(app.state.sessions)
     await cleaner.start()
-    chores = asyncio.create_task(tasks.keeper())
+    chores = asyncio.create_task(keeper())
     try:
         yield
     finally:
         chores.cancel()
-        await tasks.flush()
+        await flush()
         await cleaner.stop()
         await watchdog.stop()
         await db.close()

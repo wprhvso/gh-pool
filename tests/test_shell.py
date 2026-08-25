@@ -17,6 +17,7 @@ from gh_pool.cli.shell import Escape
 from gh_pool.core.config import settings
 from gh_pool.server import shell as api
 from gh_pool.server import tasks as server
+from gh_pool.server.pool import state as pool_state
 from tests.conftest import CLIENT, WORKER, as_client, as_worker
 
 BOOT = 20.0
@@ -26,7 +27,7 @@ BEAT = 10.0
 def seed(tid="", ttype="shell"):
     tid = tid or uuid.uuid4().hex
     now = time.time()
-    server.TASKS[tid] = {
+    pool_state.TASKS[tid] = {
         "id": tid,
         "type": ttype,
         "payload": {},
@@ -165,7 +166,7 @@ async def test_the_runner_is_sent_home_when_nobody_is_attached(
 
 async def test_a_shell_for_a_task_that_is_over_is_refused(client, shell_room):
     tid = seed()
-    server.TASKS[tid]["status"] = "done"
+    pool_state.TASKS[tid]["status"] = "done"
 
     assert (await out_down(client, tid)).status_code == 410
 

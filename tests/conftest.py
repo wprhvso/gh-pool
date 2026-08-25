@@ -7,8 +7,8 @@ import pytest
 from gh_pool.core.config import settings
 from gh_pool.db import tasks as db
 from gh_pool.server import storage
-from gh_pool.server import tasks as server
 from gh_pool.server.app import create_app
+from gh_pool.server.pool import state as pool_state
 from tests.postgres import NO_DATABASE, Cluster, start_cluster
 
 WORKER = "dev-worker"
@@ -84,20 +84,11 @@ def blank(monkeypatch, tmp_path, fake_db):
     monkeypatch.setattr(settings, "data_dir", tmp_path / "data")
     monkeypatch.setattr(settings, "blob_dir", tmp_path / "blobs")
     monkeypatch.setattr(settings, "lease_wait", 0.05)
-    server.boot()
-    server.TASKS.clear()
-    server.QUEUE.clear()
-    server.WORKERS.clear()
-    server.BLOBS.clear()
-    server.DIRTY.clear()
-    server.DIRTY_BLOBS.clear()
-    server.event_locks.clear()
-    server.new_task = asyncio.Event()
-    server.state["db"] = False
+    pool_state.boot()
+    pool_state.reset()
+    pool_state.new_task = asyncio.Event()
     yield fake_db
-    server.TASKS.clear()
-    server.QUEUE.clear()
-    server.WORKERS.clear()
+    pool_state.reset()
 
 
 class FakeDatabase:

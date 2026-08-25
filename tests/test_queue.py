@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from gh_pool.core.config import settings
-from gh_pool.server import tasks as server
+from gh_pool.server.pool import state as pool_state
 from tests.conftest import as_client, as_worker, submit, take
 
 
@@ -15,7 +15,7 @@ async def test_a_submitted_task_is_leased_with_its_payload(client):
     assert leased["task_id"] == tid
     assert leased["payload"]["code"] == "result = 2 + 2"
     assert leased["lease_token"]
-    assert server.TASKS[tid]["status"] == "running"
+    assert pool_state.TASKS[tid]["status"] == "running"
 
 
 async def test_tasks_are_handed_out_in_the_order_they_arrived(client):
@@ -64,7 +64,7 @@ async def test_a_lease_is_only_good_for_the_worker_that_holds_it(client):
 async def test_a_heartbeat_keeps_the_task_and_its_worker_alive(client):
     tid = await submit(client)
     leased = await take(client)
-    server.TASKS[tid]["heartbeat_at"] = 0
+    pool_state.TASKS[tid]["heartbeat_at"] = 0
 
     answer = await client.post(
         f"/v1/tasks/{tid}/heartbeat",
@@ -72,7 +72,7 @@ async def test_a_heartbeat_keeps_the_task_and_its_worker_alive(client):
     )
 
     assert answer.json() == {"cancel": False}
-    assert server.TASKS[tid]["heartbeat_at"] > 0
+    assert pool_state.TASKS[tid]["heartbeat_at"] > 0
 
 
 async def test_completing_a_task_frees_its_worker(client):
@@ -86,7 +86,7 @@ async def test_completing_a_task_frees_its_worker(client):
     )
 
     assert answer.json()["status"] == "done"
-    assert server.WORKERS["w1"]["task_id"] is None
+    assert pool_state.WORKERS["w1"]["task_id"] is None
 
 
 async def test_a_second_completion_is_refused_because_the_lease_is_gone(client):
@@ -126,7 +126,7 @@ async def test_cancelling_a_task_nobody_took_ends_it_outright(client):
     answer = await client.post(f"/v1/tasks/{tid}/cancel", headers=as_client())
 
     assert answer.json()["status"] == "cancelled"
-    assert server.TASKS[tid]["status"] == "cancelled"
+    assert pool_state.TASKS[tid]["status"] == "cancelled"
 
 
 async def test_cancelling_a_running_task_only_asks_its_worker_to_stop(client):
@@ -167,14 +167,14 @@ async def test_a_retry_is_a_new_task_that_remembers_its_parent(client):
 
     child = answer.json()["task_id"]
     assert answer.json()["parent_id"] == tid
-    assert server.TASKS[child]["status"] == "pending"
-    assert server.TASKS[child]["payload"]["code"] == "result = 7"
+    assert pool_state.TASKS[child]["status"] == "pending"
+    assert pool_state.TASKS[child]["payload"]["code"] == "result = 7"
 
 
 async def test_a_busy_worker_returns_to_the_list_after_a_restart(client, blank):
     tid = await submit(client)
     task = await take(client)
-    server.WORKERS.clear()
+    pool_state.WORKERS.clear()
 
     answer = await client.post(
         f"/v1/tasks/{tid}/heartbeat",
@@ -182,5 +182,5 @@ async def test_a_busy_worker_returns_to_the_list_after_a_restart(client, blank):
     )
 
     assert answer.status_code == 200
-    assert "w1" in server.WORKERS
-    assert server.WORKERS["w1"]["task_id"] == tid
+    assert "w1" in pool_state.WORKERS
+    assert pool_state.WORKERS["w1"]["task_id"] == tid

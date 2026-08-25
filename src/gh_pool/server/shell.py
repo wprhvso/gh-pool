@@ -7,7 +7,8 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from gh_pool.core.config import settings
-from gh_pool.server.tasks import TASKS, auth_client, auth_worker
+from gh_pool.server.pool import state
+from gh_pool.server.pool.auth import auth_client, auth_worker
 from gh_pool.status import FINISHED
 
 router = APIRouter(prefix="/v1/shells", tags=["shell"])
@@ -76,14 +77,16 @@ class Shell:
 
 def _sweep() -> None:
     for tid in [
-        s for s in SHELLS if (t := TASKS.get(s)) is None or t["status"] in FINISHED
+        s
+        for s in SHELLS
+        if (t := state.TASKS.get(s)) is None or t["status"] in FINISHED
     ]:
         SHELLS.pop(tid, None)
 
 
 def _shell(tid: str) -> Shell:
     _sweep()
-    task = TASKS.get(tid)
+    task = state.TASKS.get(tid)
     if task is None or task["status"] in FINISHED:
         raise HTTPException(410, "no such live shell")
     if task["type"] != "shell":
@@ -144,7 +147,7 @@ async def pull_out(
     shell.seen_at = time.time()
     await shell.out.wait(offset, settings.shell_poll)
     shell.seen_at = time.time()
-    task: dict[str, Any] = TASKS.get(tid) or {}
+    task: dict[str, Any] = state.TASKS.get(tid) or {}
     return _served(shell.out, offset, {"X-Task-Status": task.get("status") or "gone"})
 
 

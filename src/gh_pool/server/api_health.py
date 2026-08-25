@@ -6,7 +6,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from gh_pool.core.deps import Db
-from gh_pool.server import tasks
+from gh_pool.server.pool.health import report
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ async def livez() -> Alive:
 
 @router.get("/healthz")
 async def healthz(db: Db, response: Response) -> Health:
-    health = Health(**tasks.report(), status="ok")
+    health = Health(**report(), status="ok")
     try:
         await db.probe()
     except Exception:

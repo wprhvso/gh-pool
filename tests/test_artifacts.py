@@ -4,6 +4,7 @@ import hashlib
 
 from gh_pool.core.config import settings
 from gh_pool.server import tasks as server
+from gh_pool.server.pool import state as pool_state
 from tests.conftest import as_client, as_worker
 
 
@@ -52,7 +53,7 @@ async def test_a_deleted_artifact_leaves_nothing_behind(client):
     await client.delete("/v1/artifacts/k", headers=as_client())
 
     assert (await client.get("/v1/artifacts/k", headers=as_client())).status_code == 404
-    assert "k" not in server.BLOBS
+    assert "k" not in pool_state.BLOBS
 
 
 async def test_an_unfinished_upload_does_not_become_the_artifact(client, monkeypatch):

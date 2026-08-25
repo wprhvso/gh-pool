@@ -2,7 +2,9 @@ import asyncio
 import time
 
 from gh_pool.core.config import settings
-from gh_pool.server import tasks as server
+from gh_pool.server.pool import keeper as pool_keeper
+from gh_pool.server.pool import state as pool_state
+from gh_pool.server.pool import store as pool_store
 from tests.conftest import as_client, as_worker, submit, take
 
 
@@ -19,7 +21,7 @@ async def reaping(monkeypatch, **overrides):
     for name, value in overrides.items():
         monkeypatch.setattr(settings, name, value)
     monkeypatch.setattr(settings, "flush_every", 0.01)
-    return asyncio.ensure_future(server.keeper())
+    return asyncio.ensure_future(pool_keeper.keeper())
 
 
 async def test_a_task_whose_worker_went_quiet_is_declared_lost(
@@ -27,7 +29,7 @@ async def test_a_task_whose_worker_went_quiet_is_declared_lost(
 ):
     tid = await submit(client)
     await take(client)
-    server.TASKS[tid]["heartbeat_at"] = time.time() - 100
+    pool_state.TASKS[tid]["heartbeat_at"] = time.time() - 100
     reaper = await reaping(monkeypatch, lost_after=1.0)
 
     try:
@@ -50,7 +52,7 @@ async def test_a_task_that_keeps_beating_is_left_alone(client, monkeypatch):
     finally:
         reaper.cancel()
 
-    assert server.TASKS[tid]["status"] == "running"
+    assert pool_state.TASKS[tid]["status"] == "running"
 
 
 async def test_a_worker_that_stopped_asking_drops_off_the_listing(client, monkeypatch):
@@ -59,11 +61,11 @@ async def test_a_worker_that_stopped_asking_drops_off_the_listing(client, monkey
         json={"worker_id": "w1"},
         headers={"Authorization": "Bearer dev-worker"},
     )
-    server.WORKERS["w1"]["seen_at"] = time.time() - 100
+    pool_state.WORKERS["w1"]["seen_at"] = time.time() - 100
     reaper = await reaping(monkeypatch, worker_stale=1.0)
 
     try:
-        assert await until(lambda: "w1" not in server.WORKERS)
+        assert await until(lambda: "w1" not in pool_state.WORKERS)
     finally:
         reaper.cancel()
 
@@ -74,10 +76,10 @@ async def test_work_left_over_from_a_previous_server_is_picked_up(client, blank)
         {"id": "gone", "status": "running", "payload": {}, "type": "python"},
     ]
 
-    await server.recover()
+    await pool_store.recover()
 
-    assert list(server.QUEUE) == ["waiting"]
-    assert server.TASKS["gone"]["status"] == "running"
+    assert list(pool_state.QUEUE) == ["waiting"]
+    assert pool_state.TASKS["gone"]["status"] == "running"
 
 
 async def test_a_finished_task_leaves_memory_once_it_is_written_down(client):
@@ -92,19 +94,19 @@ async def test_a_finished_task_leaves_memory_once_it_is_written_down(client):
         },
     )
 
-    await server.flush()
+    await pool_store.flush()
 
-    assert tid not in server.TASKS
+    assert tid not in pool_state.TASKS
 
 
 async def test_nothing_is_forgotten_while_the_database_refuses(client, blank):
     tid = await submit(client)
     blank.broken = True
 
-    await server.flush()
+    await pool_store.flush()
 
-    assert tid in server.DIRTY
-    assert server.state["db"] is False
+    assert tid in pool_state.DIRTY
+    assert pool_state.health["db"] is False
 
 
 async def test_health_says_when_the_server_came_up(client):
@@ -148,18 +150,18 @@ async def test_a_worker_reports_how_long_it_has_been_serving(client, blank):
 async def test_taking_another_task_does_not_reset_the_serving_clock(client, blank):
     await submit(client)
     await take(client)
-    born = server.WORKERS["w1"]["first_seen"]
+    born = pool_state.WORKERS["w1"]["first_seen"]
     await submit(client)
     await take(client)
 
-    assert server.WORKERS["w1"]["first_seen"] == born
+    assert pool_state.WORKERS["w1"]["first_seen"] == born
 
 
 async def test_listing_tasks_writes_nothing_to_disk(client, blank):
     blank.rows = {}
     blank.pending = []
     tid = await submit(client)
-    server.TASKS.clear()
+    pool_state.TASKS.clear()
     blank.rows[tid] = {
         "id": tid,
         "type": "python",
@@ -194,7 +196,7 @@ async def test_a_pending_task_the_server_forgot_is_still_cancelled(client, blank
     blank.rows["old"] = row
 
     answer = await client.post("/v1/tasks/old/cancel", headers=as_client())
-    await server.flush()
+    await pool_store.flush()
 
     assert answer.json()["status"] == "cancelled"
     assert [r["status"] for r in blank.saved if r["id"] == "old"] == ["cancelled"]
@@ -252,7 +254,7 @@ async def test_a_running_task_survives_the_server_it_was_started_on(client, blan
         }
     ]
 
-    await server.recover()
+    await pool_store.recover()
 
     answer = await client.post(
         "/v1/tasks/busy/heartbeat",
@@ -260,8 +262,8 @@ async def test_a_running_task_survives_the_server_it_was_started_on(client, blan
     )
 
     assert answer.status_code == 200
-    assert server.TASKS["busy"]["status"] == "running"
-    assert server.TASKS["busy"]["lease_token"] == "token-from-before-the-restart"
+    assert pool_state.TASKS["busy"]["status"] == "running"
+    assert pool_state.TASKS["busy"]["lease_token"] == "token-from-before-the-restart"
 
 
 async def test_a_recovered_task_gets_a_fresh_grace_period(client, blank):
@@ -275,9 +277,9 @@ async def test_a_recovered_task_gets_a_fresh_grace_period(client, blank):
         }
     ]
 
-    await server.recover()
+    await pool_store.recover()
 
-    assert server.TASKS["busy"]["heartbeat_at"] > time.time() - 5
+    assert pool_state.TASKS["busy"]["heartbeat_at"] > time.time() - 5
 
 
 async def test_a_recovered_task_whose_worker_never_returns_is_declared_lost(
@@ -292,8 +294,8 @@ async def test_a_recovered_task_whose_worker_never_returns_is_declared_lost(
             "worker_id": "w1",
         }
     ]
-    await server.recover()
-    server.TASKS["busy"]["heartbeat_at"] = time.time() - 1000
+    await pool_store.recover()
+    pool_state.TASKS["busy"]["heartbeat_at"] = time.time() - 1000
 
     task = await reaping(monkeypatch, lost_after=1)
     ok = await until(
@@ -314,7 +316,7 @@ async def test_a_second_token_cannot_steal_a_recovered_task(client, blank):
             "worker_id": "w1",
         }
     ]
-    await server.recover()
+    await pool_store.recover()
 
     first = await client.post(
         "/v1/tasks/busy/heartbeat",
