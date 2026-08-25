@@ -3,36 +3,85 @@ name: ci
 on:
   push:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ruff:
-    runs-on: pool
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - run: ruff check --output-format github .
+      - uses: astral-sh/setup-uv@v7
+        if: runner.environment == 'github-hosted'
+      - run: uv sync --frozen
+      - run: uv run ruff check --output-format github .
 
   format:
-    runs-on: pool
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - run: ruff format --check --diff .
+      - uses: astral-sh/setup-uv@v7
+        if: runner.environment == 'github-hosted'
+      - run: uv sync --frozen
+      - run: uv run ruff format --check --diff .
 
   pyright:
-    runs-on: pool
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        if: runner.environment == 'github-hosted'
       - run: uv sync --frozen
-      - run: basedpyright
+      - run: uv run basedpyright
+
+  extras:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - extra: ""
+            probe: import gh_pool, gh_pool.rpc, gh_pool.tasks, gh_pool.shell
+          - extra: "[client]"
+            probe: import gh_pool.client, gh_pool.cli
+          - extra: "[worker]"
+            probe: import gh_pool.worker
+          - extra: "[fleet]"
+            probe: import gh_pool.fleet.workers, gh_pool.fleet.runners.__main__
+          - extra: "[relay]"
+            probe: import gh_pool.relay.__main__
+          - extra: "[server]"
+            probe: import gh_pool.server.__main__
+          - extra: "[browser]"
+            probe: import gh_pool.browser.__main__
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        if: runner.environment == 'github-hosted'
+      - run: uv run --no-project --with '.${{ matrix.extra }}' python -c '${{ matrix.probe }}'
 
   unit:
-    runs-on: pool
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        if: runner.environment == 'github-hosted'
       - run: uv sync --frozen
       - run: echo "$PWD/.venv/bin" >>"$GITHUB_PATH"
       - run: pytest --ignore=tests/chrome/e2e --ignore=tests/test_e2e.py
 
   e2e:
     runs-on: pool
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - run: uv sync --frozen

@@ -108,8 +108,10 @@ gh-pool-browser = "gh_pool.browser.__main__:main"
 [dependency-groups]
 dev = [
     "gh-pool[browser,client,fleet,relay,server,worker]",
+    "basedpyright>=1.39",
     "pytest>=8.3",
     "pytest-asyncio>=0.25",
+    "ruff>=0.16",
 ]
 
 [tool.hatch.build.targets.wheel]
