@@ -30,8 +30,8 @@ def _ctx(
 ) -> ctrl.Ctx:
     target = target or Target(slug="owner/app", token="ghp", jobs=4)
     return ctrl.Ctx(
-        api=api or FakeScaleSet(target),  # pyright: ignore[reportArgumentType]
-        pool=pool or FakePool(run=False),  # pyright: ignore[reportArgumentType]
+        api=api or FakeScaleSet(target),
+        pool=pool or FakePool(run=False),
         target=target,
         scale_set_id=42,
         fleet=Fleet(),
@@ -300,7 +300,7 @@ def test_a_runner_is_unregistered_when_the_pool_refuses_it() -> None:
     def refuse(*_args: object, **_kw: object) -> str:
         raise RunnerError("пул лежит")
 
-    pool.submit = refuse  # pyright: ignore[reportAttributeAccessIssue]
+    pool.submit = refuse
     policy_mod.scale(ctx, Stats(assigned=4), "рост")
 
     assert ctx.fleet.size() == 0
@@ -454,7 +454,7 @@ def test_a_strange_acquirable_list_does_not_stop_the_pick_up() -> None:
     api = FakeScaleSet(Target(slug="owner/app", token="ghp"))
     ctx = _ctx(api=api)
     session = api.open(42, "тест")
-    api.acquirable = lambda _scale_set_id: [  # pyright: ignore[reportAttributeAccessIssue]
+    api.acquirable = lambda _scale_set_id: [
         {"нет": "ключа"},
         {"runnerRequestId": "не число"},
         {"runnerRequestId": "9"},

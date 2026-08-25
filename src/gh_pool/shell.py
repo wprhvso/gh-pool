@@ -150,7 +150,7 @@ def kill(pid: int) -> None:
     for sig in (signal.SIGHUP, signal.SIGKILL):
         try:
             os.killpg(os.getpgid(pid), sig)
-        except (ProcessLookupError, PermissionError, ChildProcessError):
+        except ProcessLookupError, PermissionError, ChildProcessError:
             return
         deadline = time.monotonic() + GRACE
         while time.monotonic() < deadline:

@@ -21,7 +21,7 @@ def _build(**overrides: object) -> str:
         "live": True,
     }
     arguments.update(overrides)
-    return manifest.build(**arguments)  # pyright: ignore[reportArgumentType]
+    return manifest.build(**arguments)
 
 
 def _root(xml: str) -> ET.Element:

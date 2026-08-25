@@ -35,13 +35,13 @@ class FakeXtest:
 def _keyboard(
     speed: Speed = Speed.INSTANT, **kwargs: object
 ) -> tuple[Keyboard, FakeXtest]:
-    xtest = FakeXtest(**kwargs)  # pyright: ignore[reportArgumentType]
-    return Keyboard(xtest, speed), xtest  # pyright: ignore[reportArgumentType]
+    xtest = FakeXtest(**kwargs)
+    return Keyboard(xtest, speed), xtest
 
 
 def _scroller(speed: Speed = Speed.INSTANT) -> tuple[Scroller, FakeXtest]:
     xtest = FakeXtest()
-    return Scroller(xtest, speed), xtest  # pyright: ignore[reportArgumentType]
+    return Scroller(xtest, speed), xtest
 
 
 def test_every_speed_has_a_pace_for_typing_and_for_scrolling():

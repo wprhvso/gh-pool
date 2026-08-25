@@ -95,7 +95,7 @@ class FakeTabs:
 def _input(tabs: FakeTabs, speed: Speed = Speed.INSTANT) -> tuple[Input, FakeXtest]:
     xtest = FakeXtest()
     params = SessionParams(mouse_speed=speed, type_speed=speed, scroll_speed=speed)
-    return Input(xtest, tabs, params), xtest  # pyright: ignore[reportArgumentType]
+    return Input(xtest, tabs, params), xtest
 
 
 async def test_a_click_lands_inside_the_element_it_was_aimed_at():

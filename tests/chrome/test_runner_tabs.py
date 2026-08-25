@@ -124,7 +124,7 @@ def cdp(monkeypatch: pytest.MonkeyPatch) -> FakeCdp:
 
 @pytest.fixture
 async def started(cdp: FakeCdp) -> AsyncIterator[tuple[Tabs, Announcements]]:
-    tabs = Tabs(cdp)  # pyright: ignore[reportArgumentType]
+    tabs = Tabs(cdp)
     announced = Announcements()
     tabs.on_event = announced
     await tabs.start()

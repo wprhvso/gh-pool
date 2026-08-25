@@ -29,7 +29,7 @@ class Box:
     def center(self) -> tuple[float, float]:
         return self.x + self.width / 2, self.y + self.height / 2
 
-    def close_to(self, other: "Box") -> bool:
+    def close_to(self, other: Box) -> bool:
         return all(
             abs(mine - theirs) <= STABLE_EPSILON
             for mine, theirs in (

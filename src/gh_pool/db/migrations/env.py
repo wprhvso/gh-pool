@@ -9,7 +9,7 @@ from sqlalchemy.pool import NullPool
 from gh_pool.db import base, sessions, tasks
 from gh_pool.db import engine as engine_mod
 
-REGISTERED = (sessions, tasks)
+MAPPED_ONTO_METADATA = (sessions, tasks)
 
 config = context.config
 

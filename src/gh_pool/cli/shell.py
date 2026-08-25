@@ -142,7 +142,7 @@ def wire_stdin(
 ) -> int | None:
     try:
         fd = sys.stdin.fileno()
-    except (AttributeError, ValueError):
+    except AttributeError, ValueError:
         return None
     escape = Escape()
 
@@ -164,7 +164,7 @@ def wire_stdin(
 
     try:
         loop.add_reader(fd, ready)
-    except (OSError, NotImplementedError):
+    except OSError, NotImplementedError:
         return None
     return fd
 
@@ -214,7 +214,7 @@ async def attach(tid: str, server: str, token: str) -> str:
 def run(tid: str, server: str, token: str) -> str:
     try:
         fd = sys.stdin.fileno()
-    except (AttributeError, ValueError):
+    except AttributeError, ValueError:
         fd = 0
     with raw(fd):
         status = asyncio.run(attach(tid, server, token))

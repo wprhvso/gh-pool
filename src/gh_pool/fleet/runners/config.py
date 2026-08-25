@@ -85,7 +85,7 @@ def secs(value: object) -> float:
 def count(value: object, name: str) -> int:
     try:
         number = int(value)  # pyright: ignore[reportArgumentType]
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise RunnerError(f"{name} должен быть числом, получено: {value}") from None
     if number < 1:
         raise RunnerError(f"{name} должен быть больше нуля, получено: {number}")

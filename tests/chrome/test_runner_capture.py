@@ -31,7 +31,7 @@ class FakeServer:
 def _config(**params: object) -> RunnerConfig:
     return RunnerConfig(
         session_id=uuid4(),
-        params=SessionParams(**params),  # pyright: ignore[reportArgumentType]
+        params=SessionParams(**params),
         profile=None,
         persist=False,
         has_profile_archive=False,
@@ -47,7 +47,7 @@ def workdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _capture(server: FakeServer, config: RunnerConfig | None = None) -> Capture:
-    return Capture(FakeDisplay(), server, config or _config())  # pyright: ignore[reportArgumentType]
+    return Capture(FakeDisplay(), server, config or _config())
 
 
 def _wrote(name: str, content: bytes = b"a recorded second") -> Path:
@@ -58,7 +58,7 @@ def _wrote(name: str, content: bytes = b"a recorded second") -> Path:
 
 def test_the_recorder_is_told_the_screen_and_the_quality_it_was_asked_for():
     command = capture._ffmpeg_command(
-        FakeDisplay(),  # pyright: ignore[reportArgumentType]
+        FakeDisplay(),
         _config(width=800, height=600, fps=5, bitrate="750k"),
     )
 
@@ -72,7 +72,7 @@ def test_the_recorder_is_told_the_screen_and_the_quality_it_was_asked_for():
 
 def test_the_recorder_keeps_the_keyframes_close_enough_to_seek_between():
     command = capture._ffmpeg_command(
-        FakeDisplay(),  # pyright: ignore[reportArgumentType]
+        FakeDisplay(),
         _config(fps=10),
     )
 

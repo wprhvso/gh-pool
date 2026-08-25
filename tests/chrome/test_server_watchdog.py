@@ -55,7 +55,7 @@ class FakeSessions:
 
 
 def _watchdog(sessions: FakeSessions) -> Watchdog:
-    return Watchdog(sessions)  # pyright: ignore[reportArgumentType]
+    return Watchdog(sessions)
 
 
 async def _until(condition, what: str, timeout: float = 5.0) -> None:

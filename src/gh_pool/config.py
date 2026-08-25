@@ -12,7 +12,7 @@
 
 import logging
 import os
-from collections.abc import Mapping, MutableMapping
+from collections.abc import MutableMapping
 
 log = logging.getLogger(__name__)
 
@@ -87,12 +87,3 @@ def adopt(env: MutableMapping[str, str] | None = None) -> list[tuple[str, str]]:
             ", ".join(f"{old} -> {new}" for old, new in moved),
         )
     return moved
-
-
-def describe(env: Mapping[str, str] | None = None) -> list[tuple[str, str]]:
-    source: Mapping[str, str] = os.environ if env is None else env
-    return [
-        (name, new)
-        for name in sorted(source)
-        if (new := _target(name)) is not None and new != name and not source.get(new)
-    ]

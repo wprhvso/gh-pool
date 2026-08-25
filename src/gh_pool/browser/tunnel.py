@@ -36,7 +36,7 @@ class TunnelOverflow(Exception):
 
 
 class Channel:
-    def __init__(self, link: "Link", stream_id: int) -> None:
+    def __init__(self, link: Link, stream_id: int) -> None:
         self.id = stream_id
         self._link = link
         self.overflowed = False

@@ -12,7 +12,7 @@ from gh_pool.status import FINISHED
 
 router = APIRouter(prefix="/v1/shells", tags=["shell"])
 
-SHELLS: dict[str, "Shell"] = {}
+SHELLS: dict[str, Shell] = {}
 
 
 class Size(BaseModel):

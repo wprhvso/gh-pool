@@ -68,7 +68,7 @@ class FakeTabs:
 async def test_a_page_is_asked_for_and_waited_for():
     tabs = FakeTabs()
 
-    await navigation.goto(tabs, Goto(url="https://example.com/form"))  # pyright: ignore[reportArgumentType]
+    await navigation.goto(tabs, Goto(url="https://example.com/form"))
 
     assert tabs.navigated == ["https://example.com/form"]
 
@@ -77,7 +77,7 @@ async def test_a_page_the_browser_refused_fails_the_command():
     tabs = FakeTabs(navigate_error="net::ERR_CONNECTION_REFUSED")
 
     with pytest.raises(NavigationFailed, match="ERR_CONNECTION_REFUSED"):
-        await navigation.goto(tabs, Goto(url="http://127.0.0.1:1/"))  # pyright: ignore[reportArgumentType]
+        await navigation.goto(tabs, Goto(url="http://127.0.0.1:1/"))
 
 
 @pytest.mark.parametrize(
@@ -93,21 +93,21 @@ async def test_a_wait_ends_when_the_document_reached_the_state_it_was_told_to(
     tabs = FakeTabs(ready_states=states)
 
     async with asyncio.timeout(5):
-        await navigation.settle(tabs, wait_until)  # pyright: ignore[reportArgumentType]
+        await navigation.settle(tabs, wait_until)
 
 
 async def test_a_wait_for_the_document_does_not_wait_for_the_network():
     tabs = FakeTabs(ready_states=["complete"], inflight=[3])
 
     async with asyncio.timeout(5):
-        await navigation.settle(tabs, WaitUntil.LOAD)  # pyright: ignore[reportArgumentType]
+        await navigation.settle(tabs, WaitUntil.LOAD)
 
 
 async def test_a_wait_for_a_quiet_network_outlasts_the_last_request():
     tabs = FakeTabs(ready_states=["complete"], inflight=[2, 1, 0])
 
     async with asyncio.timeout(10):
-        await navigation.settle(tabs, WaitUntil.NETWORKIDLE)  # pyright: ignore[reportArgumentType]
+        await navigation.settle(tabs, WaitUntil.NETWORKIDLE)
 
     assert tabs.inflight() == 0
 
@@ -117,7 +117,7 @@ async def test_a_network_that_never_goes_quiet_holds_the_wait_open():
 
     with pytest.raises(TimeoutError):
         async with asyncio.timeout(0.3):
-            await navigation.settle(tabs, WaitUntil.NETWORKIDLE)  # pyright: ignore[reportArgumentType]
+            await navigation.settle(tabs, WaitUntil.NETWORKIDLE)
 
 
 async def test_going_back_asks_for_the_entry_before_this_one():
@@ -129,7 +129,7 @@ async def test_going_back_asks_for_the_entry_before_this_one():
         ],
     )
 
-    await navigation.back(tabs)  # pyright: ignore[reportArgumentType]
+    await navigation.back(tabs)
 
     assert ("Page.navigateToHistoryEntry", {"entryId": "a"}) in tabs.sent
 
@@ -143,7 +143,7 @@ async def test_going_forward_asks_for_the_entry_after_this_one():
         ],
     )
 
-    await navigation.forward(tabs)  # pyright: ignore[reportArgumentType]
+    await navigation.forward(tabs)
 
     assert ("Page.navigateToHistoryEntry", {"entryId": "c"}) in tabs.sent
 
@@ -168,7 +168,7 @@ async def test_a_step_that_only_changed_the_fragment_still_counts_as_arriving():
     )
 
     async with asyncio.timeout(5):
-        await navigation.back(tabs)  # pyright: ignore[reportArgumentType]
+        await navigation.back(tabs)
 
     assert ("Page.navigateToHistoryEntry", {"entryId": "a"}) in tabs.sent
 
@@ -181,7 +181,7 @@ async def test_a_reload_waits_for_the_document_that_replaces_this_one():
         ]
     )
 
-    await navigation.reload(tabs)  # pyright: ignore[reportArgumentType]
+    await navigation.reload(tabs)
 
     assert ("Page.reload", {"ignoreCache": False}) in tabs.sent
 
@@ -193,4 +193,4 @@ async def test_a_page_that_never_leaves_is_reported_rather_than_waited_out(
     tabs = FakeTabs(documents=[("loader-1", "https://example.com/")])
 
     with pytest.raises(NavigationFailed, match="never left"):
-        await navigation.reload(tabs)  # pyright: ignore[reportArgumentType]
+        await navigation.reload(tabs)

@@ -42,7 +42,7 @@ class FakeServer:
 
 @pytest.fixture
 def actions() -> Actions:
-    return Actions(FakeCdp(), FakeXtest(), FakeServer(), SessionParams())  # pyright: ignore[reportArgumentType]
+    return Actions(FakeCdp(), FakeXtest(), FakeServer(), SessionParams())
 
 
 def test_every_command_the_protocol_names_has_something_to_run_it(actions: Actions):

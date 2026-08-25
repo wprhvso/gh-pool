@@ -40,7 +40,7 @@ KILL_GRACE = 30.0
 CHUNK = 1 << 20
 MAX_AGE = float(os.getenv("GH_POOL_WORKER_MAX_AGE", "0"))
 
-_current: "Spool | None" = None
+_current: Spool | None = None
 
 _meter: Final = get_meter("gh_pool.worker")
 _executed: Final = _meter.create_counter(
@@ -347,7 +347,7 @@ async def _serve(
 def _signal_group(proc: asyncio.subprocess.Process, sig: int) -> None:
     try:
         os.killpg(os.getpgid(proc.pid), sig)
-    except (ProcessLookupError, PermissionError):
+    except ProcessLookupError, PermissionError:
         with contextlib.suppress(ProcessLookupError):
             proc.send_signal(sig)
 

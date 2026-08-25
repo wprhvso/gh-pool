@@ -553,7 +553,7 @@ async def retry(
     return {"task_id": nid, "parent_id": tid}
 
 
-def _write(f: BufferedWriter, digest: "hashlib._Hash", chunk: bytes) -> None:
+def _write(f: BufferedWriter, digest: hashlib._Hash, chunk: bytes) -> None:
     digest.update(chunk)
     f.write(chunk)
 

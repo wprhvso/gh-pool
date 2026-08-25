@@ -72,9 +72,9 @@ async def test_a_profile_is_stored_and_comes_back_as_it_was(
 ):
     _profile_with({"Default/Cookies": "the cookie jar", "Local State": "{}"})
 
-    await profile.store(server)  # pyright: ignore[reportArgumentType]
+    await profile.store(server)
     shutil.rmtree(settings.profile_dir)
-    restored = await profile.restore(server)  # pyright: ignore[reportArgumentType]
+    restored = await profile.restore(server)
 
     assert server.put == ["profile"]
     assert restored is True
@@ -95,7 +95,7 @@ async def test_what_the_browser_can_rebuild_is_not_carried_between_sessions(
         }
     )
 
-    await profile.store(server)  # pyright: ignore[reportArgumentType]
+    await profile.store(server)
 
     listing = await _listing(server.stored)
     assert "Default/Cookies" in listing
@@ -106,17 +106,17 @@ async def test_what_the_browser_can_rebuild_is_not_carried_between_sessions(
 async def test_a_session_with_no_archive_yet_starts_from_nothing(
     tools: None, workdir: Path, server: FakeServer
 ):
-    assert await profile.restore(server) is False  # pyright: ignore[reportArgumentType]
+    assert await profile.restore(server) is False
 
 
 async def test_restoring_replaces_whatever_the_runner_had(
     tools: None, workdir: Path, server: FakeServer
 ):
     _profile_with({"Default/Cookies": "the ones that came with the archive"})
-    await profile.store(server)  # pyright: ignore[reportArgumentType]
+    await profile.store(server)
     _profile_with({"Default/Cookies": "stale", "Default/Leftover": "from before"})
 
-    await profile.restore(server)  # pyright: ignore[reportArgumentType]
+    await profile.restore(server)
 
     assert (
         settings.profile_dir / "Default" / "Cookies"
@@ -129,8 +129,8 @@ async def test_the_archive_is_not_left_behind_on_the_runner(
 ):
     _profile_with({"Local State": "{}"})
 
-    await profile.store(server)  # pyright: ignore[reportArgumentType]
-    await profile.restore(server)  # pyright: ignore[reportArgumentType]
+    await profile.store(server)
+    await profile.restore(server)
 
     assert not (settings.workdir / profile.ARCHIVE).exists()
 
@@ -139,4 +139,4 @@ async def test_a_profile_that_will_not_pack_is_reported(
     tools: None, workdir: Path, server: FakeServer
 ):
     with pytest.raises(RuntimeError, match="tar"):
-        await profile.store(server)  # pyright: ignore[reportArgumentType]
+        await profile.store(server)

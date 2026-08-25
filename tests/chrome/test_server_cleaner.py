@@ -44,7 +44,7 @@ def _by_age(item: tuple[UUID, float]) -> float:
 
 
 def _cleaner(sessions: FakeSessions) -> Cleaner:
-    return Cleaner(sessions)  # pyright: ignore[reportArgumentType]
+    return Cleaner(sessions)
 
 
 async def _until(condition, what: str, timeout: float = 5.0) -> None:

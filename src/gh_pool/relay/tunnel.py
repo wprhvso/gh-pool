@@ -21,7 +21,7 @@ class TunnelDown(Exception):
 
 
 class Stream:
-    def __init__(self, owner: "Tunnel", stream_id: int) -> None:
+    def __init__(self, owner: Tunnel, stream_id: int) -> None:
         self.id = stream_id
         self._owner = owner
         self._queue: asyncio.Queue[tuple[tunnel.Op, bytes]] = asyncio.Queue(QUEUE_SIZE)

@@ -73,7 +73,7 @@ def site() -> Iterator[Background]:
 
 
 def _files(cdp: FakeCdp | None = None) -> Files:
-    return Files(cdp or FakeCdp(), None, None)  # pyright: ignore[reportArgumentType]
+    return Files(cdp or FakeCdp(), None, None)
 
 
 @pytest.mark.parametrize(

@@ -40,7 +40,7 @@ class Failed(RuntimeError):
 def source(fn: Callable[..., Any]) -> str:
     try:
         lines = textwrap.dedent(inspect.getsource(fn)).splitlines()
-    except (OSError, TypeError):
+    except OSError, TypeError:
         raise TypeError(f"no source for {fn!r}, pass the code as a string") from None
     start = next((i for i, line in enumerate(lines) if line.startswith("def ")), None)
     if start is None:

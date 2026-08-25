@@ -35,7 +35,7 @@ def _box(**overrides: float) -> dict[str, float]:
 
 
 def _locator(answers: list[Any] | None = None, default: Any = None) -> Locator:
-    return Locator(FakeTabs(answers, default))  # pyright: ignore[reportArgumentType]
+    return Locator(FakeTabs(answers, default))
 
 
 def test_a_selector_becomes_a_string_the_page_can_read():
@@ -175,7 +175,7 @@ async def test_an_element_that_went_away_while_settling_is_waited_for_again():
 
 async def test_a_hit_test_asks_the_page_what_is_under_the_point():
     tabs = FakeTabs([True])
-    locator = Locator(tabs)  # pyright: ignore[reportArgumentType]
+    locator = Locator(tabs)
 
     assert await locator.hit_test("#save", 120.0, 220.0) is True
     assert '"#save"' in tabs.asked[0]
