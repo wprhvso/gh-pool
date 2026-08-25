@@ -11,7 +11,7 @@ import traceback
 import uuid
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, Final, NoReturn
+from typing import Any, Final
 
 import httpx
 from opentelemetry.context import Context
@@ -29,12 +29,15 @@ from yaol import (
 
 from gh_pool.core.obs import observability, version
 from gh_pool.status import TaskStatus
+from gh_pool.worker.errors import Permanent
+from gh_pool.worker.exec import run_exec
 
 SERVER = os.getenv("GH_POOL_SERVER", "http://localhost:8000").rstrip("/")
 TOKEN = os.getenv("GH_POOL_WORKER_TOKEN", "dev-worker")
 WORKER_ID = os.getenv("GH_POOL_WORKER_ID") or f"local-{uuid.uuid4().hex[:8]}"
 SPOOL_DIR = Path(os.getenv("GH_POOL_SPOOL_DIR", "/tmp"))
 SPOOL_CAP = int(os.getenv("GH_POOL_SPOOL_CAP", str(256 * 1024 * 1024)))
+EXEC_ARGV = 4
 HEARTBEAT = 15.0
 KILL_GRACE = 30.0
 CHUNK = 1 << 20
@@ -53,14 +56,6 @@ _task_seconds: Final = _meter.create_histogram(
     unit="s",
     description="Wall time of a task from lease to completion",
 )
-
-
-class Permanent(Exception):
-    pass
-
-
-class Cancelled(Exception):
-    pass
 
 
 def note(msg: str) -> None:
@@ -392,31 +387,6 @@ async def loop() -> None:
                 await asyncio.sleep(5)
 
 
-def run_exec(ttype: str, payload_file: str) -> NoReturn:
-    import importlib
-
-    tasks = importlib.import_module(os.getenv("GH_POOL_TASKS", "gh_pool.tasks"))
-    fn = tasks.REGISTRY.get(ttype)
-    if fn is None:
-        print(f"unknown task type: {ttype}")  # noqa: T201
-        sys.exit(2)
-
-    def on_term(*_: Any) -> NoReturn:
-        raise Cancelled
-
-    signal.signal(signal.SIGTERM, on_term)
-    payload = json.loads(Path(payload_file).read_text())
-    try:
-        fn(payload)
-    except Cancelled:
-        print("[task] cancelled")  # noqa: T201
-        sys.exit(75)
-    except Exception:
-        traceback.print_exc()
-        sys.exit(1)
-    sys.exit(0)
-
-
 def logs_off_stdout() -> None:
     for handler in logging.getLogger().handlers:
         if isinstance(handler, logging.StreamHandler) and handler.stream is sys.stdout:
@@ -425,6 +395,9 @@ def logs_off_stdout() -> None:
 
 def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "exec":
+        if len(sys.argv) != EXEC_ARGV:
+            print("usage: gh-pool-worker exec <type> <payload-file>", file=sys.stderr)  # noqa: T201
+            sys.exit(2)
         run_exec(sys.argv[2], sys.argv[3])
         return
     with contextlib.redirect_stdout(sys.stderr):
