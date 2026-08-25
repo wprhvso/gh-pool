@@ -1,0 +1,241 @@
+{
+  "relay": {
+    "DELETE /s/{session_id}/vnc/{path}": [
+      "200",
+      "422"
+    ],
+    "GET /healthz": [
+      "200"
+    ],
+    "GET /livez": [
+      "200"
+    ],
+    "GET /s/{session_id}/vnc": [
+      "200",
+      "422"
+    ],
+    "GET /s/{session_id}/vnc.json": [
+      "200",
+      "422"
+    ],
+    "GET /s/{session_id}/vnc/{path}": [
+      "200",
+      "422"
+    ],
+    "HEAD /s/{session_id}/vnc/{path}": [
+      "200",
+      "422"
+    ],
+    "OPTIONS /s/{session_id}/vnc/{path}": [
+      "200",
+      "422"
+    ],
+    "PATCH /s/{session_id}/vnc/{path}": [
+      "200",
+      "422"
+    ],
+    "POST /s/{session_id}/vnc/{path}": [
+      "200",
+      "422"
+    ],
+    "PUT /s/{session_id}/vnc/{path}": [
+      "200",
+      "422"
+    ]
+  },
+  "server": {
+    "DELETE /profiles/{name}": [
+      "204",
+      "422"
+    ],
+    "DELETE /sessions/{session_id}": [
+      "204",
+      "422"
+    ],
+    "DELETE /v1/artifacts/{key}": [
+      "200",
+      "422"
+    ],
+    "GET /healthz": [
+      "200"
+    ],
+    "GET /livez": [
+      "200"
+    ],
+    "GET /profiles": [
+      "200"
+    ],
+    "GET /runner/{session_id}/config": [
+      "200",
+      "422"
+    ],
+    "GET /runner/{session_id}/files/{file_id}": [
+      "200",
+      "422"
+    ],
+    "GET /runner/{session_id}/profile": [
+      "200",
+      "422"
+    ],
+    "GET /runner/{session_id}/stream": [
+      "200",
+      "422"
+    ],
+    "GET /s/{session_id}": [
+      "200",
+      "422"
+    ],
+    "GET /s/{session_id}/init.m4s": [
+      "200",
+      "422"
+    ],
+    "GET /s/{session_id}/manifest.mpd": [
+      "200",
+      "422"
+    ],
+    "GET /s/{session_id}/{number}.m4s": [
+      "200",
+      "422"
+    ],
+    "GET /sessions/{session_id}": [
+      "200",
+      "422"
+    ],
+    "GET /sessions/{session_id}/downloads/{name}": [
+      "200",
+      "422"
+    ],
+    "GET /sessions/{session_id}/events": [
+      "200",
+      "422"
+    ],
+    "GET /v1/artifacts": [
+      "200",
+      "422"
+    ],
+    "GET /v1/artifacts/{key}": [
+      "200",
+      "422"
+    ],
+    "GET /v1/shells/{tid}": [
+      "200",
+      "422"
+    ],
+    "GET /v1/shells/{tid}/in": [
+      "200",
+      "422"
+    ],
+    "GET /v1/shells/{tid}/out": [
+      "200",
+      "422"
+    ],
+    "GET /v1/tasks": [
+      "200",
+      "422"
+    ],
+    "GET /v1/tasks/{tid}": [
+      "200",
+      "422"
+    ],
+    "GET /v1/tasks/{tid}/events": [
+      "200",
+      "422"
+    ],
+    "GET /v1/workers": [
+      "200",
+      "422"
+    ],
+    "POST /runner/{session_id}/closed": [
+      "204",
+      "422"
+    ],
+    "POST /runner/{session_id}/commands/{command_id}": [
+      "204",
+      "422"
+    ],
+    "POST /runner/{session_id}/events": [
+      "204",
+      "422"
+    ],
+    "POST /runner/{session_id}/heartbeat": [
+      "204",
+      "422"
+    ],
+    "POST /sessions": [
+      "201",
+      "422"
+    ],
+    "POST /sessions/{session_id}/close": [
+      "204",
+      "422"
+    ],
+    "POST /sessions/{session_id}/commands": [
+      "202",
+      "422"
+    ],
+    "POST /sessions/{session_id}/files": [
+      "201",
+      "422"
+    ],
+    "POST /v1/lease": [
+      "200",
+      "422"
+    ],
+    "POST /v1/shells/{tid}/in": [
+      "200",
+      "422"
+    ],
+    "POST /v1/shells/{tid}/out": [
+      "200",
+      "422"
+    ],
+    "POST /v1/shells/{tid}/size": [
+      "204",
+      "422"
+    ],
+    "POST /v1/tasks": [
+      "200",
+      "422"
+    ],
+    "POST /v1/tasks/{tid}/cancel": [
+      "200",
+      "422"
+    ],
+    "POST /v1/tasks/{tid}/complete": [
+      "200",
+      "422"
+    ],
+    "POST /v1/tasks/{tid}/events": [
+      "200",
+      "422"
+    ],
+    "POST /v1/tasks/{tid}/heartbeat": [
+      "200",
+      "422"
+    ],
+    "POST /v1/tasks/{tid}/retry": [
+      "200",
+      "422"
+    ],
+    "PUT /runner/{session_id}/downloads/{name}": [
+      "204",
+      "422"
+    ],
+    "PUT /runner/{session_id}/init": [
+      "204",
+      "422"
+    ],
+    "PUT /runner/{session_id}/profile": [
+      "204",
+      "422"
+    ],
+    "PUT /runner/{session_id}/segments/{number}": [
+      "204",
+      "422"
+    ],
+    "PUT /v1/artifacts/{key}": [
+      "200",
+      "422"
+    ]
+  }
+}
