@@ -10,7 +10,8 @@ from typing import Any
 
 import httpx
 
-TERMINAL = ("done", "failed", "cancelled", "lost")
+from gh_pool.status import FINISHED
+
 TIMEOUT = httpx.Timeout(30.0, read=120.0)
 MIN_BACKOFF = 0.25
 MAX_BACKOFF = 5.0
@@ -104,7 +105,7 @@ async def downstream(link: Link) -> None:
             sys.stdout.buffer.flush()
         link.read = int(answer.headers.get("X-Shell-Offset", link.read))
         status = answer.headers.get("X-Task-Status", link.status)
-        if status in TERMINAL or status == "gone":
+        if status in FINISHED or status == "gone":
             link.over(status)
             return
 

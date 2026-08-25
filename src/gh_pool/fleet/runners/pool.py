@@ -6,9 +6,10 @@ from typing import TYPE_CHECKING, Any
 
 from yaol import inject_headers
 
-from gh_pool.fleet.runners.config import ADOPT_LIMIT, ALIVE, POOL_TIMEOUT
+from gh_pool.fleet.runners.config import ADOPT_LIMIT, POOL_TIMEOUT
 from gh_pool.fleet.runners.errors import RunnerError
 from gh_pool.fleet.runners.http import Reply, fetch
+from gh_pool.status import LIVE
 
 if TYPE_CHECKING:
     from gh_pool.fleet.runners.config import Server
@@ -101,7 +102,7 @@ class Pool:
 
     def mine(self, slug: str, label: str) -> list[tuple[str, str, str]]:
         found: list[tuple[str, str, str]] = []
-        for status in ALIVE:
+        for status in LIVE:
             answer = self.call(
                 "GET", "/v1/tasks", params={"status": status, "limit": ADOPT_LIMIT}
             )

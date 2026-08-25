@@ -6,6 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from gh_pool.db.base import Base
 from gh_pool.db.engine import session
+from gh_pool.status import LIVE
 
 
 class Task(Base):
@@ -87,4 +88,4 @@ async def artifacts(prefix: str = "", limit: int = 100) -> list[dict[str, Any]]:
 
 
 async def unfinished() -> list[dict[str, Any]]:
-    return await rows(Task, select(Task).where(Task.status.in_(("pending", "running"))))
+    return await rows(Task, select(Task).where(Task.status.in_(LIVE)))

@@ -28,6 +28,7 @@ from yaol import (
 )
 
 from gh_pool.core.obs import observability, version
+from gh_pool.status import TaskStatus
 
 SERVER = os.getenv("GH_POOL_SERVER", "http://localhost:8000").rstrip("/")
 TOKEN = os.getenv("GH_POOL_WORKER_TOKEN", "dev-worker")
@@ -295,7 +296,7 @@ async def _serve(
 
     killed = False
     if not wait_task.done():
-        why = "cancelled" if cancel.is_set() else "stale lease"
+        why = TaskStatus.CANCELLED if cancel.is_set() else "stale lease"
         note(f"{why}, terminating")
         killed = True
         _signal_group(proc, signal.SIGTERM)
@@ -317,14 +318,14 @@ async def _serve(
         spool.event.set()
         send_task.cancel()
         beat_task.cancel()
-        return "lost"
+        return TaskStatus.LOST
 
     if killed and cancel.is_set():
-        status, error = "cancelled", "cancelled by client"
+        status, error = TaskStatus.CANCELLED, "cancelled by client"
     elif rc == 0:
-        status, error = "done", None
+        status, error = TaskStatus.DONE, None
     else:
-        status, error = "failed", f"exit code {rc}"
+        status, error = TaskStatus.FAILED, f"exit code {rc}"
         fail(f"exit code {rc}")
     note(f"finished: {status}")
 

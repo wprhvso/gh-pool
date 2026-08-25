@@ -19,11 +19,9 @@ from opentelemetry.metrics import CallbackOptions, Observation
 
 from gh_pool.core.config import settings
 from gh_pool.db import tasks as db
+from gh_pool.status import FINISHED, REPORTABLE, TaskStatus
 
 log = structlog.get_logger()
-
-TERMINAL = ("done", "failed", "cancelled")
-FINISHED = (*TERMINAL, "lost")
 
 TASKS: dict[str, dict[str, Any]] = {}
 QUEUE: deque[str] = deque()
@@ -171,7 +169,7 @@ def owned(tid: str, lease_token: str | None) -> dict[str, Any]:
     t = TASKS.get(tid)
     if t is None or not lease_token:
         raise HTTPException(409, "stale lease")
-    if t.get("lease_token") is None and t["status"] == "running":
+    if t.get("lease_token") is None and t["status"] == TaskStatus.RUNNING:
         t["lease_token"] = lease_token
     if t["lease_token"] != lease_token:
         raise HTTPException(409, "stale lease")
@@ -191,11 +189,11 @@ def grab(worker_id: str) -> dict[str, Any] | None:
     now = time.time()
     while QUEUE:
         t = TASKS.get(QUEUE.popleft())
-        if t is None or t["status"] != "pending":
+        if t is None or t["status"] != TaskStatus.PENDING:
             continue
         token = uuid.uuid4().hex
         t.update(
-            status="running",
+            status=TaskStatus.RUNNING,
             worker_id=worker_id,
             lease_token=token,
             started_at=now,
@@ -258,7 +256,7 @@ async def recover() -> None:
         if t["id"] in TASKS:
             continue
         TASKS[t["id"]] = t
-        if t["status"] == "running":
+        if t["status"] == TaskStatus.RUNNING:
             t.update(heartbeat_at=time.time(), lease_token=None)
             running += 1
         else:
@@ -280,11 +278,11 @@ async def keeper() -> None:
         now = time.time()
         for t in list(TASKS.values()):
             if (
-                t["status"] == "running"
+                t["status"] == TaskStatus.RUNNING
                 and t.get("heartbeat_at", now) < now - settings.lost_after
             ):
                 t.update(
-                    status="lost",
+                    status=TaskStatus.LOST,
                     error="worker gone",
                     finished_at=now,
                     lease_token=None,
@@ -397,8 +395,8 @@ async def complete(
     auth_worker(authorization)
     t = owned(tid, x_lease_token)
     body = await request.json()
-    status = body.get("status", "done")
-    if status not in TERMINAL:
+    status = body.get("status", TaskStatus.DONE)
+    if status not in REPORTABLE:
         raise HTTPException(400, "bad status")
     if t["status"] in FINISHED:
         return {"ok": True, "status": t["status"], "note": "already terminal"}
@@ -439,7 +437,7 @@ async def create_task(
         "id": tid,
         "type": ttype,
         "payload": body.get("payload") or {},
-        "status": "pending",
+        "status": TaskStatus.PENDING,
         "worker_id": None,
         "error": None,
         "parent_id": body.get("parent_id"),
@@ -513,18 +511,20 @@ async def cancel(
 ) -> dict[str, Any]:
     auth_client(authorization)
     t = await find(tid)
-    if t["status"] == "pending":
+    if t["status"] == TaskStatus.PENDING:
         t.update(
-            status="cancelled", finished_at=time.time(), error="cancelled before start"
+            status=TaskStatus.CANCELLED,
+            finished_at=time.time(),
+            error="cancelled before start",
         )
         TASKS.setdefault(tid, t)
         DIRTY.add(tid)
-        tasks_completed.add(1, {"status": "cancelled", "type": t["type"]})
-        return {"status": "cancelled"}
-    if t["status"] == "running":
+        tasks_completed.add(1, {"status": TaskStatus.CANCELLED, "type": t["type"]})
+        return {"status": TaskStatus.CANCELLED}
+    if t["status"] == TaskStatus.RUNNING:
         t["cancel_requested"] = True
         TASKS.setdefault(tid, t)
-        return {"status": "running", "cancel_requested": True}
+        return {"status": TaskStatus.RUNNING, "cancel_requested": True}
     return {"status": t["status"], "note": "already terminal"}
 
 
@@ -538,7 +538,7 @@ async def retry(
     TASKS[nid] = {
         **{c: t[c] for c in db.TASK_COLUMNS},
         "id": nid,
-        "status": "pending",
+        "status": TaskStatus.PENDING,
         "worker_id": None,
         "error": None,
         "parent_id": tid,

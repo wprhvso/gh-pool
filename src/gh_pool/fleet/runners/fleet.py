@@ -4,6 +4,8 @@ import threading
 import time
 from dataclasses import dataclass, field
 
+from gh_pool.status import TaskStatus
+
 
 @dataclass
 class Slot:
@@ -12,7 +14,7 @@ class Slot:
     runner_id: int = 0
     born: float = field(default_factory=time.monotonic)
     since: float = field(default_factory=time.monotonic)
-    status: str = "pending"
+    status: str = TaskStatus.PENDING
     spent: bool = False
 
     def age(self) -> float:
@@ -66,7 +68,7 @@ class Fleet:
             waiting = [
                 slot
                 for slot in self._slots.values()
-                if slot.status == "pending" and not slot.spent
+                if slot.status == TaskStatus.PENDING and not slot.spent
             ]
         return sorted(waiting, key=lambda slot: slot.born, reverse=True)
 

@@ -12,9 +12,9 @@ import httpx
 from yaol import SpanKind, inject_headers, span
 
 from gh_pool import rpc
+from gh_pool.status import FINISHED
 
 TYPE = "python"
-TERMINAL = ("done", "failed", "cancelled", "lost")
 
 
 class Failed(RuntimeError):
@@ -62,7 +62,7 @@ class Task:
     def wait(self, poll: float = 0.25) -> dict[str, Any]:
         while True:
             state = self.state()
-            if state["status"] in TERMINAL:
+            if state["status"] in FINISHED:
                 return state
             time.sleep(poll)
             poll = min(poll * 1.5, 5.0)
@@ -103,7 +103,7 @@ class Task:
             if r.content:
                 yield r.content
             offset = int(r.headers["X-Event-Offset"])
-            if r.headers["X-Task-Status"] in TERMINAL and offset >= int(
+            if r.headers["X-Task-Status"] in FINISHED and offset >= int(
                 r.headers["X-Event-Size"]
             ):
                 return

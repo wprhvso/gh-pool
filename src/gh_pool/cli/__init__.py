@@ -14,11 +14,11 @@ from yaol import SpanKind, from_env, inject_headers, setup, shutdown, span
 
 from gh_pool.cli import shell
 from gh_pool.core.obs import version
+from gh_pool.status import FINISHED
 
 SERVER = os.getenv("GH_POOL_SERVER", "http://localhost:8000").rstrip("/")
 TOKEN = os.getenv("GH_POOL_CLIENT_TOKEN", "dev-client")
 POLL = 0.5
-TERMINAL = ("done", "failed", "cancelled", "lost")
 CODES: dict[str | None, int] = {"done": 0, "failed": 1, "cancelled": 2, "lost": 3}
 
 http = httpx.Client(
@@ -80,13 +80,13 @@ def follow(tid: str, offset: int = 0) -> str | None:
         offset = int(r.headers.get("X-Event-Offset", offset))
         new_status = r.headers.get("X-Task-Status")
         if (
-            new_status in TERMINAL
+            new_status in FINISHED
             and status == new_status
             and offset >= int(r.headers.get("X-Event-Size", 0))
         ):
             break
         status = new_status
-        if status in TERMINAL:
+        if status in FINISHED:
             continue
         time.sleep(POLL)
     return status

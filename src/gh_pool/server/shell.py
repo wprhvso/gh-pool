@@ -7,7 +7,8 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from gh_pool.core.config import settings
-from gh_pool.server.tasks import FINISHED, TASKS, auth_client, auth_worker
+from gh_pool.server.tasks import TASKS, auth_client, auth_worker
+from gh_pool.status import FINISHED
 
 router = APIRouter(prefix="/v1/shells", tags=["shell"])
 

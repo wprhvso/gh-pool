@@ -6,7 +6,6 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from gh_pool.fleet.runners.config import (
-    ALIVE,
     FLEET_INTERVAL,
     STATS_INTERVAL,
     WORKER_STALE,
@@ -16,6 +15,7 @@ from gh_pool.fleet.runners.metrics import FLEET_SIZE
 from gh_pool.fleet.runners.policy import scale
 from gh_pool.fleet.runners.provision import NOT_FOUND, cancel
 from gh_pool.fleet.runners.state import TIMEOUT_GRACE
+from gh_pool.status import LIVE, TaskStatus
 
 if TYPE_CHECKING:
     from gh_pool.fleet.runners.state import Ctx
@@ -82,10 +82,10 @@ def reconcile(ctx: Ctx) -> None:
             blind += 1
             continue
         status = str(state.get("status") or "")
-        if status not in ALIVE:
+        if status not in LIVE:
             ctx.fleet.drop(slot.task_id)
             log.info("%s: раннер %s отработал: %s", ctx.slug, slot.name, status)
-            if status in ("failed", "lost"):
+            if status in (TaskStatus.FAILED, TaskStatus.LOST):
                 log.warning(
                     "%s: %s — %s", ctx.slug, slot.name, why(ctx, slot.task_id, state)
                 )
@@ -93,7 +93,7 @@ def reconcile(ctx: Ctx) -> None:
 
         ctx.fleet.mark(slot.task_id, status)
         if (
-            status == "running"
+            status == TaskStatus.RUNNING
             and taken
             and slot.task_id not in taken
             and slot.age() > WORKER_STALE
