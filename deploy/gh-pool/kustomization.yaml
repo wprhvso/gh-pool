@@ -10,6 +10,11 @@ resources:
   - fleet.yaml
   - service.yaml
 
+images:
+  - name: ghcr.io/wprhvso/gh-pool
+    newTag: 0.1.5
+    digest: sha256:32a3bdee9bbdb8062f6b763478365ef7a3d0aa443f069c12a85d547ef4bdd174
+
 labels:
   - pairs:
       app.kubernetes.io/part-of: gh-pool

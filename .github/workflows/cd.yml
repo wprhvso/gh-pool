@@ -1,20 +1,35 @@
 name: cd
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: cd
+  cancel-in-progress: false
 
 jobs:
   version:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push'
     runs-on: pool
+    timeout-minutes: 10
+    permissions:
+      contents: read
     outputs:
       version: ${{ steps.read.outputs.version }}
       prerelease: ${{ steps.read.outputs.prerelease }}
       release: ${{ steps.read.outputs.release }}
+      sha: ${{ github.event.workflow_run.head_sha }}
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - id: read
@@ -35,11 +50,16 @@ jobs:
     needs: version
     if: needs.version.outputs.release == 'true'
     runs-on: pool
+    timeout-minutes: 90
     permissions:
       contents: read
       packages: write
+    outputs:
+      digest: ${{ steps.digest.outputs.digest }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.sha }}
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -51,17 +71,26 @@ jobs:
           earthly --ci --push +multi \
             --VERSION="${{ needs.version.outputs.version }}" \
             --LATEST="${{ needs.version.outputs.prerelease == 'false' }}"
+      - id: digest
+        run: |
+          digest=$(docker buildx imagetools inspect \
+            "ghcr.io/${{ github.repository }}:${{ needs.version.outputs.version }}" \
+            --format '{{.Manifest.Digest}}')
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
   pypi:
     needs: [version, image]
     if: needs.version.outputs.release == 'true'
     runs-on: pool
+    timeout-minutes: 20
     environment: pypi
     permissions:
       contents: read
       id-token: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.sha }}
       - run: uv build --out-dir dist
       - run: uv publish
 
@@ -69,10 +98,40 @@ jobs:
     needs: [version, image, pypi]
     if: needs.version.outputs.release == 'true'
     runs-on: pool
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.sha }}
       - run: |
           git tag "v${{ needs.version.outputs.version }}"
           git push origin "v${{ needs.version.outputs.version }}"
+
+  manifests:
+    needs: [version, image, pypi, tag]
+    if: needs.version.outputs.release == 'true'
+    runs-on: pool
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      NEW_TAG: ${{ needs.version.outputs.version }}
+      NEW_DIGEST: ${{ needs.image.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - run: |
+          cd deploy/gh-pool
+          kustomize edit set image \
+            "ghcr.io/${{ github.repository }}=ghcr.io/${{ github.repository }}:$NEW_TAG@$NEW_DIGEST"
+          kustomize build . >/dev/null
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deploy/gh-pool/kustomization.yaml
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: pin manifests to $NEW_TAG"
+          git push origin HEAD:main

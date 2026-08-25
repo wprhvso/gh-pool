@@ -28,7 +28,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: relay
-          image: ghcr.io/wprhvso/gh-pool:0.1.5@sha256:32a3bdee9bbdb8062f6b763478365ef7a3d0aa443f069c12a85d547ef4bdd174
+          image: ghcr.io/wprhvso/gh-pool
           imagePullPolicy: IfNotPresent
           command: ["gh-pool-relay"]
           env:
