@@ -4,18 +4,18 @@ kind: Kustomization
 namespace: browser
 
 resources:
-  - migrate.yaml
-  - server.yaml
-  - relay.yaml
-  - fleet.yaml
-  - service.yaml
+- migrate.yaml
+- server.yaml
+- relay.yaml
+- fleet.yaml
+- service.yaml
 
 images:
-  - name: ghcr.io/wprhvso/gh-pool
-    newTag: 0.1.5
-    digest: sha256:32a3bdee9bbdb8062f6b763478365ef7a3d0aa443f069c12a85d547ef4bdd174
+- digest: sha256:93460f6c99e506a0aca8420fb86a330a2f0c6840fd25c9f1564f027bb853de05
+  name: ghcr.io/wprhvso/gh-pool
+  newName: ghcr.io/wprhvso/gh-pool
+  newTag: 0.1.6
 
 labels:
-  - pairs:
-      app.kubernetes.io/part-of: gh-pool
-    includeSelectors: false
+- pairs:
+    app.kubernetes.io/part-of: gh-pool
