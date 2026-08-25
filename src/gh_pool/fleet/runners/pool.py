@@ -13,7 +13,7 @@ from gh_pool.fleet.runners.http import Reply, fetch
 if TYPE_CHECKING:
     from gh_pool.fleet.runners.config import Server
 
-log = logging.getLogger("runners")
+log = logging.getLogger(__name__)
 
 TYPE = "python"
 _TAIL = 4000

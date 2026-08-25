@@ -27,7 +27,7 @@ from gh_pool.fleet.runners.models import Session, Stats
 if TYPE_CHECKING:
     from gh_pool.fleet.runners.config import Target
 
-log = logging.getLogger("runners")
+log = logging.getLogger(__name__)
 
 _RUNNER_GROUP = 1
 _AGENTS = "_apis/distributedtask/pools/0/agents"

@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
     from gh_pool.fleet.runners.budget import Budget
 
-log = logging.getLogger("runners")
+log = logging.getLogger(__name__)
 
 _FALLBACK_TTL = 1800.0
 _TOO_MANY = 429

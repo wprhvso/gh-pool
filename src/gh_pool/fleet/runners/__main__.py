@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
     from gh_pool.fleet.runners.config import Target
 
-log = logging.getLogger("runners")
+log = logging.getLogger(__name__)
 
 _EXIT_USAGE = 2
 _EXIT_ERROR = 1

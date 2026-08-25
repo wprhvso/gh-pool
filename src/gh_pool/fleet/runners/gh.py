@@ -20,7 +20,7 @@ from gh_pool.fleet.runners.http import fetch, request
 if TYPE_CHECKING:
     from gh_pool.fleet.runners.config import Target
 
-log = logging.getLogger("runners")
+log = logging.getLogger(__name__)
 
 _HEADERS = {
     "Accept": "application/vnd.github+json",

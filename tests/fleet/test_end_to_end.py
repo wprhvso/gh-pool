@@ -7,6 +7,9 @@ from pathlib import Path
 import pytest
 
 from gh_pool.fleet.runners import controller as ctrl
+from gh_pool.fleet.runners import policy as policy_mod
+from gh_pool.fleet.runners import reconcile as reconcile_mod
+from gh_pool.fleet.runners import teardown as teardown_mod
 from gh_pool.fleet.runners.config import Server, Target
 from gh_pool.fleet.runners.models import Stats
 from tests.fleet.fake import FakePool, FakeScaleSet, job
@@ -23,10 +26,10 @@ def stage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     from gh_pool.fleet.runners import agent as agent_mod
 
     _tarball(room / f"actions-runner-linux-{agent_mod.arch()}-{VERSION}.tar.gz", JOB)
-    monkeypatch.setattr(ctrl, "FLEET_INTERVAL", 0.2)
-    monkeypatch.setattr(ctrl, "release_version", lambda: VERSION)
+    monkeypatch.setattr(reconcile_mod, "FLEET_INTERVAL", 0.2)
+    monkeypatch.setattr(policy_mod, "release_version", lambda: VERSION)
     monkeypatch.setattr(ctrl, "preflight", lambda _target: {"private": True})
-    monkeypatch.setattr(ctrl, "runners", lambda _target: [])
+    monkeypatch.setattr(teardown_mod, "runners", lambda _target: [])
     return room
 
 
@@ -137,8 +140,8 @@ def test_a_batch_of_jobs_fills_and_empties_the_fleet(
         deleted.append(runner_id)
         return True
 
-    monkeypatch.setattr(ctrl, "runners", lambda _target: [{"id": 7}, {"id": 8}])
-    monkeypatch.setattr(ctrl, "delete_runner", remember)
+    monkeypatch.setattr(teardown_mod, "runners", lambda _target: [{"id": 7}, {"id": 8}])
+    monkeypatch.setattr(teardown_mod, "delete_runner", remember)
 
     api.offer(job(1), job(2), job(3), stats=Stats(available=3))
 
