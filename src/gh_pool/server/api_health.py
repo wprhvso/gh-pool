@@ -25,6 +25,15 @@ class Health(BaseModel):
     db: bool
 
 
+class Alive(BaseModel):
+    status: Literal["ok"] = "ok"
+
+
+@router.get("/livez")
+async def livez() -> Alive:
+    return Alive()
+
+
 @router.get("/healthz")
 async def healthz(db: Db, response: Response) -> Health:
     health = Health(**tasks.report(), status="ok")

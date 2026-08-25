@@ -27,7 +27,7 @@ STATUS_CODES: Codes = {
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    db = Database(settings.database_url)
+    db = Database(settings.database_url, settings.db_pool_min, settings.db_pool_max)
     await db.open()
     app.state.db = db
     app.state.events = Events(db)
@@ -44,7 +44,16 @@ class Health(BaseModel):
     tunnels: int
 
 
+class Alive(BaseModel):
+    status: Literal["ok"] = "ok"
+
+
 health = APIRouter(tags=["health"])
+
+
+@health.get("/livez")
+async def livez() -> Alive:
+    return Alive()
 
 
 @health.get("/healthz")

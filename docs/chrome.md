@@ -150,11 +150,12 @@ Run `gh-pool-server`. The runner needs no secrets of its own: the server mints
 a token for each session and hands it to the pool task along with the session id.
 `GH_POOL_PROXY` sends the runner's traffic through a proxy of your own.
 
-`GET /healthz` is the one route with no credentials on it. It reaches for a
-connection and asks postgres a question: 200 while the database answers, 503
-once it stops. Nothing else is in the verdict — a server whose pool is
-unreachable and whose tunnels are all down still serves the API correctly, and
-taking it out of rotation would only make that worse.
+`GET /healthz` and `GET /livez` are the two routes with no credentials on them.
+`/healthz` reaches for a connection and asks postgres a question: 200 while the
+database answers, 503 once it stops. Nothing else is in the verdict — a server
+whose pool is unreachable and whose tunnels are all down still serves the API
+correctly, and taking it out of rotation would only make that worse. `/livez`
+answers 200 for as long as the process runs and never touches the database.
 
 ## Housekeeping
 
@@ -196,7 +197,9 @@ whatever the live sessions and the profiles need.
 `GH_POOL_DATABASE_URL` too when the password is in it. The rest is a
 ConfigMap. `GH_POOL_HOST` is already `0.0.0.0` in the image.
 
-Point both probes at `/healthz`. The root filesystem can be read-only, but the
+Point readiness at `/healthz`, and liveness and startup at `/livez`: the queue
+lives in the process, so a probe that fails on a database outage would kill
+what is holding it. The root filesystem can be read-only, but the
 server still needs a writable `/tmp`: an upload over a megabyte is spooled
 there by starlette before it is handed to the storage directory, so give the
 pod an `emptyDir` at `/tmp` sized for `GH_POOL_MAX_UPLOAD`.

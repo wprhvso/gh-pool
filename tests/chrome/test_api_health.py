@@ -57,3 +57,14 @@ def test_the_probe_asks_for_no_credentials(probe):
         answer = client.get("/healthz", headers={"Authorization": "Bearer nonsense"})
 
     assert answer.status_code == 200
+
+
+def test_a_server_whose_database_went_away_is_still_alive(probe):
+    database = FakeDatabase(OSError("connection refused"))
+
+    with probe(database) as client:
+        answer = client.get("/livez")
+
+    assert answer.status_code == 200
+    assert answer.json() == {"status": "ok"}
+    assert database.probes == 0
