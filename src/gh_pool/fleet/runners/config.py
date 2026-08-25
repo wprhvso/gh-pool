@@ -4,11 +4,20 @@ import os
 import re
 import tomllib
 from dataclasses import dataclass, replace
+from importlib import metadata
 from pathlib import Path
 
 from gh_pool.fleet.runners.errors import RunnerError
 
-VERSION = "0.1.0"
+
+def _version() -> str:
+    try:
+        return metadata.version("gh-pool")
+    except metadata.PackageNotFoundError:
+        return "0.0.0"
+
+
+VERSION = _version()
 USER_AGENT = f"pool-runners/{VERSION}"
 
 API_VERSION = "6.0-preview"
