@@ -30,7 +30,12 @@ def test_a_finished_status_is_not_live(status: str):
 def test_only_the_worker_reportable_statuses_leave_out_lost():
     assert "lost" in FINISHED
     assert "lost" not in REPORTABLE
-    assert REPORTABLE < FINISHED
+    assert set(REPORTABLE) < set(FINISHED)
+
+
+def test_the_sets_keep_a_stable_order_because_queries_are_built_from_them():
+    assert LIVE == ("pending", "running")
+    assert FINISHED == ("done", "failed", "cancelled", "lost")
 
 
 def test_the_properties_agree_with_the_sets():

@@ -22,6 +22,6 @@ class TaskStatus(StrEnum):
         return self not in LIVE
 
 
-LIVE = frozenset({TaskStatus.PENDING, TaskStatus.RUNNING})
-REPORTABLE = frozenset({TaskStatus.DONE, TaskStatus.FAILED, TaskStatus.CANCELLED})
-FINISHED = frozenset({*REPORTABLE, TaskStatus.LOST})
+LIVE = (TaskStatus.PENDING, TaskStatus.RUNNING)
+REPORTABLE = (TaskStatus.DONE, TaskStatus.FAILED, TaskStatus.CANCELLED)
+FINISHED = (*REPORTABLE, TaskStatus.LOST)
