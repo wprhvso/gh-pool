@@ -40,9 +40,9 @@ def gh(
     return answer if isinstance(answer, dict) else {}
 
 
-_log: Final = structlog.get_logger("pool.fleet.runners")
+_log: Final = structlog.get_logger("pool.fleet.keeper")
 
-_meter: Final = get_meter("pool.fleet.runners")
+_meter: Final = get_meter("pool.fleet.keeper")
 _launched: Final = _meter.create_counter(
     "pool.fleet.runners.runs.launched",
     unit="1",
