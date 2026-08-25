@@ -54,7 +54,7 @@ class FakeHttp:
         self.accepted: list[UUID] = []
         self.resumed_from: list[int] = []
         self.close_requests = 0
-        self.aclosed = False
+        self.acloses = 0
         self.enqueue_error: Exception | None = None
         self.stream_error: Exception | None = None
         self.held: asyncio.Event | None = None
@@ -120,7 +120,7 @@ class FakeHttp:
         return uuid4()
 
     async def aclose(self) -> None:
-        self.aclosed = True
+        self.acloses += 1
 
 
 async def _until(condition, what: str, timeout: float = 5.0) -> None:
@@ -385,7 +385,7 @@ async def test_closing_the_session_settles_what_was_still_pending(
     await running.close()
 
     assert http.close_requests == 1
-    assert http.aclosed
+    assert http.acloses == 1
     assert not running.alive
     with pytest.raises(SessionDead):
         await command.wait(timeout=5)
@@ -411,6 +411,103 @@ async def test_a_command_asked_for_after_the_close_never_reaches_the_server(
         await running.title().wait(timeout=5)
 
     assert len(http.enqueued) == enqueued
+
+
+async def test_detaching_leaves_the_session_running_on_the_server(
+    session: tuple[Session, FakeHttp],
+):
+    running, http = session
+
+    await running.detach()
+
+    assert http.close_requests == 0
+    assert http.acloses == 1
+    assert running._reader.done()
+    assert running.alive
+
+
+async def test_detaching_settles_what_was_still_pending(
+    session: tuple[Session, FakeHttp],
+):
+    running, http = session
+    http.accepted.append(uuid4())
+    command = running.title()
+    await _until(lambda: bool(http.enqueued), "the command to be enqueued")
+
+    await running.detach()
+
+    with pytest.raises(SessionDead):
+        await command.wait(timeout=5)
+
+
+async def test_detaching_stops_the_watcher(session: tuple[Session, FakeHttp]):
+    running, _ = session
+    watching = running.events()
+
+    await running.detach()
+
+    async with asyncio.timeout(5):
+        with pytest.raises(StopAsyncIteration):
+            await anext(watching)
+
+
+async def test_a_watcher_opened_after_a_detach_is_not_left_waiting(
+    session: tuple[Session, FakeHttp],
+):
+    running, _ = session
+    await running.detach()
+
+    watching = running.events()
+
+    async with asyncio.timeout(5):
+        with pytest.raises(StopAsyncIteration):
+            await anext(watching)
+
+
+async def test_a_command_asked_for_after_a_detach_never_reaches_the_server(
+    session: tuple[Session, FakeHttp],
+):
+    running, http = session
+    await running.detach()
+    enqueued = len(http.enqueued)
+
+    with pytest.raises(SessionDead):
+        await running.title().wait(timeout=5)
+
+    assert len(http.enqueued) == enqueued
+
+
+async def test_detaching_twice_lets_go_once(session: tuple[Session, FakeHttp]):
+    running, http = session
+
+    await running.detach()
+    await running.detach()
+
+    assert http.acloses == 1
+    assert http.close_requests == 0
+
+
+async def test_detaching_after_a_close_is_harmless(session: tuple[Session, FakeHttp]):
+    running, http = session
+
+    await running.close()
+    await running.detach()
+
+    assert http.close_requests == 1
+    assert http.acloses == 1
+    assert not running.alive
+
+
+async def test_closing_after_a_detach_leaves_the_session_alone(
+    session: tuple[Session, FakeHttp],
+):
+    running, http = session
+
+    await running.detach()
+    await running.close()
+
+    assert http.close_requests == 0
+    assert running.alive
 
 
 async def test_a_refused_enqueue_reaches_the_caller_as_it_was(

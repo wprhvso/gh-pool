@@ -134,6 +134,7 @@ class Session:
         self._ready = asyncio.Event()
         self._finished = asyncio.Event()
         self._closed = False
+        self._detached = False
         self._last_seq = 0
         self._reader = asyncio.create_task(self._read_events(), context=Context())
 
@@ -176,7 +177,7 @@ class Session:
             raise SessionNotReady(f"runner did not connect in {timeout}s")
 
     async def close(self) -> None:
-        if self._closed:
+        if self._closed or self._detached:
             return
         self._closed = True
         try:
@@ -186,13 +187,22 @@ class Session:
                     async with asyncio.timeout(self._close_timeout):
                         await self._finished.wait()
         finally:
-            self._reader.cancel()
-            with suppress(asyncio.CancelledError):
-                await self._reader
-            self._fail_pending(SessionDead("session closed"))
-            for queue in tuple(self._subscribers):
-                queue.put_nowait(None)
-            await self._http.aclose()
+            await self._let_go(SessionDead("session closed"))
+
+    async def detach(self) -> None:
+        await self._let_go(SessionDead("session detached"))
+
+    async def _let_go(self, error: BaseException) -> None:
+        if self._detached:
+            return
+        self._detached = True
+        self._reader.cancel()
+        with suppress(asyncio.CancelledError):
+            await self._reader
+        self._fail_pending(error)
+        for queue in tuple(self._subscribers):
+            queue.put_nowait(None)
+        await self._http.aclose()
 
     def events(self) -> AsyncIterator[Event]:
         queue: asyncio.Queue[Event | None] = asyncio.Queue()
@@ -324,7 +334,7 @@ class Session:
 
     @property
     def _over(self) -> bool:
-        return self._closed or self._finished.is_set()
+        return self._closed or self._detached or self._finished.is_set()
 
     def goto(
         self,
