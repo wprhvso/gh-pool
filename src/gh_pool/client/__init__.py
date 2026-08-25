@@ -20,6 +20,7 @@ from gh_pool.client.errors import (
 from gh_pool.client.http import Http
 from gh_pool.client.session import Command, Session
 from gh_pool.client.tap import Captured, Rule, Tap
+from gh_pool.client.task import Failed, Pool, Remote, Task
 from gh_pool.protocol import (
     ElementState,
     Event,
@@ -43,10 +44,13 @@ __all__ = [
     "ElementState",
     "Event",
     "EventType",
+    "Failed",
     "GhChromeError",
     "NavigationFailed",
+    "Pool",
     "ProfileInfo",
     "Rejected",
+    "Remote",
     "Rule",
     "RunnerError",
     "Session",
@@ -60,6 +64,7 @@ __all__ = [
     "TapError",
     "TapRejected",
     "TapTimeout",
+    "Task",
     "TooManySessions",
     "Topic",
     "WaitUntil",
