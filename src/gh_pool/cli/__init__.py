@@ -6,6 +6,7 @@ import os
 import sys
 import time
 from dataclasses import replace
+from functools import cache
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -21,11 +22,14 @@ TOKEN = os.getenv("GH_POOL_CLIENT_TOKEN", "dev-client")
 POLL = 0.5
 CODES: dict[str | None, int] = {"done": 0, "failed": 1, "cancelled": 2, "lost": 3}
 
-http = httpx.Client(
-    base_url=SERVER,
-    headers={"Authorization": f"Bearer {TOKEN}"},
-    timeout=httpx.Timeout(30.0, read=300.0),
-)
+
+@cache
+def http() -> httpx.Client:
+    return httpx.Client(
+        base_url=SERVER,
+        headers={"Authorization": f"Bearer {TOKEN}"},
+        timeout=httpx.Timeout(30.0, read=300.0),
+    )
 
 
 def die(msg: str, code: int = 1) -> NoReturn:
@@ -35,7 +39,7 @@ def die(msg: str, code: int = 1) -> NoReturn:
 
 def call(method: str, path: str, **kw: Any) -> httpx.Response:
     try:
-        r = http.request(method, path, **kw)
+        r = http().request(method, path, **kw)
     except Exception as e:
         die(f"server unreachable: {type(e).__name__}: {e}")
     if r.status_code >= 400:
@@ -203,7 +207,7 @@ def cmd_put(args: argparse.Namespace) -> None:
 
 
 def cmd_get(args: argparse.Namespace) -> None:
-    with http.stream("GET", f"/v1/artifacts/{args.key}") as r:
+    with http().stream("GET", f"/v1/artifacts/{args.key}") as r:
         if r.status_code >= 400:
             r.read()
             die(f"{r.status_code}: {r.text[:300]}")

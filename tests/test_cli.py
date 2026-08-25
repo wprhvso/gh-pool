@@ -25,7 +25,7 @@ class Fake:
 @pytest.fixture
 def fake(monkeypatch):
     f = Fake()
-    monkeypatch.setattr(cli, "http", f)
+    monkeypatch.setattr(cli, "http", lambda: f)
     monkeypatch.setattr(cli.time, "sleep", lambda _: None)
     return f
 
