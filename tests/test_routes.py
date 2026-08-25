@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -9,7 +10,7 @@ from gh_pool.server.app import create_app as create_server
 SNAPSHOT = Path(__file__).parent / "routes.json"
 
 
-def surface(spec: dict) -> dict[str, list[str]]:
+def surface(spec: dict[str, Any]) -> dict[str, list[str]]:
     found: dict[str, list[str]] = {}
     for path, operations in spec["paths"].items():
         for method, operation in operations.items():
