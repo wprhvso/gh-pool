@@ -9,20 +9,20 @@ meter = metrics.get_meter("gh_pool.server")
 
 
 def _observe_queue(options: CallbackOptions) -> Iterable[Observation]:
-    return [Observation(len(state.QUEUE))]
+    return [Observation(len(state.current.queue))]
 
 
 def _observe_workers(options: CallbackOptions) -> Iterable[Observation]:
-    busy = sum(1 for w in state.WORKERS.values() if w.get("task_id"))
+    busy = sum(1 for w in state.current.workers.values() if w.get("task_id"))
     return [
         Observation(busy, {"state": "busy"}),
-        Observation(len(state.WORKERS) - busy, {"state": "idle"}),
+        Observation(len(state.current.workers) - busy, {"state": "idle"}),
     ]
 
 
 def _observe_tasks(options: CallbackOptions) -> Iterable[Observation]:
     counts: dict[str, int] = {}
-    for t in list(state.TASKS.values()):
+    for t in list(state.current.tasks.values()):
         status = t["status"]
         counts[status] = counts.get(status, 0) + 1
     return [Observation(n, {"status": s}) for s, n in counts.items()]

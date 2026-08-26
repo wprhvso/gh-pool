@@ -26,20 +26,22 @@ async def from_db[T](what: str, call: Coroutine[Any, Any, T], fallback: T) -> T:
     try:
         return await call
     except Exception as e:
-        state.health["db"] = False
+        state.current.db_ok = False
         log.warning("db_read_failed", what=what, error=type(e).__name__, detail=str(e))
         return fallback
 
 
 async def find(tid: str) -> dict[str, Any]:
-    t = state.TASKS.get(tid) or await from_db("task", db.fetch(db.Task, tid), None)
+    t = state.current.tasks.get(tid) or await from_db(
+        "task", db.fetch(db.Task, tid), None
+    )
     if t is None:
         raise HTTPException(404, "no such task")
     return t
 
 
 def owned(tid: str, lease_token: str | None) -> dict[str, Any]:
-    t = state.TASKS.get(tid)
+    t = state.current.tasks.get(tid)
     if t is None or not lease_token:
         raise HTTPException(409, "stale lease")
     if t.get("lease_token") is None and t["status"] == TaskStatus.RUNNING:
@@ -50,9 +52,9 @@ def owned(tid: str, lease_token: str | None) -> dict[str, Any]:
 
 
 def touch(worker_id: str, task_id: str | None, now: float) -> None:
-    w = state.WORKERS.get(worker_id)
+    w = state.current.workers.get(worker_id)
     if w is None:
-        state.WORKERS[worker_id] = {
+        state.current.workers[worker_id] = {
             "first_seen": now,
             "seen_at": now,
             "task_id": task_id,
@@ -64,8 +66,8 @@ def touch(worker_id: str, task_id: str | None, now: float) -> None:
 
 def grab(worker_id: str) -> dict[str, Any] | None:
     now = time.time()
-    while state.QUEUE:
-        t = state.TASKS.get(state.QUEUE.popleft())
+    while state.current.queue:
+        t = state.current.tasks.get(state.current.queue.popleft())
         if t is None or t["status"] != TaskStatus.PENDING:
             continue
         token = uuid.uuid4().hex
@@ -76,7 +78,7 @@ def grab(worker_id: str) -> dict[str, Any] | None:
             started_at=now,
             heartbeat_at=now,
         )
-        state.DIRTY.add(t["id"])
+        state.current.dirty.add(t["id"])
         touch(worker_id, t["id"], now)
         lease_wait.record(max(now - t["created_at"], 0.0), {"type": t["type"]})
         return {

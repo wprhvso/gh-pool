@@ -29,7 +29,7 @@ async def test_a_task_whose_worker_went_quiet_is_declared_lost(
 ):
     tid = await submit(client)
     await take(client)
-    pool_state.TASKS[tid]["heartbeat_at"] = time.time() - 100
+    pool_state.current.tasks[tid]["heartbeat_at"] = time.time() - 100
     reaper = await reaping(monkeypatch, lost_after=1.0)
 
     try:
@@ -52,7 +52,7 @@ async def test_a_task_that_keeps_beating_is_left_alone(client, monkeypatch):
     finally:
         reaper.cancel()
 
-    assert pool_state.TASKS[tid]["status"] == "running"
+    assert pool_state.current.tasks[tid]["status"] == "running"
 
 
 async def test_a_worker_that_stopped_asking_drops_off_the_listing(client, monkeypatch):
@@ -61,11 +61,11 @@ async def test_a_worker_that_stopped_asking_drops_off_the_listing(client, monkey
         json={"worker_id": "w1"},
         headers={"Authorization": "Bearer dev-worker"},
     )
-    pool_state.WORKERS["w1"]["seen_at"] = time.time() - 100
+    pool_state.current.workers["w1"]["seen_at"] = time.time() - 100
     reaper = await reaping(monkeypatch, worker_stale=1.0)
 
     try:
-        assert await until(lambda: "w1" not in pool_state.WORKERS)
+        assert await until(lambda: "w1" not in pool_state.current.workers)
     finally:
         reaper.cancel()
 
@@ -78,8 +78,8 @@ async def test_work_left_over_from_a_previous_server_is_picked_up(client, blank)
 
     await pool_store.recover()
 
-    assert list(pool_state.QUEUE) == ["waiting"]
-    assert pool_state.TASKS["gone"]["status"] == "running"
+    assert list(pool_state.current.queue) == ["waiting"]
+    assert pool_state.current.tasks["gone"]["status"] == "running"
 
 
 async def test_a_finished_task_leaves_memory_once_it_is_written_down(client):
@@ -96,7 +96,7 @@ async def test_a_finished_task_leaves_memory_once_it_is_written_down(client):
 
     await pool_store.flush()
 
-    assert tid not in pool_state.TASKS
+    assert tid not in pool_state.current.tasks
 
 
 async def test_nothing_is_forgotten_while_the_database_refuses(client, blank):
@@ -105,8 +105,8 @@ async def test_nothing_is_forgotten_while_the_database_refuses(client, blank):
 
     await pool_store.flush()
 
-    assert tid in pool_state.DIRTY
-    assert pool_state.health["db"] is False
+    assert tid in pool_state.current.dirty
+    assert pool_state.current.db_ok is False
 
 
 async def test_health_says_when_the_server_came_up(client):
@@ -150,18 +150,18 @@ async def test_a_worker_reports_how_long_it_has_been_serving(client, blank):
 async def test_taking_another_task_does_not_reset_the_serving_clock(client, blank):
     await submit(client)
     await take(client)
-    born = pool_state.WORKERS["w1"]["first_seen"]
+    born = pool_state.current.workers["w1"]["first_seen"]
     await submit(client)
     await take(client)
 
-    assert pool_state.WORKERS["w1"]["first_seen"] == born
+    assert pool_state.current.workers["w1"]["first_seen"] == born
 
 
 async def test_listing_tasks_writes_nothing_to_disk(client, blank):
     blank.rows = {}
     blank.pending = []
     tid = await submit(client)
-    pool_state.TASKS.clear()
+    pool_state.current.tasks.clear()
     blank.rows[tid] = {
         "id": tid,
         "type": "python",
@@ -262,8 +262,11 @@ async def test_a_running_task_survives_the_server_it_was_started_on(client, blan
     )
 
     assert answer.status_code == 200
-    assert pool_state.TASKS["busy"]["status"] == "running"
-    assert pool_state.TASKS["busy"]["lease_token"] == "token-from-before-the-restart"
+    assert pool_state.current.tasks["busy"]["status"] == "running"
+    assert (
+        pool_state.current.tasks["busy"]["lease_token"]
+        == "token-from-before-the-restart"
+    )
 
 
 async def test_a_recovered_task_gets_a_fresh_grace_period(client, blank):
@@ -279,7 +282,7 @@ async def test_a_recovered_task_gets_a_fresh_grace_period(client, blank):
 
     await pool_store.recover()
 
-    assert pool_state.TASKS["busy"]["heartbeat_at"] > time.time() - 5
+    assert pool_state.current.tasks["busy"]["heartbeat_at"] > time.time() - 5
 
 
 async def test_a_recovered_task_whose_worker_never_returns_is_declared_lost(
@@ -295,7 +298,7 @@ async def test_a_recovered_task_whose_worker_never_returns_is_declared_lost(
         }
     ]
     await pool_store.recover()
-    pool_state.TASKS["busy"]["heartbeat_at"] = time.time() - 1000
+    pool_state.current.tasks["busy"]["heartbeat_at"] = time.time() - 1000
 
     task = await reaping(monkeypatch, lost_after=1)
     ok = await until(

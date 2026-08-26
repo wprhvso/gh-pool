@@ -53,7 +53,7 @@ async def test_a_deleted_artifact_leaves_nothing_behind(client):
     await client.delete("/v1/artifacts/k", headers=as_client())
 
     assert (await client.get("/v1/artifacts/k", headers=as_client())).status_code == 404
-    assert "k" not in pool_state.BLOBS
+    assert "k" not in pool_state.current.blobs
 
 
 async def test_an_unfinished_upload_does_not_become_the_artifact(client, monkeypatch):

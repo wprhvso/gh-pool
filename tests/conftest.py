@@ -1,4 +1,3 @@
-import asyncio
 import uuid
 
 import httpx
@@ -85,8 +84,6 @@ def blank(monkeypatch, tmp_path, fake_db):
     monkeypatch.setattr(settings, "blob_dir", tmp_path / "blobs")
     monkeypatch.setattr(settings, "lease_wait", 0.05)
     pool_state.boot()
-    pool_state.reset()
-    pool_state.new_task = asyncio.Event()
     yield fake_db
     pool_state.reset()
 

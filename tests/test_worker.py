@@ -199,10 +199,10 @@ async def test_a_cancelled_task_is_stopped_and_says_so(wired):
 async def test_a_lease_the_server_forgot_ends_the_task_as_lost(wired):
     tid = await submit(wired, code="import time\ntime.sleep(60)")
     lease = await take(wired)
-    pool_state.TASKS[tid]["lease_token"] = "someone else"
+    pool_state.current.tasks[tid]["lease_token"] = "someone else"
 
     assert await worker._run(wired, lease) == "lost"
-    assert pool_state.TASKS[tid]["status"] == "running"
+    assert pool_state.current.tasks[tid]["status"] == "running"
 
 
 async def test_the_worker_leaves_no_spool_behind(wired, tmp_path):
@@ -236,7 +236,7 @@ async def test_the_loop_runs_the_task_the_server_hands_it(wired, monkeypatch):
     monkeypatch.setattr(worker.httpx, "AsyncClient", lambda **kw: _Handed(wired))
 
     async def stop_after_one():
-        while pool_state.TASKS.get(tid, {}).get("status") not in FINISHED:
+        while pool_state.current.tasks.get(tid, {}).get("status") not in FINISHED:
             await asyncio.sleep(0.05)
 
     runner = asyncio.create_task(worker.loop())

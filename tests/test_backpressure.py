@@ -29,8 +29,8 @@ def test_the_rest_between_flushes_grows_and_then_stops_growing():
 
 async def test_a_failing_flush_keeps_the_work_and_says_it_failed(monkeypatch):
     monkeypatch.setattr("gh_pool.server.pool.store.db", Refusing())
-    state.TASKS["t1"] = {"id": "t1", "status": "pending"}
-    state.DIRTY.add("t1")
+    state.current.tasks["t1"] = {"id": "t1", "status": "pending"}
+    state.current.dirty.add("t1")
 
     assert await flush() is False
     assert pending() == 1
@@ -44,10 +44,10 @@ def test_the_pool_reports_overload_only_past_the_cap(monkeypatch):
     monkeypatch.setattr(settings, "max_pending_writes", 3)
     assert not overloaded()
 
-    state.DIRTY.update({"a", "b"})
+    state.current.dirty.update({"a", "b"})
     assert not overloaded()
 
-    state.DIRTY.add("c")
+    state.current.dirty.add("c")
     assert overloaded()
 
 

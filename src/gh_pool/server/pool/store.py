@@ -2,7 +2,6 @@ import time
 
 import structlog
 
-from gh_pool.core.config import settings
 from gh_pool.db import tasks as db
 from gh_pool.server.pool import state
 from gh_pool.status import FINISHED, TaskStatus
@@ -11,36 +10,37 @@ log = structlog.get_logger()
 
 
 def pending() -> int:
-    return len(state.DIRTY) + len(state.DIRTY_BLOBS)
+    return state.current.pending()
 
 
 def overloaded() -> bool:
-    return pending() >= settings.max_pending_writes
+    return state.current.overloaded()
 
 
 async def flush() -> bool:
-    async with state.flush_lock:
-        ids, keys = list(state.DIRTY), list(state.DIRTY_BLOBS)
+    async with state.current.flush_lock:
+        ids, keys = list(state.current.dirty), list(state.current.dirty_blobs)
         if not ids and not keys:
             return True
-        state.DIRTY.difference_update(ids)
-        state.DIRTY_BLOBS.difference_update(keys)
+        state.current.dirty.difference_update(ids)
+        state.current.dirty_blobs.difference_update(keys)
         try:
             await db.save(
                 db.Task,
                 [
-                    {c: state.TASKS[i].get(c) for c in db.TASK_COLUMNS}
+                    {c: state.current.tasks[i].get(c) for c in db.TASK_COLUMNS}
                     for i in ids
-                    if i in state.TASKS
+                    if i in state.current.tasks
                 ],
             )
             await db.save(
-                db.Artifact, [state.BLOBS[k] for k in keys if k in state.BLOBS]
+                db.Artifact,
+                [state.current.blobs[k] for k in keys if k in state.current.blobs],
             )
         except Exception as e:
-            state.DIRTY.update(ids)
-            state.DIRTY_BLOBS.update(keys)
-            state.health["db"] = False
+            state.current.dirty.update(ids)
+            state.current.dirty_blobs.update(keys)
+            state.current.db_ok = False
             log.warning(
                 "flush_failed",
                 error=type(e).__name__,
@@ -50,30 +50,30 @@ async def flush() -> bool:
                 pending=pending(),
             )
             return False
-        state.health["db"] = True
+        state.current.db_ok = True
         for i in ids:
             if (
-                i not in state.DIRTY
-                and state.TASKS.get(i, {}).get("status") in FINISHED
+                i not in state.current.dirty
+                and state.current.tasks.get(i, {}).get("status") in FINISHED
             ):
-                state.TASKS.pop(i, None)
+                state.current.tasks.pop(i, None)
         for k in keys:
-            if k not in state.DIRTY_BLOBS:
-                state.BLOBS.pop(k, None)
+            if k not in state.current.dirty_blobs:
+                state.current.blobs.pop(k, None)
         return True
 
 
 async def recover() -> None:
     running = 0
     for t in await db.unfinished():
-        if t["id"] in state.TASKS:
+        if t["id"] in state.current.tasks:
             continue
-        state.TASKS[t["id"]] = t
+        state.current.tasks[t["id"]] = t
         if t["status"] == TaskStatus.RUNNING:
             t.update(heartbeat_at=time.time(), lease_token=None)
             running += 1
         else:
-            state.QUEUE.append(t["id"])
-    if state.QUEUE:
-        state.new_task.set()
-    log.info("recovered", pending=len(state.QUEUE), running=running)
+            state.current.queue.append(t["id"])
+    if state.current.queue:
+        state.current.arrived.set()
+    log.info("recovered", pending=len(state.current.queue), running=running)

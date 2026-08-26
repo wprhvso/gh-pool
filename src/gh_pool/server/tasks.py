@@ -46,8 +46,8 @@ async def lease(
         if left <= 0:
             return Response(status_code=204)
         try:
-            await asyncio.wait_for(state.new_task.wait(), timeout=left)
-            state.new_task.clear()
+            await asyncio.wait_for(state.current.arrived.wait(), timeout=left)
+            state.current.arrived.clear()
         except TimeoutError:
             return Response(status_code=204)
 
@@ -78,7 +78,7 @@ async def append_events(
 ) -> Any:
     auth_worker(authorization)
     owned(tid, x_lease_token)
-    lock = state.event_locks.setdefault(tid, asyncio.Lock())
+    lock = state.current.event_locks.setdefault(tid, asyncio.Lock())
     async with lock:
         size = events_size(tid)
         if size >= settings.event_cap:
@@ -120,10 +120,10 @@ async def complete(
         finished_at=time.time(),
         lease_token=None,
     )
-    state.DIRTY.add(tid)
-    if t["worker_id"] in state.WORKERS:
-        state.WORKERS[t["worker_id"]]["task_id"] = None
-    state.event_locks.pop(tid, None)
+    state.current.dirty.add(tid)
+    if t["worker_id"] in state.current.workers:
+        state.current.workers[t["worker_id"]]["task_id"] = None
+    state.current.event_locks.pop(tid, None)
     tasks_completed.add(1, {"status": status, "type": t["type"]})
     log.info(
         "task_finished",
@@ -149,7 +149,7 @@ async def create_task(
     if overloaded():
         raise HTTPException(503, "too many unflushed writes, try again shortly")
     tid = uuid.uuid4().hex
-    state.TASKS[tid] = {
+    state.current.tasks[tid] = {
         "id": tid,
         "type": ttype,
         "payload": body.get("payload") or {},
@@ -161,9 +161,9 @@ async def create_task(
         "started_at": None,
         "finished_at": None,
     }
-    state.QUEUE.append(tid)
-    state.DIRTY.add(tid)
-    state.new_task.set()
+    state.current.queue.append(tid)
+    state.current.dirty.add(tid)
+    state.current.arrived.set()
     tasks_created.add(1, {"type": ttype})
     return {"task_id": tid}
 
@@ -175,7 +175,9 @@ async def list_tasks(
     authorization: Annotated[str | None, Header()] = None,
 ) -> list[dict[str, Any]]:
     auth_client(authorization)
-    live = [t for t in state.TASKS.values() if not status or t["status"] == status]
+    live = [
+        t for t in state.current.tasks.values() if not status or t["status"] == status
+    ]
     seen = {t["id"] for t in live}
     rows_from_db = await from_db("tasks", db.tasks(status, limit), [])
     stored = [t for t in rows_from_db if t["id"] not in seen]
@@ -233,13 +235,13 @@ async def cancel(
             finished_at=time.time(),
             error="cancelled before start",
         )
-        state.TASKS.setdefault(tid, t)
-        state.DIRTY.add(tid)
+        state.current.tasks.setdefault(tid, t)
+        state.current.dirty.add(tid)
         tasks_completed.add(1, {"status": TaskStatus.CANCELLED, "type": t["type"]})
         return {"status": TaskStatus.CANCELLED}
     if t["status"] == TaskStatus.RUNNING:
         t["cancel_requested"] = True
-        state.TASKS.setdefault(tid, t)
+        state.current.tasks.setdefault(tid, t)
         return {"status": TaskStatus.RUNNING, "cancel_requested": True}
     return {"status": t["status"], "note": "already terminal"}
 
@@ -251,7 +253,7 @@ async def retry(
     auth_client(authorization)
     t = await find(tid)
     nid = uuid.uuid4().hex
-    state.TASKS[nid] = {
+    state.current.tasks[nid] = {
         **{c: t[c] for c in db.TASK_COLUMNS},
         "id": nid,
         "status": TaskStatus.PENDING,
@@ -262,9 +264,9 @@ async def retry(
         "started_at": None,
         "finished_at": None,
     }
-    state.QUEUE.append(nid)
-    state.DIRTY.add(nid)
-    state.new_task.set()
+    state.current.queue.append(nid)
+    state.current.dirty.add(nid)
+    state.current.arrived.set()
     tasks_created.add(1, {"type": t["type"], "retry": True})
     return {"task_id": nid, "parent_id": tid}
 
@@ -312,8 +314,8 @@ async def put_artifact(
         "task_id": task_id,
         "created_at": time.time(),
     }
-    state.BLOBS[key] = row
-    state.DIRTY_BLOBS.add(key)
+    state.current.blobs[key] = row
+    state.current.dirty_blobs.add(key)
     return row
 
 
@@ -324,7 +326,7 @@ async def list_artifacts(
     authorization: Annotated[str | None, Header()] = None,
 ) -> list[dict[str, Any]]:
     auth_any(authorization)
-    live = [b for b in state.BLOBS.values() if b["key"].startswith(prefix)]
+    live = [b for b in state.current.blobs.values() if b["key"].startswith(prefix)]
     seen = {b["key"] for b in live}
     rows_from_db = await from_db("artifacts", db.artifacts(prefix, limit), [])
     stored = [b for b in rows_from_db if b["key"] not in seen]
@@ -347,9 +349,9 @@ async def del_artifact(
     key: str, authorization: Annotated[str | None, Header()] = None
 ) -> dict[str, bool]:
     auth_any(authorization)
-    async with state.flush_lock:
-        state.DIRTY_BLOBS.discard(key)
-        state.BLOBS.pop(key, None)
+    async with state.current.flush_lock:
+        state.current.dirty_blobs.discard(key)
+        state.current.blobs.pop(key, None)
     await to_thread.run_sync(blob_path(key).unlink, True)
     await from_db("drop", db.drop(db.Artifact, key), None)
     return {"ok": True}
@@ -368,5 +370,7 @@ async def workers(
             "idle_for": round(now - w["seen_at"], 1),
             "serving_for": round(now - w["first_seen"], 1),
         }
-        for wid, w in sorted(state.WORKERS.items(), key=lambda kv: -kv[1]["seen_at"])
+        for wid, w in sorted(
+            state.current.workers.items(), key=lambda kv: -kv[1]["seen_at"]
+        )
     ]

@@ -27,7 +27,7 @@ BEAT = 10.0
 def seed(tid="", ttype="shell"):
     tid = tid or uuid.uuid4().hex
     now = time.time()
-    pool_state.TASKS[tid] = {
+    pool_state.current.tasks[tid] = {
         "id": tid,
         "type": ttype,
         "payload": {},
@@ -166,7 +166,7 @@ async def test_the_runner_is_sent_home_when_nobody_is_attached(
 
 async def test_a_shell_for_a_task_that_is_over_is_refused(client, shell_room):
     tid = seed()
-    pool_state.TASKS[tid]["status"] = "done"
+    pool_state.current.tasks[tid]["status"] = "done"
 
     assert (await out_down(client, tid)).status_code == 410
 

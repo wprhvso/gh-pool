@@ -79,14 +79,14 @@ def _sweep() -> None:
     for tid in [
         s
         for s in SHELLS
-        if (t := state.TASKS.get(s)) is None or t["status"] in FINISHED
+        if (t := state.current.tasks.get(s)) is None or t["status"] in FINISHED
     ]:
         SHELLS.pop(tid, None)
 
 
 def _shell(tid: str) -> Shell:
     _sweep()
-    task = state.TASKS.get(tid)
+    task = state.current.tasks.get(tid)
     if task is None or task["status"] in FINISHED:
         raise HTTPException(410, "no such live shell")
     if task["type"] != "shell":
@@ -147,7 +147,7 @@ async def pull_out(
     shell.seen_at = time.time()
     await shell.out.wait(offset, settings.shell_poll)
     shell.seen_at = time.time()
-    task: dict[str, Any] = state.TASKS.get(tid) or {}
+    task: dict[str, Any] = state.current.tasks.get(tid) or {}
     return _served(shell.out, offset, {"X-Task-Status": task.get("status") or "gone"})
 
 

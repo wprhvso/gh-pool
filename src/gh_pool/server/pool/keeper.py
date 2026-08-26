@@ -25,11 +25,11 @@ async def keeper() -> None:
         if not started:
             try:
                 await recover()
-                started = state.health["db"] = True
+                started = state.current.db_ok = True
             except Exception as e:
                 log.warning("db_unavailable", error=type(e).__name__, detail=str(e))
         now = time.time()
-        for t in list(state.TASKS.values()):
+        for t in list(state.current.tasks.values()):
             if (
                 t["status"] == TaskStatus.RUNNING
                 and t.get("heartbeat_at", now) < now - settings.lost_after
@@ -40,8 +40,8 @@ async def keeper() -> None:
                     finished_at=now,
                     lease_token=None,
                 )
-                state.DIRTY.add(t["id"])
-                state.event_locks.pop(t["id"], None)
+                state.current.dirty.add(t["id"])
+                state.current.event_locks.pop(t["id"], None)
                 tasks_lost.add(1, {"reason": "worker_gone"})
                 log.warning(
                     "task_lost",
@@ -50,9 +50,9 @@ async def keeper() -> None:
                     worker=t["worker_id"],
                     quiet_for=round(now - t["heartbeat_at"], 1),
                 )
-        for wid, w in list(state.WORKERS.items()):
+        for wid, w in list(state.current.workers.items()):
             if w["seen_at"] < now - settings.worker_stale:
-                state.WORKERS.pop(wid, None)
+                state.current.workers.pop(wid, None)
                 log.info(
                     "worker_gone",
                     worker=wid,
