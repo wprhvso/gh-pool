@@ -24,6 +24,8 @@ from gh_pool.status import FINISHED, REPORTABLE, TaskStatus
 
 log = structlog.get_logger()
 
+MAX_PAGE = 1000
+
 router = APIRouter()
 
 
@@ -171,7 +173,7 @@ async def create_task(
 @router.get("/v1/tasks")
 async def list_tasks(
     status: Annotated[str | None, Query()] = None,
-    limit: Annotated[int, Query()] = 100,
+    limit: Annotated[int, Query(ge=1, le=MAX_PAGE)] = 100,
     authorization: Annotated[str | None, Header()] = None,
 ) -> list[dict[str, Any]]:
     auth_client(authorization)
@@ -322,7 +324,7 @@ async def put_artifact(
 @router.get("/v1/artifacts")
 async def list_artifacts(
     prefix: Annotated[str, Query()] = "",
-    limit: Annotated[int, Query()] = 100,
+    limit: Annotated[int, Query(ge=1, le=MAX_PAGE)] = 100,
     authorization: Annotated[str | None, Header()] = None,
 ) -> list[dict[str, Any]]:
     auth_any(authorization)
