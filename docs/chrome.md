@@ -21,13 +21,26 @@ through CDP.
 ## Quick start
 
 ```bash
-export GH_POOL_URL=https://chrome.example.com
+export GH_POOL_SERVER=https://chrome.example.com
 export GH_POOL_TOKEN=...
 python examples/hello.py
 ```
 
 The player lives at `https://chrome.example.com/s/<id>`: user `admin`, password
 the token.
+
+`pool chrome` does the same from a terminal: it opens a session, prints the link
+to its desktop and puts that link in a new browser window. It waits for the
+runner to bring the desktop up first, because the session goes through the pool's
+queue and nothing is there to look at until a job picks it up.
+
+```bash
+pool chrome                a clean profile, thrown away with the session
+pool chrome shopping       on the profile `shopping`, which outlives the session
+pool chrome -s <id>        the desktop of a session that already runs
+pool chrome -p             the player instead of the bare desktop
+pool chrome -n             print the link, open nothing
+```
 
 ## Live desktop
 
@@ -44,7 +57,8 @@ because the tunnel is the only way in and the player's credentials guard it.
 
 The desktop sits in a frame, which costs it cross-origin isolation and with it
 the client's threaded decoder. *open on its own* puts the same desktop in a tab
-of its own, where it is isolated and decodes faster.
+of its own, where it is isolated and decodes faster. That is the link
+`pool chrome` prints and opens; `pool chrome -p` prints the player instead.
 
 Two websockets cross whatever sits in front of the server — the runner's tunnel
 and the browser's desktop — so a reverse proxy has to pass an upgrade through

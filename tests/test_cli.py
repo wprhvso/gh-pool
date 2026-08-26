@@ -316,3 +316,187 @@ def test_health_is_printed_as_readable_json(fake, capsys):
     cli.cmd_health(args())
 
     assert json.loads(capsys.readouterr().out) == {"ok": True}
+
+
+SESSION = "6f1b8f7a-1111-2222-3333-444455556666"
+
+
+@pytest.fixture
+def chrome(monkeypatch):
+    monkeypatch.setattr(cli, "CHROME_TOKEN", "chrome-secret")
+    opened = []
+
+    def open_new(url):
+        opened.append(url)
+        return True
+
+    monkeypatch.setattr(cli.chrome.webbrowser, "open_new", open_new)
+    return opened
+
+
+def chrome_args(**kw):
+    return args(
+        **{
+            "profile": None,
+            "session": None,
+            "no_open": False,
+            "player": False,
+            "wait": 0.0,
+            "width": None,
+            "height": None,
+        }
+        | kw
+    )
+
+
+def session(status="active"):
+    return httpx.Response(200, json={"id": SESSION, "status": status})
+
+
+def test_the_browser_api_is_asked_with_its_own_token(fake, chrome):
+    cli.chrome_call("GET", "/sessions")
+
+    assert fake.seen[0][2]["headers"]["Authorization"] == "Bearer chrome-secret"
+
+
+def test_without_a_browser_token_the_command_stops(fake, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "CHROME_TOKEN", "")
+
+    with pytest.raises(SystemExit):
+        cli.chrome_call("GET", "/sessions")
+
+    assert "GH_POOL_TOKEN" in capsys.readouterr().err
+
+
+def test_a_chrome_session_is_opened_on_the_profile_it_was_given(fake, chrome):
+    fake.answers = [session()]
+
+    cli.cmd_chrome(chrome_args(profile="shopping"))
+
+    assert fake.seen[0][:2] == ("POST", "/sessions")
+    assert fake.seen[0][2]["json"] == {"profile": "shopping"}
+
+
+def test_a_size_on_the_command_line_reaches_the_session(fake, chrome):
+    fake.answers = [session()]
+
+    cli.cmd_chrome(chrome_args(width=1280, height=720))
+
+    assert fake.seen[0][2]["json"]["params"] == {"width": 1280, "height": 720}
+
+
+def test_the_desktop_link_is_printed_and_opened_in_a_new_browser(fake, chrome, capsys):
+    fake.answers = [session()]
+
+    cli.cmd_chrome(chrome_args())
+
+    printed = capsys.readouterr().out.strip()
+    assert (
+        printed
+        == f"{cli.SERVER}/s/{SESSION}/vnc/?path=s%2F{SESSION}%2Fvnc%2Fwebsockify&resize=scale&reconnect=true&reconnect_delay=2000&reconnect_retries=1000"
+    )
+    assert chrome == [printed]
+
+
+def test_the_player_link_is_opened_instead_when_it_is_asked_for(fake, chrome, capsys):
+    fake.answers = [session()]
+
+    cli.cmd_chrome(chrome_args(player=True))
+
+    printed = capsys.readouterr().out.strip()
+    assert printed == f"{cli.SERVER}/s/{SESSION}"
+    assert chrome == [printed]
+
+
+def test_the_login_and_the_player_are_said_alongside_the_link(fake, chrome, capsys):
+    fake.answers = [session()]
+
+    cli.cmd_chrome(chrome_args())
+
+    err = capsys.readouterr().err
+    assert SESSION in err
+    assert "admin" in err
+    assert f"{cli.SERVER}/s/{SESSION}" in err
+
+
+def test_the_link_can_be_printed_without_opening_anything(fake, chrome, capsys):
+    fake.answers = [session()]
+
+    cli.cmd_chrome(chrome_args(no_open=True))
+
+    assert SESSION in capsys.readouterr().out
+    assert chrome == []
+
+
+def test_printing_the_link_does_not_wait_for_the_desktop(fake, chrome, capsys):
+    fake.answers = [session("pending")]
+
+    cli.cmd_chrome(chrome_args(session=SESSION, no_open=True, wait=600.0))
+
+    assert fake.seen == []
+    assert SESSION in capsys.readouterr().out
+
+
+def test_an_existing_session_is_opened_rather_than_a_new_one(fake, chrome, capsys):
+    cli.cmd_chrome(chrome_args(session=SESSION))
+
+    assert fake.seen == []
+    assert SESSION in capsys.readouterr().out
+    assert chrome == [cli.chrome.desktop(cli.SERVER, SESSION)]
+
+
+def test_an_existing_session_and_a_profile_together_are_refused(fake, chrome):
+    with pytest.raises(SystemExit):
+        cli.cmd_chrome(chrome_args(session=SESSION, profile="shopping"))
+
+    assert fake.seen == []
+
+
+def test_waiting_holds_until_the_runner_brings_the_desktop_up(fake, chrome, capsys):
+    fake.answers = [session("pending"), session("pending"), session("active")]
+
+    cli.cmd_chrome(chrome_args(session=SESSION, wait=600.0))
+
+    assert [call[:2] for call in fake.seen] == [("GET", f"/sessions/{SESSION}")] * 3
+    assert chrome == [cli.chrome.desktop(cli.SERVER, SESSION)]
+
+
+@pytest.mark.parametrize("status", ["closed", "dead"])
+def test_a_session_that_is_over_has_no_desktop_to_open(fake, chrome, status):
+    fake.answers = [session(status)]
+
+    with pytest.raises(SystemExit):
+        cli.cmd_chrome(chrome_args(session=SESSION, wait=600.0))
+
+    assert chrome == []
+
+
+def test_a_desktop_that_never_came_up_is_opened_anyway(
+    fake, chrome, capsys, monkeypatch
+):
+    clock = iter([0.0, 1e9])
+    monkeypatch.setattr(cli.time, "monotonic", lambda: next(clock))
+    fake.answers = [session("pending")]
+
+    cli.cmd_chrome(chrome_args(session=SESSION, wait=600.0))
+
+    assert "no desktop yet" in capsys.readouterr().err
+    assert chrome == [cli.chrome.desktop(cli.SERVER, SESSION)]
+
+
+def test_a_machine_with_no_browser_on_it_says_so(fake, chrome, monkeypatch, capsys):
+    monkeypatch.setattr(cli.chrome.webbrowser, "open_new", lambda url: False)
+    fake.answers = [session()]
+
+    cli.cmd_chrome(chrome_args())
+
+    assert "no browser here" in capsys.readouterr().err
+
+
+def test_a_browser_that_refuses_to_start_is_not_an_error(monkeypatch):
+    def boom(url):
+        raise OSError("no display")
+
+    monkeypatch.setattr(cli.chrome.webbrowser, "open_new", boom)
+
+    assert cli.chrome.open_new("https://example.com") is False
