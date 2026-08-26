@@ -37,6 +37,22 @@ spec:
             - --source
             - /app/workflows
           env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: k8s.pod.name=$(POD_NAME),k8s.namespace.name=$(POD_NAMESPACE)
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://$(HOST_IP):4317
             - name: HOME
               value: /tmp
           resources:
@@ -64,6 +80,22 @@ spec:
           command: ["gh-pool-keeper"]
           args: ["run", "-c", "/run/secrets/keeper.toml"]
           env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: k8s.pod.name=$(POD_NAME),k8s.namespace.name=$(POD_NAMESPACE)
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://$(HOST_IP):4317
             - name: HOME
               value: /tmp
           resources:
@@ -127,6 +159,22 @@ spec:
           command: ["gh-pool-runners"]
           args: ["-c", "/run/secrets/runners.toml"]
           env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: k8s.pod.name=$(POD_NAME),k8s.namespace.name=$(POD_NAMESPACE)
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://$(HOST_IP):4317
             - name: HOME
               value: /tmp
           resources:
