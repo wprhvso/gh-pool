@@ -176,8 +176,16 @@ class Runner:
 
     async def _save(self, config: RunnerConfig, told: bool) -> None:
         if config.persist and config.profile:
-            with contextlib.suppress(Exception):
+            try:
                 await profile.store(self._server)
+            except Exception:
+                # Suppressed, this is the failure that makes the next session
+                # start signed out with nothing anywhere saying why.
+                log.warning(
+                    "could not store the profile for %s", config.profile, exc_info=True
+                )
         if told:
-            with contextlib.suppress(Exception):
+            try:
                 await self._server.confirm_close()
+            except Exception:
+                log.warning("could not confirm the close", exc_info=True)

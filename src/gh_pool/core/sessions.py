@@ -10,6 +10,7 @@ from psycopg.types.json import Jsonb
 from gh_pool.core.config import settings
 from gh_pool.core.db import Database, Tx
 from gh_pool.core.events import Events
+from gh_pool.core.spans import record_command
 from gh_pool.protocol import (
     CloseReason,
     CommandError,
@@ -299,7 +300,8 @@ class Sessions:
             await self._claim(tx, session_id)
             row = await tx.one(
                 "update commands set status = %s, result = %s, error = %s, finished_at = now() "
-                "where id = %s and session_id = %s and status = 'started' returning id",
+                "where id = %s and session_id = %s and status = 'started' "
+                "returning id, seq, method, queued_at, started_at, finished_at, traceparent, tracestate",
                 (
                     "failed" if failed else "finished",
                     None if failed else Jsonb(result),
@@ -318,6 +320,9 @@ class Sessions:
                 else CommandFinished(command_id=command_id, result=result)
             )
             await self._events.publish(tx, session_id, event)
+        # After the transaction: the span describes a run that is already over,
+        # and holding the row lock while an exporter queues is not worth it.
+        record_command(session_id, dict(row), error)
         self.announce_work(session_id)
 
     async def publish_runner_event(self, session_id: UUID, data: EventData) -> None:

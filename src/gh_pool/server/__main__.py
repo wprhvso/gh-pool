@@ -30,7 +30,9 @@ def main() -> None:
     setup(observability("pool-server", version()))
     instrument_fastapi(app)
     instrument_sqlalchemy(engine())
-    instrument_runtime()
+    # In a container /proc is the node's: system.* would report the whole
+    # host once per pod, on top of what cAdvisor already says about it.
+    instrument_runtime(system_metrics=False)
     try:
         uvicorn.run(
             app,
