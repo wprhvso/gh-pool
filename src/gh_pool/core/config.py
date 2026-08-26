@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     lease_wait: float = 30.0
     worker_stale: float = 120.0
     flush_every: float = 0.2
+    flush_backoff_cap: float = 30.0
+    max_pending_writes: int = 50_000
     shell_cap: int = 1 << 20
     shell_idle: float = 300.0
     shell_poll: float = 10.0

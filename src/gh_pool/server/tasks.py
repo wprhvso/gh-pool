@@ -19,6 +19,7 @@ from gh_pool.server.pool.auth import auth_any, auth_client, auth_worker
 from gh_pool.server.pool.metrics import tasks_completed, tasks_created
 from gh_pool.server.pool.paths import blob_path, events_path, events_size
 from gh_pool.server.pool.queue import find, from_db, grab, owned, public, touch
+from gh_pool.server.pool.store import overloaded
 from gh_pool.status import FINISHED, REPORTABLE, TaskStatus
 
 log = structlog.get_logger()
@@ -145,6 +146,8 @@ async def create_task(
     ttype = body.get("type")
     if not ttype:
         raise HTTPException(400, "type required")
+    if overloaded():
+        raise HTTPException(503, "too many unflushed writes, try again shortly")
     tid = uuid.uuid4().hex
     state.TASKS[tid] = {
         "id": tid,

@@ -2,6 +2,7 @@ import time
 
 import structlog
 
+from gh_pool.core.config import settings
 from gh_pool.db import tasks as db
 from gh_pool.server.pool import state
 from gh_pool.status import FINISHED, TaskStatus
@@ -9,11 +10,19 @@ from gh_pool.status import FINISHED, TaskStatus
 log = structlog.get_logger()
 
 
-async def flush() -> None:
+def pending() -> int:
+    return len(state.DIRTY) + len(state.DIRTY_BLOBS)
+
+
+def overloaded() -> bool:
+    return pending() >= settings.max_pending_writes
+
+
+async def flush() -> bool:
     async with state.flush_lock:
         ids, keys = list(state.DIRTY), list(state.DIRTY_BLOBS)
         if not ids and not keys:
-            return
+            return True
         state.DIRTY.difference_update(ids)
         state.DIRTY_BLOBS.difference_update(keys)
         try:
@@ -38,8 +47,9 @@ async def flush() -> None:
                 detail=str(e),
                 tasks=len(ids),
                 blobs=len(keys),
+                pending=pending(),
             )
-            return
+            return False
         state.health["db"] = True
         for i in ids:
             if (
@@ -50,6 +60,7 @@ async def flush() -> None:
         for k in keys:
             if k not in state.DIRTY_BLOBS:
                 state.BLOBS.pop(k, None)
+        return True
 
 
 async def recover() -> None:
