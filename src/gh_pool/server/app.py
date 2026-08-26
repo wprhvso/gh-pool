@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -66,9 +67,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         yield
     finally:
         chores.cancel()
-        await flush()
+        with contextlib.suppress(asyncio.CancelledError):
+            await chores
         await cleaner.stop()
         await watchdog.stop()
+        await flush()
         await db.close()
         await dispose()
 
