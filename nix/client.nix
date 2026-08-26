@@ -34,16 +34,21 @@ let
     default = null;
   };
 
-  wrapper = pkgs.writeShellScriptBin "pool" ''
-    export GH_POOL_SERVER=${lib.escapeShellArg cli.server}
-    ${lib.optionalString (cli.tokenFile != null) ''
-      if [ ! -r ${lib.escapeShellArg cli.tokenFile} ]; then
-        echo "pool: не читается ${toString cli.tokenFile}" >&2
+  readToken =
+    name: file:
+    lib.optionalString (file != null) ''
+      if [ ! -r ${lib.escapeShellArg file} ]; then
+        echo "pool: не читается ${toString file}" >&2
         exit 1
       fi
-      GH_POOL_CLIENT_TOKEN=$(cat ${lib.escapeShellArg cli.tokenFile})
-      export GH_POOL_CLIENT_TOKEN
-    ''}
+      ${name}=$(cat ${lib.escapeShellArg file})
+      export ${name}
+    '';
+
+  wrapper = pkgs.writeShellScriptBin "pool" ''
+    export GH_POOL_SERVER=${lib.escapeShellArg cli.server}
+    ${readToken "GH_POOL_CLIENT_TOKEN" cli.tokenFile}
+    ${readToken "GH_POOL_TOKEN" cli.chromeTokenFile}
     exec ${cli.package}/bin/gh-pool "$@"
   '';
 
@@ -58,6 +63,9 @@ in
     server = serverOption;
     tokenFile = tokenFileOption // {
       description = "Файл с клиентским токеном, читается обёрткой при запуске.";
+    };
+    chromeTokenFile = tokenFileOption // {
+      description = "Файл с GH_POOL_TOKEN: им ходит `pool chrome` в браузерные сессии и плеер.";
     };
   };
 

@@ -13,14 +13,16 @@ from typing import Any, NoReturn
 import httpx
 from yaol import SpanKind, from_env, inject_headers, setup, shutdown, span
 
-from gh_pool.cli import shell
+from gh_pool.cli import chrome, shell
 from gh_pool.core.obs import version
 from gh_pool.status import FINISHED
 
 SERVER = os.getenv("GH_POOL_SERVER", "http://localhost:8000").rstrip("/")
 TOKEN = os.getenv("GH_POOL_CLIENT_TOKEN", "dev-client")
+CHROME_TOKEN = os.getenv("GH_POOL_TOKEN", "")
 POLL = 0.5
 CODES: dict[str | None, int] = {"done": 0, "failed": 1, "cancelled": 2, "lost": 3}
+SESSION_OVER = frozenset({"closed", "dead"})
 
 
 @cache
@@ -45,6 +47,14 @@ def call(method: str, path: str, **kw: Any) -> httpx.Response:
     if r.status_code >= 400:
         die(f"{r.status_code}: {r.text[:300]}")
     return r
+
+
+def chrome_call(method: str, path: str, **kw: Any) -> httpx.Response:
+    if not CHROME_TOKEN:
+        die("GH_POOL_TOKEN is not set: browser sessions have a token of their own")
+    headers = dict(kw.pop("headers", None) or {})
+    headers["Authorization"] = f"Bearer {CHROME_TOKEN}"
+    return call(method, path, headers=headers, **kw)
 
 
 def parse_payload(args: argparse.Namespace) -> dict[str, Any]:
@@ -149,6 +159,52 @@ def cmd_sh(args: argparse.Namespace) -> None:
     if status == "gone":
         status = call("GET", f"/v1/tasks/{tid}").json()["status"]
     finish(tid, status)
+
+
+def start_session(args: argparse.Namespace) -> str:
+    params = {
+        name: value
+        for name, value in (("width", args.width), ("height", args.height))
+        if value is not None
+    }
+    body: dict[str, Any] = {"profile": args.profile}
+    if params:
+        body["params"] = params
+    return str(chrome_call("POST", "/sessions", json=body).json()["id"])
+
+
+def settled(sid: str, seconds: float) -> str:
+    deadline = time.monotonic() + seconds
+    waiting = False
+    while True:
+        status = str(chrome_call("GET", f"/sessions/{sid}").json()["status"])
+        if status != "pending" or time.monotonic() >= deadline:
+            return status
+        if not waiting:
+            waiting = True
+            print("--- waiting for a runner to bring the desktop up", file=sys.stderr)
+        time.sleep(POLL)
+
+
+def cmd_chrome(args: argparse.Namespace) -> None:
+    if args.session and (args.profile or args.width or args.height):
+        die("--session opens a desktop that already runs, it does not make one")
+    sid = args.session or start_session(args)
+    url = chrome.player(SERVER, sid) if args.player else chrome.desktop(SERVER, sid)
+    print(url)
+    print(f"--- {sid}, log in as {chrome.USER} with $GH_POOL_TOKEN", file=sys.stderr)
+    if not args.player:
+        print(f"--- player at {chrome.player(SERVER, sid)}", file=sys.stderr)
+    if args.no_open:
+        return
+    if args.wait > 0:
+        status = settled(sid, args.wait)
+        if status in SESSION_OVER:
+            die(f"session {status}, no desktop to open")
+        if status == "pending":
+            print("--- no desktop yet, opening anyway", file=sys.stderr)
+    if not chrome.open_new(url):
+        print("--- no browser here to open it with", file=sys.stderr)
 
 
 def cmd_events(args: argparse.Namespace) -> None:
@@ -284,6 +340,16 @@ def main() -> None:
     s.add_argument("id", nargs="?")
     s.add_argument("-c", "--command")
     s.set_defaults(fn=cmd_sh)
+
+    s = sub.add_parser("chrome")
+    s.add_argument("profile", nargs="?")
+    s.add_argument("-s", "--session")
+    s.add_argument("-n", "--no-open", action="store_true")
+    s.add_argument("-p", "--player", action="store_true")
+    s.add_argument("-w", "--wait", type=float, default=600.0)
+    s.add_argument("--width", type=int)
+    s.add_argument("--height", type=int)
+    s.set_defaults(fn=cmd_chrome)
 
     s = sub.add_parser("events")
     s.add_argument("id")
