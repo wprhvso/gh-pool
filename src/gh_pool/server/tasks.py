@@ -162,6 +162,7 @@ async def create_task(
         "created_at": time.time(),
         "started_at": None,
         "finished_at": None,
+        "cancel_requested": False,
     }
     state.current.queue.append(tid)
     state.current.dirty.add(tid)
@@ -244,6 +245,7 @@ async def cancel(
     if t["status"] == TaskStatus.RUNNING:
         t["cancel_requested"] = True
         state.current.tasks.setdefault(tid, t)
+        state.current.dirty.add(tid)
         return {"status": TaskStatus.RUNNING, "cancel_requested": True}
     return {"status": t["status"], "note": "already terminal"}
 
@@ -265,6 +267,7 @@ async def retry(
         "created_at": time.time(),
         "started_at": None,
         "finished_at": None,
+        "cancel_requested": False,
     }
     state.current.queue.append(nid)
     state.current.dirty.add(nid)

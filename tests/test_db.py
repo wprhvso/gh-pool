@@ -28,6 +28,7 @@ def test_the_task_columns_are_the_ones_the_server_hands_out():
         "created_at",
         "started_at",
         "finished_at",
+        "cancel_requested",
     )
 
 

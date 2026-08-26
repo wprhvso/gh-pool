@@ -1,6 +1,16 @@
 from typing import Any
 
-from sqlalchemy import BigInteger, Float, Select, String, Text, delete, select
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Float,
+    Select,
+    String,
+    Text,
+    delete,
+    false,
+    select,
+)
 from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,6 +32,9 @@ class Task(Base):
     created_at: Mapped[float] = mapped_column(Float, index=True)
     started_at: Mapped[float | None] = mapped_column(Float)
     finished_at: Mapped[float | None] = mapped_column(Float)
+    cancel_requested: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=false(), default=False
+    )
 
 
 class Artifact(Base):
