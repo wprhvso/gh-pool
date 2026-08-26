@@ -33,3 +33,12 @@ async def test_the_artifact_page_is_bounded_too(client, blank, limit: int):
     )
 
     assert answer.status_code == 422
+
+
+async def test_a_listed_task_still_carries_what_the_fleet_matches_on(client, blank):
+    await submit(client, code="result = 1", kwargs={"slug": "owner/app"})
+
+    row = (await client.get("/v1/tasks", headers=as_client())).json()[0]
+
+    assert row["payload"]["kwargs"] == {"slug": "owner/app"}
+    assert set(row) >= {"id", "type", "status", "created_at", "event_size"}

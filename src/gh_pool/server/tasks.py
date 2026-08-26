@@ -11,6 +11,7 @@ import structlog
 from anyio import to_thread
 from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
 
 from gh_pool.core.config import settings
 from gh_pool.db import tasks as db
@@ -25,6 +26,22 @@ from gh_pool.status import FINISHED, REPORTABLE, TaskStatus
 log = structlog.get_logger()
 
 MAX_PAGE = 1000
+
+
+class TaskView(BaseModel):
+    id: str
+    type: str
+    payload: dict[str, Any]
+    status: TaskStatus
+    worker_id: str | None
+    error: str | None
+    parent_id: str | None
+    created_at: float
+    started_at: float | None
+    finished_at: float | None
+    cancel_requested: bool
+    event_size: int
+
 
 router = APIRouter()
 
@@ -176,7 +193,7 @@ async def list_tasks(
     status: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE)] = 100,
     authorization: Annotated[str | None, Header()] = None,
-) -> list[dict[str, Any]]:
+) -> list[TaskView]:
     auth_client(authorization)
     live = [
         t for t in state.current.tasks.values() if not status or t["status"] == status
@@ -185,15 +202,15 @@ async def list_tasks(
     rows_from_db = await from_db("tasks", db.tasks(status, limit), [])
     stored = [t for t in rows_from_db if t["id"] not in seen]
     rows = sorted(live + stored, key=lambda t: t["created_at"], reverse=True)
-    return [public(t) for t in rows[:limit]]
+    return [TaskView(**public(t)) for t in rows[:limit]]
 
 
 @router.get("/v1/tasks/{tid}")
 async def task_status(
     tid: str, authorization: Annotated[str | None, Header()] = None
-) -> dict[str, Any]:
+) -> TaskView:
     auth_client(authorization)
-    return public(await find(tid))
+    return TaskView(**public(await find(tid)))
 
 
 @router.get("/v1/tasks/{tid}/events")

@@ -37,3 +37,16 @@ def test_no_route_appeared_or_vanished(recorded):
 
 def test_no_route_changed_the_statuses_it_answers_with(recorded):
     assert taken() == recorded
+
+
+def test_the_task_routes_describe_what_they_return():
+    spec = create_server().openapi()
+    for path in ("/v1/tasks/{tid}", "/v1/tasks"):
+        schema = spec["paths"][path]["get"]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]
+        assert "additionalProperties" not in schema, path
+
+    fields = spec["components"]["schemas"]["TaskView"]["properties"]
+    assert "payload" in fields
+    assert fields["status"] == {"$ref": "#/components/schemas/TaskStatus"}
